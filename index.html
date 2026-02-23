@@ -337,6 +337,52 @@
     }
     .search-input:focus { outline: none; border-color: var(--primary); }
 
+    /* ─── Filter Panels (Search screen) ─── */
+    .filter-panel { background: var(--surface); border-bottom: 1px solid var(--border); }
+    .fp-header {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      padding: 14px 16px; background: none; border: none;
+      font-family: inherit; font-size: 0.95rem; font-weight: 600;
+      color: var(--text); cursor: pointer; text-align: right;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fp-title { flex: 1; }
+    .fp-arrow { font-size: 0.85rem; color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
+    .fp-header[aria-expanded=true] .fp-arrow { transform: rotate(180deg); }
+    .fp-badge {
+      background: var(--primary); color: #fff; border-radius: 12px;
+      padding: 2px 8px; font-size: 0.72rem; font-weight: 700;
+      min-width: 22px; text-align: center; flex-shrink: 0;
+    }
+    .fp-badge--hidden { display: none; }
+    .fp-body { display: none; padding: 4px 16px 12px; }
+    .fp-body.open { display: block; }
+    .fp-check-label {
+      display: flex; align-items: center; gap: 10px; padding: 9px 4px;
+      cursor: pointer; font-size: 0.92rem; border-bottom: 1px solid var(--border);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fp-check-label:last-child { border-bottom: none; }
+    .fp-check-label input[type=checkbox] {
+      width: 18px; height: 18px; cursor: pointer;
+      accent-color: var(--primary); flex-shrink: 0;
+    }
+    .sr-empty-row { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 16px; }
+    .sr-empty-label {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sr-empty-label input[type=checkbox] {
+      width: 18px; height: 18px; cursor: pointer;
+      accent-color: var(--primary); flex-shrink: 0;
+    }
+    .sr-filter-actions {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--border);
+    }
+    .sr-filter-count { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+
     /* ─── Location Group ─── */
     .loc-group { margin-bottom: 4px; }
     .loc-group-header {
@@ -1117,7 +1163,7 @@
       <div class="form-group">
         <label class="form-label">מספר עגלה</label>
         <input id="${inputId}" class="form-input cart-id-input"
-               placeholder="הקלד מספר עגלה..." autocomplete="off">
+               placeholder="8-6(110)" autocomplete="off">
       </div>
     `;
     const input = container.querySelector('.cart-id-input');
@@ -1220,15 +1266,15 @@
             <div class="card-title">הוספת / עדכון עגלה</div>
             <div class="form-group">
               <label class="form-label">מספר עגלה</label>
-              <input id="ec-cartid" class="form-input" placeholder="3-25(110)" autocomplete="off">
+              <input id="ec-cartid" class="form-input" placeholder="8-6(110)" autocomplete="off">
             </div>
             <div class="form-group">
               <label class="form-label">מיקום</label>
-              <input id="ec-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+              <input id="ec-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
             <div class="form-group" id="ec-subloc-group" hidden>
               <label class="form-label">תת-מיקום</label>
-              <input id="ec-subloc" class="form-input" placeholder="שורה 3" autocomplete="off">
+              <input id="ec-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer">
               <input type="checkbox" id="ec-empty"> עגלה ריקה
@@ -1643,11 +1689,11 @@
 
           <div class="form-group">
             <label class="form-label">מיקום יעד</label>
-            <input id="tr-dest-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+            <input id="tr-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
           </div>
           <div class="form-group" id="tr-dest-subloc-group" hidden>
             <label class="form-label">תת-מיקום יעד</label>
-            <input id="tr-dest-subloc" class="form-input" placeholder="שורה 3" autocomplete="off">
+            <input id="tr-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
 
           <div class="form-group">
@@ -1904,7 +1950,7 @@
           <div id="lu-src-floor" hidden>
             <div class="form-group">
               <label class="form-label">מיקום מקור</label>
-              <input id="lu-src-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+              <input id="lu-src-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
             <div class="form-group">
               <label class="form-label">קבוצת רצפה</label>
@@ -1921,11 +1967,11 @@
 
           <div class="form-group">
             <label class="form-label">מיקום יעד</label>
-            <input id="lu-dest-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+            <input id="lu-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
           </div>
           <div class="form-group" id="lu-dest-subloc-group" hidden>
             <label class="form-label">תת-מיקום יעד</label>
-            <input id="lu-dest-subloc" class="form-input" placeholder="שורה 3" autocomplete="off">
+            <input id="lu-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
 
           <!-- unload extra: send to floor option -->
@@ -2183,49 +2229,142 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">🔍</span>
-        <h1>חיפוש</h1>
+        <h1>סינון</h1>
       </div>
-      <div class="search-bar">
-        <input id="sr-input" class="search-input" placeholder="חיפוש עגלה, מיקום, מאפיין..." autocomplete="off">
+      <div id="sr-filter-panels"></div>
+      <div class="sr-filter-actions">
+        <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
+        <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">נקה סינון</button>
       </div>
       <div id="sr-results"></div>
     `;
 
+    // ── Filter state ──────────────────────────────────────────────
+    const state = {
+      locations: new Set(),
+      cartIds:   new Set(),
+      props:     {},         // propName → Set<value>
+      emptyOnly: false
+    };
+    const openPanels = new Set(); // panel IDs kept open across re-renders
+
+    // ── Build panel HTML ──────────────────────────────────────────
+    function buildPanelHTML(id, title, items) {
+      const sel  = items.filter(i => i.checked).length;
+      const open = openPanels.has(id);
+      return `
+        <div class="filter-panel" id="${esc(id)}">
+          <button class="fp-header" aria-expanded="${open}">
+            <span class="fp-arrow">▾</span>
+            <span class="fp-title">${esc(title)}</span>
+            <span class="fp-badge${sel ? '' : ' fp-badge--hidden'}">${sel}</span>
+          </button>
+          <div class="fp-body${open ? ' open' : ''}">
+            ${items.map(item => `
+              <label class="fp-check-label">
+                <input type="checkbox" class="fp-checkbox"
+                  data-filter-key="${item.key}"
+                  data-value="${esc(item.value)}"
+                  ${item.propName ? `data-prop="${esc(item.propName)}"` : ''}
+                  ${item.checked ? 'checked' : ''}>
+                <span>${esc(item.value)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+
+    // ── Rebuild filter panels (called on onShow and clear) ────────
+    function buildFilterPanels() {
+      const meta  = DB.getMetadata();
+      const carts = DB.getAllCarts();
+      const container = document.getElementById('sr-filter-panels');
+
+      const allLocations = (meta.locations || []).map(l => l.name);
+      const allCartIds   = carts.map(c => c.cartId).sort();
+      const allProps     = meta.properties || [];
+
+      let html = '';
+
+      if (allLocations.length) {
+        html += buildPanelHTML('sr-fp-loc', 'מיקומים',
+          allLocations.map(name => ({ key: 'loc', value: name, checked: state.locations.has(name) })));
+      }
+      if (allCartIds.length) {
+        html += buildPanelHTML('sr-fp-cart', 'עגלות',
+          allCartIds.map(id => ({ key: 'cart', value: id, checked: state.cartIds.has(id) })));
+      }
+      allProps.forEach(prop => {
+        const propSet = state.props[prop.name] || new Set();
+        const items = (prop.options || []).map(opt => ({
+          key: 'prop', propName: prop.name, value: opt, checked: propSet.has(opt)
+        }));
+        if (items.length) html += buildPanelHTML('sr-fp-prop-' + prop.name, prop.name, items);
+      });
+
+      html += `
+        <div class="sr-empty-row">
+          <label class="sr-empty-label">
+            <input type="checkbox" id="sr-empty-check" ${state.emptyOnly ? 'checked' : ''}>
+            הצג ריקות בלבד
+          </label>
+        </div>`;
+
+      container.innerHTML = html;
+
+      document.getElementById('sr-empty-check').addEventListener('change', e => {
+        state.emptyOnly = e.target.checked;
+        updateActionsBar();
+        renderResults();
+      });
+    }
+
+    // ── Actions bar ───────────────────────────────────────────────
+    function countActive() {
+      return state.locations.size + state.cartIds.size +
+        Object.values(state.props).reduce((s, set) => s + set.size, 0) +
+        (state.emptyOnly ? 1 : 0);
+    }
+    function updateActionsBar() {
+      const count    = countActive();
+      const label    = document.getElementById('sr-filter-count');
+      const clearBtn = document.getElementById('sr-clear-btn');
+      label.textContent = count ? count + ' פילטרים פעילים' : 'כל הפריטים';
+      clearBtn.style.display = count ? '' : 'none';
+    }
+
+    // ── Filter logic ──────────────────────────────────────────────
+    function itemPasses(item) {
+      if (state.locations.size && !state.locations.has(item.location)) return false;
+      if (state.cartIds.size) {
+        if (!item.cartId || !state.cartIds.has(item.cartId)) return false;
+      }
+      for (const [propName, valSet] of Object.entries(state.props)) {
+        if (!valSet.size) continue;
+        if (!valSet.has((item.properties || {})[propName])) return false;
+      }
+      if (state.emptyOnly && !item.isEmpty) return false;
+      return true;
+    }
+
+    // ── Render results ────────────────────────────────────────────
     function propSummary(props) {
       return Object.values(props || {}).filter(Boolean).join(' · ');
     }
-
-    function renderResults(query) {
+    function renderResults() {
       const results = document.getElementById('sr-results');
-      const q = (query || '').trim().toLowerCase();
+      const carts   = DB.getAllCarts().filter(itemPasses);
+      const fis     = DB.getAllFloorItems().filter(itemPasses);
 
-      const carts = DB.getAllCarts();
-      const fis   = DB.getAllFloorItems();
-
-      const matchedCarts = carts.filter(c => {
-        if (!q) return true;
-        const haystack = [c.cartId, c.location, c.subLocation, ...Object.values(c.properties || {})]
-          .join(' ').toLowerCase();
-        return haystack.includes(q);
-      });
-
-      const matchedFIs = fis.filter(fi => {
-        if (!q) return true;
-        const haystack = [fi.id, fi.location, fi.subLocation, ...Object.values(fi.properties || {})]
-          .join(' ').toLowerCase();
-        return haystack.includes(q);
-      });
-
-      if (!matchedCarts.length && !matchedFIs.length) {
+      if (!carts.length && !fis.length) {
         results.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">🔍</div>
-            <div class="empty-state-text">לא נמצאו תוצאות</div>
+            <div class="empty-state-text">${countActive() ? 'לא נמצאו תוצאות לסינון הנוכחי' : 'אין פריטים במערכת'}</div>
           </div>`;
         return;
       }
 
-      // group by location → subLocation
       const groups = {};
       const addItem = (item, type) => {
         const locKey = item.location || 'ללא מיקום';
@@ -2234,8 +2373,8 @@
         if (!groups[gk]) groups[gk] = { loc: locKey, sub: subKey, items: [] };
         groups[gk].items.push({ data: item, type });
       };
-      matchedCarts.forEach(c  => addItem(c,  'cart'));
-      matchedFIs.forEach(fi   => addItem(fi, 'fi'));
+      carts.forEach(c  => addItem(c,  'cart'));
+      fis.forEach(fi   => addItem(fi, 'fi'));
 
       const sortedGroups = Object.values(groups).sort((a,b) =>
         a.loc.localeCompare(b.loc) || a.sub.localeCompare(b.sub));
@@ -2243,7 +2382,7 @@
       results.innerHTML = sortedGroups.map(g => `
         <div class="loc-group">
           <div class="loc-group-header">
-            ${g.loc}${g.sub ? ' / ' + g.sub : ''}
+            ${esc(g.loc)}${g.sub ? ' / ' + esc(g.sub) : ''}
           </div>
           ${g.items.map(({ data, type }) => {
             if (type === 'cart') {
@@ -2251,7 +2390,7 @@
               return `
                 <div class="list-item sr-item" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
                   <div class="list-item-body">
-                    <div class="list-item-title">${data.cartId}</div>
+                    <div class="list-item-title">${esc(data.cartId)}</div>
                     <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}${ps ? ' · ' + ps : ''}</div>
                   </div>
                   <span>›</span>
@@ -2261,7 +2400,7 @@
               return `
                 <div class="list-item sr-item" data-type="fi" data-id="${esc(data.id)}" style="cursor:pointer">
                   <div class="list-item-body">
-                    <div class="list-item-title"><span class="badge badge-floor">רצפה</span> ${ps || data.id}</div>
+                    <div class="list-item-title"><span class="badge badge-floor">רצפה</span> ${ps || esc(data.id)}</div>
                     <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}</div>
                   </div>
                   <span>›</span>
@@ -2272,13 +2411,60 @@
       `).join('');
     }
 
-    // search input
-    screen.querySelector('#sr-input').addEventListener('input', e => {
-      renderResults(e.target.value);
+    // ── Event delegation: accordion toggle ───────────────────────
+    document.getElementById('sr-filter-panels').addEventListener('click', e => {
+      const btn = e.target.closest('.fp-header');
+      if (!btn) return;
+      const panel  = btn.closest('.filter-panel');
+      const body   = btn.nextElementSibling;
+      const isOpen = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!isOpen));
+      body.classList.toggle('open', !isOpen);
+      if (!isOpen) openPanels.add(panel.id);
+      else         openPanels.delete(panel.id);
     });
 
-    // item click → modal
-    screen.querySelector('#sr-results').addEventListener('click', e => {
+    // ── Event delegation: checkbox changes ───────────────────────
+    document.getElementById('sr-filter-panels').addEventListener('change', e => {
+      const cb = e.target.closest('.fp-checkbox');
+      if (!cb) return;
+      const key   = cb.dataset.filterKey;
+      const value = cb.dataset.value;
+      const on    = cb.checked;
+      if (key === 'loc') {
+        on ? state.locations.add(value) : state.locations.delete(value);
+      } else if (key === 'cart') {
+        on ? state.cartIds.add(value) : state.cartIds.delete(value);
+      } else if (key === 'prop') {
+        const pn = cb.dataset.prop;
+        if (!state.props[pn]) state.props[pn] = new Set();
+        on ? state.props[pn].add(value) : state.props[pn].delete(value);
+        if (!state.props[pn].size) delete state.props[pn];
+      }
+      // update badge in this panel
+      const panel = cb.closest('.filter-panel');
+      if (panel) {
+        const checked = panel.querySelectorAll('.fp-checkbox:checked').length;
+        const badge   = panel.querySelector('.fp-badge');
+        if (badge) { badge.textContent = checked; badge.classList.toggle('fp-badge--hidden', !checked); }
+      }
+      updateActionsBar();
+      renderResults();
+    });
+
+    // ── Clear all ─────────────────────────────────────────────────
+    document.getElementById('sr-clear-btn').addEventListener('click', () => {
+      state.locations.clear();
+      state.cartIds.clear();
+      state.props   = {};
+      state.emptyOnly = false;
+      buildFilterPanels();
+      updateActionsBar();
+      renderResults();
+    });
+
+    // ── Item click → modal ────────────────────────────────────────
+    document.getElementById('sr-results').addEventListener('click', e => {
       const item = e.target.closest('.sr-item');
       if (!item) return;
       const type = item.dataset.type;
@@ -2289,10 +2475,10 @@
         if (!cart) return;
         const ps = propSummary(cart.properties);
         Modal.open({
-          title: `עגלה ${cart.cartId}`,
+          title: `עגלה ${esc(cart.cartId)}`,
           html: `
-            <p class="card-meta">מיקום: ${cart.location || 'לא ידוע'}</p>
-            ${cart.subLocation ? `<p class="card-meta">תת-מיקום: ${cart.subLocation}</p>` : ''}
+            <p class="card-meta">מיקום: ${esc(cart.location || 'לא ידוע')}</p>
+            ${cart.subLocation ? `<p class="card-meta">תת-מיקום: ${esc(cart.subLocation)}</p>` : ''}
             <p class="card-meta">פריטים: ${cart.isEmpty ? 'ריקה' : (cart.itemCount || 0)}</p>
             ${ps ? `<p class="card-meta">מאפיינים: ${ps}</p>` : ''}
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(cart.lastUpdated)}</p>
@@ -2318,8 +2504,8 @@
         Modal.open({
           title: `פריטי רצפה`,
           html: `
-            <p class="card-meta">מיקום: ${fi.location || 'לא ידוע'}</p>
-            ${fi.subLocation ? `<p class="card-meta">תת-מיקום: ${fi.subLocation}</p>` : ''}
+            <p class="card-meta">מיקום: ${esc(fi.location || 'לא ידוע')}</p>
+            ${fi.subLocation ? `<p class="card-meta">תת-מיקום: ${esc(fi.subLocation)}</p>` : ''}
             <p class="card-meta">פריטים: ${fi.isEmpty ? 'ריקה' : (fi.itemCount || 0)}</p>
             ${ps ? `<p class="card-meta">מאפיינים: ${ps}</p>` : ''}
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(fi.lastUpdated)}</p>
@@ -2343,7 +2529,9 @@
 
     Router.register('search', {
       onShow() {
-        renderResults(screen.querySelector('#sr-input').value);
+        buildFilterPanels();
+        updateActionsBar();
+        renderResults();
       }
     });
   }
