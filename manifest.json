@@ -1,0 +1,16 @@
+{
+  "name": "שינוע",
+  "short_name": "שינוע",
+  "description": "ניהול עגלות ולוגיסטיקה",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0F4C81",
+  "theme_color": "#0F4C81",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml",
+      "purpose": "any maskable" }
+  ]
+}

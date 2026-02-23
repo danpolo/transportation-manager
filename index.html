@@ -1,0 +1,2481 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F4C81">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon.svg">
+  <title>שינוע</title>
+  <style>
+    /* ─── Reset & Base ─── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+
+    :root {
+      --primary:  #0F4C81;
+      --accent:   #FF6B35;
+      --bg:       #F7F8FC;
+      --surface:  #FFFFFF;
+      --text:     #1A1A2E;
+      --muted:    #6B7280;
+      --border:   #E5E7EB;
+      --success:  #16A34A;
+      --error:    #DC2626;
+      --nav-h:    64px;
+      --hdr-h:    56px;
+    }
+
+    body {
+      direction: rtl;
+      text-align: right;
+      font-family: -apple-system, BlinkMacSystemFont, 'Heebo', 'Arial Hebrew',
+                   'Noto Sans Hebrew', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* ─── App Shell ─── */
+    #app {
+      display: grid;
+      grid-template-rows: 1fr var(--nav-h);
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    #screen-container {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+    }
+
+    .screen { min-height: 100%; display: flex; flex-direction: column; }
+    .screen[hidden] { display: none !important; }
+
+    /* ─── Screen Header ─── */
+    .screen-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--primary);
+      color: #fff;
+      height: var(--hdr-h);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+    }
+    .screen-header h1 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      flex: 1;
+    }
+    .screen-header .header-icon { font-size: 1.4rem; }
+
+    /* ─── Bottom Nav ─── */
+    #bottom-nav {
+      display: flex;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 6px 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.65rem;
+      font-family: inherit;
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-item .nav-icon { font-size: 1.4rem; line-height: 1; }
+    .nav-item.active { color: var(--primary); }
+    .nav-item:active { opacity: 0.7; }
+
+    /* ─── Cards ─── */
+    .card {
+      background: var(--surface);
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 14px 16px;
+      margin: 0 12px 10px;
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .card-meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ─── Form Elements ─── */
+    .form-group { margin-bottom: 14px; }
+    .form-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+      background: var(--surface);
+      color: var(--text);
+      direction: rtl;
+      text-align: right;
+      transition: border-color 0.15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .form-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: left 12px center;
+      padding-left: 32px;
+    }
+
+    /* ─── Buttons ─── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 11px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.95rem;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { opacity: 0.8; transform: scale(0.98); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-accent  { background: var(--accent);  color: #fff; }
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--primary);
+      padding: 8px 12px;
+    }
+    .btn-danger { background: var(--error); color: #fff; }
+    .btn-sm { padding: 7px 12px; font-size: 0.82rem; }
+    .btn-full { width: 100%; }
+    .btn-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-icon:active { background: var(--border); }
+
+    /* ─── Pill Toggle ─── */
+    .pill-toggle {
+      display: flex;
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 2px;
+      border: 1px solid var(--border);
+    }
+    .pill-toggle button {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pill-toggle button.active {
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+
+    /* ─── Item ID rows ─── */
+    .item-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .item-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .item-row-num {
+      font-size: 0.78rem;
+      color: var(--muted);
+      min-width: 22px;
+      text-align: center;
+    }
+    .item-id-input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      direction: ltr;
+      text-align: left;
+    }
+    .item-id-input:focus { outline: none; border-color: var(--primary); }
+
+    /* ─── Tags / Badges ─── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-floor { background: #FEF3C7; color: #92400E; }
+    .badge-empty { background: #F3F4F6; color: var(--muted); }
+
+    /* ─── Tabs ─── */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border);
+      margin: 0 12px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px 8px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    /* ─── List items ─── */
+    .list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item-body { flex: 1; min-width: 0; }
+    .list-item-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .list-item-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .list-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+    /* ─── Search ─── */
+    .search-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .search-input {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      direction: rtl;
+      text-align: right;
+    }
+    .search-input:focus { outline: none; border-color: var(--primary); }
+
+    /* ─── Location Group ─── */
+    .loc-group { margin-bottom: 4px; }
+    .loc-group-header {
+      padding: 8px 16px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--primary);
+      background: #EBF4FF;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    /* ─── Property Editor ─── */
+    .prop-group { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+    .prop-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 14px;
+      background: var(--surface);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .prop-group-header-left { display: flex; align-items: center; gap: 8px; }
+    .prop-chevron { transition: transform 0.2s; font-style: normal; }
+    .prop-group.expanded .prop-chevron { transform: rotate(90deg); }
+    .prop-options {
+      display: none;
+      padding: 6px 14px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .prop-group.expanded .prop-options { display: block; }
+    .prop-option-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .prop-option-row:last-of-type { border-bottom: none; }
+    .prop-add-row { display: flex; gap: 8px; margin-top: 10px; }
+    .prop-add-row input { flex: 1; }
+
+    /* ─── Main screen hero buttons ─── */
+    .hero-btn {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 22px 20px;
+      background: var(--surface);
+      border: none;
+      border-radius: 14px;
+      width: 100%;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin-bottom: 14px;
+      transition: transform 0.1s, box-shadow 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hero-btn:active { transform: scale(0.98); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .hero-btn-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      flex-shrink: 0;
+    }
+    .hero-btn-body { text-align: right; }
+    .hero-btn-title { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .hero-btn-sub { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+
+    /* ─── Modal ─── */
+    #modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    #modal-overlay[hidden] { display: none !important; }
+    .modal-sheet {
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 540px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    }
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto 16px;
+    }
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .modal-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+
+    /* ─── Toast ─── */
+    #toast-container {
+      position: fixed;
+      bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .toast {
+      padding: 10px 18px;
+      border-radius: 24px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fff;
+      max-width: 300px;
+      text-align: center;
+      animation: toastIn 0.25s ease;
+      pointer-events: none;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .toast-success { background: var(--success); }
+    .toast-error   { background: var(--error); }
+    .toast-info    { background: var(--primary); }
+
+    /* ─── Utilities ─── */
+    .p-screen  { padding: 12px; }
+    .mt-8  { margin-top: 8px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 8px 16px 4px;
+    }
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 0;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+    .empty-state-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .empty-state-text { font-size: 0.9rem; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+
+    /* ─── Autocomplete dropdown ─── */
+    .ac-dropdown {
+      position: fixed;
+      z-index: 300;
+      background: var(--surface);
+      border: 1.5px solid var(--primary);
+      border-radius: 0 0 10px 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      max-height: 200px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .ac-item {
+      padding: 12px 14px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      direction: rtl;
+      text-align: right;
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item:active { background: var(--bg); }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <main id="screen-container">
+      <section id="screen-main"       class="screen"></section>
+      <section id="screen-search"     class="screen" hidden></section>
+      <section id="screen-transfer"   class="screen" hidden></section>
+      <section id="screen-loadunload" class="screen" hidden></section>
+      <section id="screen-edit"       class="screen" hidden></section>
+    </main>
+    <nav id="bottom-nav"></nav>
+  </div>
+  <div id="modal-overlay" hidden></div>
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 1 — DB
+  ════════════════════════════════════════════════════ -->
+  <script>
+  const DB = (() => {
+    const KEY = 'shinua_data';
+    let _cache = null;
+
+    function _empty() {
+      return { metadata: { carts: [], properties: [], locations: [] }, carts: {}, floorItems: {} };
+    }
+
+    function load() {
+      if (_cache) return _cache;
+      try {
+        const raw = localStorage.getItem(KEY);
+        _cache = raw ? JSON.parse(raw) : _empty();
+        // ensure all sections exist (migrate old data)
+        if (!_cache.metadata)             _cache.metadata = { carts: [], properties: [], locations: [] };
+        if (!_cache.metadata.carts)       _cache.metadata.carts = [];
+        if (!_cache.metadata.properties)  _cache.metadata.properties = [];
+        if (!_cache.metadata.locations)   _cache.metadata.locations = [];
+        if (!_cache.carts)                _cache.carts = {};
+        if (!_cache.floorItems)           _cache.floorItems = {};
+      } catch(e) {
+        _cache = _empty();
+      }
+      return _cache;
+    }
+
+    function save() {
+      localStorage.setItem(KEY, JSON.stringify(_cache));
+    }
+
+    function getMetadata() { return load().metadata; }
+
+    function getCart(id) { return load().carts[id] || null; }
+
+    function getAllCarts() { return Object.values(load().carts); }
+
+    function upsertCart(data) {
+      const db = load();
+      const existing = db.carts[data.cartId] || {};
+      db.carts[data.cartId] = Object.assign({}, existing, data, { lastUpdated: Date.now() });
+      // ensure cartId is in metadata.carts list
+      if (!db.metadata.carts.includes(data.cartId)) {
+        db.metadata.carts.push(data.cartId);
+      }
+      save();
+      return db.carts[data.cartId];
+    }
+
+    function deleteCart(id) {
+      const db = load();
+      delete db.carts[id];
+      db.metadata.carts = db.metadata.carts.filter(c => c !== id);
+      save();
+    }
+
+    function getFloorItem(id) { return load().floorItems[id] || null; }
+
+    function getAllFloorItems() { return Object.values(load().floorItems); }
+
+    function upsertFloorItem(data) {
+      const db = load();
+      const id = data.id || ('fi_' + Date.now());
+      const existing = db.floorItems[id] || {};
+      db.floorItems[id] = Object.assign({}, existing, data, { id, lastUpdated: Date.now() });
+      save();
+      return db.floorItems[id];
+    }
+
+    function deleteFloorItem(id) {
+      const db = load();
+      delete db.floorItems[id];
+      save();
+    }
+
+    function upsertLocation(locData) {
+      // locData: { name, inMap }
+      const db = load();
+      const idx = db.metadata.locations.findIndex(l => l.name === locData.name);
+      if (idx >= 0) {
+        db.metadata.locations[idx] = Object.assign({}, db.metadata.locations[idx], locData);
+      } else {
+        db.metadata.locations.push(locData);
+      }
+      save();
+    }
+
+    function deleteLocation(name) {
+      const db = load();
+      db.metadata.locations = db.metadata.locations.filter(l => l.name !== name);
+      save();
+    }
+
+    function upsertProperty(propData) {
+      // propData: { name, options: [] }
+      const db = load();
+      const idx = db.metadata.properties.findIndex(p => p.name === propData.name);
+      if (idx >= 0) {
+        db.metadata.properties[idx] = Object.assign({}, db.metadata.properties[idx], propData);
+      } else {
+        db.metadata.properties.push(propData);
+      }
+      save();
+    }
+
+    function deleteProperty(name) {
+      const db = load();
+      db.metadata.properties = db.metadata.properties.filter(p => p.name !== name);
+      save();
+    }
+
+    function addPropertyOption(propName, option) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      if (prop && !prop.options.includes(option)) {
+        prop.options.push(option);
+        save();
+      }
+    }
+
+    function removePropertyOption(propName, option) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      if (prop) {
+        prop.options = prop.options.filter(o => o !== option);
+        save();
+      }
+    }
+
+    function addMetaCart(cartId) {
+      const db = load();
+      if (!db.metadata.carts.includes(cartId)) {
+        db.metadata.carts.push(cartId);
+        save();
+      }
+    }
+
+    function removeMetaCart(cartId) {
+      const db = load();
+      db.metadata.carts = db.metadata.carts.filter(c => c !== cartId);
+      save();
+    }
+
+    function importJSON(json, mode) {
+      // mode = 'merge'
+      let incoming;
+      try { incoming = JSON.parse(json); } catch(e) { throw new Error('JSON לא תקין'); }
+      const db = load();
+
+      if (mode === 'merge') {
+        // Carts: keep higher lastUpdated
+        const inCarts = incoming.carts || {};
+        for (const [id, cart] of Object.entries(inCarts)) {
+          const existing = db.carts[id];
+          if (!existing || (cart.lastUpdated || 0) > (existing.lastUpdated || 0)) {
+            db.carts[id] = cart;
+            if (!db.metadata.carts.includes(id)) db.metadata.carts.push(id);
+          }
+        }
+        // FloorItems: keep higher lastUpdated
+        const inFI = incoming.floorItems || {};
+        for (const [id, fi] of Object.entries(inFI)) {
+          const existing = db.floorItems[id];
+          if (!existing || (fi.lastUpdated || 0) > (existing.lastUpdated || 0)) {
+            db.floorItems[id] = fi;
+          }
+        }
+        // Metadata: union + dedup
+        const inMeta = incoming.metadata || {};
+        // carts list
+        (inMeta.carts || []).forEach(c => { if (!db.metadata.carts.includes(c)) db.metadata.carts.push(c); });
+        // locations by name
+        (inMeta.locations || []).forEach(loc => {
+          const idx = db.metadata.locations.findIndex(l => l.name === loc.name);
+          if (idx < 0) db.metadata.locations.push(loc);
+        });
+        // properties by name, options union
+        (inMeta.properties || []).forEach(prop => {
+          const existing = db.metadata.properties.find(p => p.name === prop.name);
+          if (!existing) {
+            db.metadata.properties.push(prop);
+          } else {
+            (prop.options || []).forEach(o => {
+              if (!existing.options.includes(o)) existing.options.push(o);
+            });
+          }
+        });
+      } else {
+        // replace
+        _cache = incoming;
+        // ensure structure
+        if (!_cache.metadata)            _cache.metadata = { carts: [], properties: [], locations: [] };
+        if (!_cache.carts)               _cache.carts = {};
+        if (!_cache.floorItems)          _cache.floorItems = {};
+      }
+      save();
+    }
+
+    function getRaw() { return JSON.stringify(load()); }
+
+    function clear() {
+      _cache = _empty();
+      save();
+    }
+
+    return {
+      load, save, getMetadata, getCart, getAllCarts, upsertCart, deleteCart,
+      getFloorItem, getAllFloorItems, upsertFloorItem, deleteFloorItem,
+      upsertLocation, deleteLocation, upsertProperty, deleteProperty,
+      addPropertyOption, removePropertyOption, addMetaCart, removeMetaCart,
+      importJSON, getRaw, clear
+    };
+  })();
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 2 — Utils
+  ════════════════════════════════════════════════════ -->
+  <script>
+  // HTML-attribute escape — prevents " in user data from breaking markup
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  const Utils = (() => {
+    function base64Encode(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    function base64Decode(b64) {
+      return decodeURIComponent(escape(atob(b64)));
+    }
+
+    function formatDate(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      const dd   = String(d.getDate()).padStart(2,'0');
+      const mm   = String(d.getMonth()+1).padStart(2,'0');
+      const yyyy = d.getFullYear();
+      const hh   = String(d.getHours()).padStart(2,'0');
+      const min  = String(d.getMinutes()).padStart(2,'0');
+      return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+    }
+
+    function generateExportText(dbJSON) {
+      let parsed;
+      try { parsed = JSON.parse(dbJSON); } catch(e) { parsed = {}; }
+      const now = formatDate(Date.now());
+      const carts = Object.values(parsed.carts || {});
+      const fis   = Object.values(parsed.floorItems || {});
+
+      // summary by location
+      const locMap = {};
+      carts.forEach(c => {
+        const loc = c.location || 'ללא מיקום';
+        if (!locMap[loc]) locMap[loc] = { carts: 0, empty: 0, fi: 0 };
+        locMap[loc].carts++;
+        if (c.isEmpty) locMap[loc].empty++;
+      });
+      fis.forEach(fi => {
+        const loc = fi.location || 'ללא מיקום';
+        if (!locMap[loc]) locMap[loc] = { carts: 0, empty: 0, fi: 0 };
+        locMap[loc].fi++;
+      });
+
+      let summary = '';
+      for (const [loc, s] of Object.entries(locMap)) {
+        const parts = [];
+        if (s.carts) parts.push(`${s.carts} עגלות` + (s.empty ? ` (${s.empty} ריקות)` : ''));
+        if (s.fi)    parts.push(`${s.fi} קבוצות רצפה`);
+        summary += `${loc}: ${parts.join(', ')}\n`;
+      }
+
+      const b64 = base64Encode(dbJSON);
+      return `=== ייצוא נתונים — שינוע ===\nתאריך: ${now}\n\n${summary}\nSHINUA_DATA_START\n${b64}\nSHINUA_DATA_END`;
+    }
+
+    function parseImportText(text) {
+      const start = text.indexOf('SHINUA_DATA_START');
+      const end   = text.indexOf('SHINUA_DATA_END');
+      if (start < 0 || end < 0) throw new Error('פורמט לא תקין — לא נמצא SHINUA_DATA_START/END');
+      const b64 = text.slice(start + 'SHINUA_DATA_START'.length, end).trim();
+      return base64Decode(b64);
+    }
+
+    function generateMapText(db) {
+      const now = formatDate(Date.now());
+      const meta   = db.metadata || {};
+      const carts  = db.carts || {};
+      const fis    = db.floorItems || {};
+      const locs   = (meta.locations || []).filter(l => l.inMap);
+
+      if (!locs.length) return `מיפוי\n${now}\n(אין מיקומים מסומנים בעמוד המיפוי)`;
+
+      let out = `מיפוי\n${now}\n`;
+      for (const loc of locs) {
+        out += `${loc.name}:\n`;
+        // carts at this location
+        const locCarts = Object.values(carts).filter(c => c.location === loc.name);
+        locCarts.forEach(c => {
+          if (c.isEmpty || !c.itemCount) {
+            out += `${c.cartId}: empty\n`;
+          } else {
+            const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
+            out += `${c.cartId}: ${c.itemCount} ${propVals}\n`.trim() + '\n';
+          }
+        });
+        // floor items at this location
+        const locFIs = Object.values(fis).filter(fi => fi.location === loc.name);
+        locFIs.forEach(fi => {
+          if (fi.isEmpty || !fi.itemCount) {
+            out += `[רצפה] empty\n`;
+          } else {
+            const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
+            out += `[רצפה] ${fi.itemCount} ${propVals}\n`.trim() + '\n';
+          }
+        });
+        out += '----------------------------------\n';
+      }
+      return out.trim();
+    }
+
+    function copyMessage(cartId, count, props, from, to) {
+      const propStr = Object.values(props || {}).filter(Boolean).join(' ');
+      const parts = [`עגלה ${cartId}`];
+      if (count) parts.push(`${count}${propStr ? ' ' + propStr : ''}`);
+      if (from || to) parts.push(`מועברת מ${from || '?'} ל${to || '?'}`);
+      return parts.join(' | ');
+    }
+
+    function copyToClipboard(text) {
+      const tryModern = (navigator.clipboard && navigator.clipboard.writeText)
+        ? navigator.clipboard.writeText(text)
+        : Promise.reject(new Error('no clipboard api'));
+
+      return tryModern.catch(() => new Promise((resolve, reject) => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        Object.assign(ta.style, { position: 'fixed', top: '0', left: '0',
+                                   opacity: '0', pointerEvents: 'none' });
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok ? resolve() : reject(new Error('execCommand failed'));
+        } catch(e) {
+          document.body.removeChild(ta);
+          reject(e);
+        }
+      }));
+    }
+
+    return { base64Encode, base64Decode, formatDate, generateExportText,
+             parseImportText, generateMapText, copyMessage, copyToClipboard };
+  })();
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 3 — Router
+  ════════════════════════════════════════════════════ -->
+  <script>
+  const Router = (() => {
+    const _screens = {};
+    let _current = null;
+
+    function register(name, handlers) {
+      _screens[name] = handlers;
+    }
+
+    function navigate(name, params) {
+      const screenEl = document.getElementById('screen-' + name);
+      if (!screenEl) return;
+
+      // hide current
+      if (_current && _current !== name) {
+        const prev = document.getElementById('screen-' + _current);
+        if (prev) prev.hidden = true;
+      }
+
+      screenEl.hidden = false;
+      _current = name;
+
+      // update nav active state
+      document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.screen === name);
+      });
+
+      if (_screens[name] && _screens[name].onShow) {
+        _screens[name].onShow(params || {});
+      }
+    }
+
+    function getCurrent() { return _current; }
+
+    window.addEventListener('hashchange', () => {
+      const name = location.hash.replace('#','') || 'main';
+      navigate(name);
+    });
+
+    return { register, navigate, getCurrent };
+  })();
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 4 — Components
+  ════════════════════════════════════════════════════ -->
+  <script>
+  // ── Autocomplete ──
+  // makeAutocomplete(inputEl, getOptions)
+  // getOptions: () => string[]  — called lazily on each keystroke
+  function makeAutocomplete(input, getOptions) {
+    // Remove any existing dropdown for this input (handles re-renders)
+    const existId = input.id ? ('ac-' + input.id) : null;
+    if (existId) { const old = document.getElementById(existId); if (old) old.remove(); }
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'ac-dropdown';
+    if (existId) dropdown.id = existId;
+    dropdown.style.cssText = 'position:fixed;z-index:300;display:none';
+    document.body.appendChild(dropdown);
+
+    function position() {
+      const r = input.getBoundingClientRect();
+      dropdown.style.top   = r.bottom + 'px';
+      dropdown.style.left  = r.left   + 'px';
+      dropdown.style.width = r.width  + 'px';
+    }
+
+    function render() {
+      const opts = getOptions();
+      const q = input.value.trim().toLowerCase();
+      const filtered = q ? opts.filter(o => String(o).toLowerCase().includes(q)) : opts;
+      if (!filtered.length) { hide(); return; }
+      position();
+      dropdown.innerHTML = filtered.map(o => `<div class="ac-item">${esc(o)}</div>`).join('');
+      dropdown.style.display = '';
+      dropdown.querySelectorAll('.ac-item').forEach((item, i) => {
+        const pick = () => {
+          input.value = filtered[i];
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          hide();
+        };
+        item.addEventListener('mousedown', e => { e.preventDefault(); pick(); });
+        item.addEventListener('touchend',  e => { e.preventDefault(); pick(); });
+      });
+    }
+
+    function hide() { dropdown.style.display = 'none'; dropdown.innerHTML = ''; }
+
+    input.addEventListener('input',   render);
+    input.addEventListener('focus',   render);
+    input.addEventListener('blur',    () => setTimeout(hide, 200));
+    input.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  }
+
+  // ── Location + conditional sublocation ──
+  // Shows subGroup only when the chosen location has saved sublocations.
+  function setupLocationFields(locInput, subGroup, subInput) {
+    makeAutocomplete(locInput, () => DB.getMetadata().locations.map(l => l.name));
+    makeAutocomplete(subInput, () => {
+      const loc = DB.getMetadata().locations.find(l => l.name === locInput.value.trim());
+      return (loc && loc.subLocations) || [];
+    });
+
+    function updateSub() {
+      const loc  = DB.getMetadata().locations.find(l => l.name === locInput.value.trim());
+      const subs = loc && loc.subLocations && loc.subLocations.length;
+      subGroup.hidden = !subs;
+      if (!subs) subInput.value = '';
+    }
+
+    locInput.addEventListener('change', updateSub);
+    locInput.addEventListener('input',  updateSub);
+    updateSub();
+  }
+
+  // ── Bottom Nav ──
+  const BottomNav = {
+    items: [
+      { screen: 'main',       icon: '🛒', label: 'ראשי' },
+      { screen: 'search',     icon: '🔍', label: 'חיפוש' },
+      { screen: 'transfer',   icon: '🔄', label: 'העברה' },
+      { screen: 'loadunload', icon: '📦', label: 'העמסה' },
+      { screen: 'edit',       icon: '✏️',  label: 'עריכה' },
+    ],
+    render() {
+      const nav = document.getElementById('bottom-nav');
+      nav.innerHTML = this.items.map(item => `
+        <button class="nav-item" data-screen="${item.screen}" aria-label="${item.label}">
+          <span class="nav-icon">${item.icon}</span>
+          <span>${item.label}</span>
+        </button>
+      `).join('');
+      nav.addEventListener('click', e => {
+        const btn = e.target.closest('.nav-item');
+        if (!btn) return;
+        const screen = btn.dataset.screen;
+        Router.navigate(screen);
+        history.replaceState(null, '', '#' + screen);
+      });
+    }
+  };
+
+  // ── Modal ──
+  const Modal = {
+    open({ title = '', html = '', actions = [] } = {}) {
+      const overlay = document.getElementById('modal-overlay');
+      overlay.innerHTML = `
+        <div class="modal-sheet" role="dialog" aria-modal="true">
+          <div class="modal-handle"></div>
+          ${title ? `<div class="modal-title">${title}</div>` : ''}
+          ${html}
+          ${actions.length ? `<div class="modal-actions">${actions.map(a =>
+            `<button class="btn ${a.cls || 'btn-outline'} btn-full" data-action="${a.id}">${a.label}</button>`
+          ).join('')}</div>` : ''}
+        </div>
+      `;
+      overlay.hidden = false;
+
+      // action buttons
+      overlay.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const action = actions.find(a => a.id === btn.dataset.action);
+          if (action && action.onClick) action.onClick();
+        });
+      });
+
+      // backdrop close
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) Modal.close();
+      }, { once: true });
+    },
+
+    close() {
+      const overlay = document.getElementById('modal-overlay');
+      overlay.hidden = true;
+      overlay.innerHTML = '';
+    }
+  };
+
+  // ── Toast ──
+  const Toast = {
+    show(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = `toast toast-${type}`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.transition = 'opacity 0.3s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      }, 2700);
+    }
+  };
+
+  // ── CartForm ──
+  // Creates a cart ID input with autocomplete datalist inside `container`
+  function CartForm(container, { onCartLoaded } = {}) {
+    const inputId = 'cart-id-input-' + Date.now();
+    container.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">מספר עגלה</label>
+        <input id="${inputId}" class="form-input cart-id-input"
+               placeholder="הקלד מספר עגלה..." autocomplete="off">
+      </div>
+    `;
+    const input = container.querySelector('.cart-id-input');
+    makeAutocomplete(input, () => DB.getMetadata().carts);
+
+    function lookup() {
+      const id = input.value.trim();
+      if (!id) { if (onCartLoaded) onCartLoaded(null); return; }
+      const cart = DB.getCart(id);
+      if (onCartLoaded) onCartLoaded(cart);
+    }
+
+    input.addEventListener('change', lookup);
+    input.addEventListener('input', () => {
+      // only auto-lookup if the value exactly matches a known cart
+      if (DB.getCart(input.value.trim())) lookup();
+    });
+
+    return {
+      getValue: () => input.value.trim(),
+      setValue(id) {
+        input.value = id;
+        const evt = new Event('change', { bubbles: true });
+        input.dispatchEvent(evt);
+      },
+      focus() { input.focus(); }
+    };
+  }
+
+  // ── buildPropertyFields ──
+  // Renders property dropdowns from metadata into a container element
+  function buildPropertyFields(container, currentValues) {
+    const props = DB.getMetadata().properties;
+    if (!props.length) {
+      container.innerHTML = '<p class="card-meta" style="padding:8px 0">אין מאפיינים מוגדרים. הוסף מאפיינים בלשונית עריכה.</p>';
+      return;
+    }
+    container.innerHTML = props.map(p => `
+      <div class="form-group">
+        <label class="form-label">${esc(p.name)}</label>
+        <select class="form-select" name="${esc(p.name)}">
+          <option value="">— בחר —</option>
+          ${p.options.map(o => `<option value="${esc(o)}" ${(currentValues && currentValues[p.name] === o) ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+        </select>
+      </div>
+    `).join('');
+  }
+
+  // ── readPropertyFields ──
+  function readPropertyFields(container) {
+    const result = {};
+    container.querySelectorAll('select[name]').forEach(sel => {
+      if (sel.value) result[sel.name] = sel.value;
+    });
+    return result;
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 5 — Screen: Edit
+  ════════════════════════════════════════════════════ -->
+  <script>
+  function initEdit() {
+    const screen = document.getElementById('screen-edit');
+    let activeTab = 'carts';
+
+    screen.innerHTML = `
+      <div class="screen-header">
+        <span class="header-icon">✏️</span>
+        <h1>עריכת נתונים</h1>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="carts">עגלות</button>
+        <button class="tab-btn" data-tab="locations">מיקומים</button>
+        <button class="tab-btn" data-tab="properties">מאפיינים</button>
+      </div>
+      <div id="edit-tab-content"></div>
+    `;
+
+    const tabContent = screen.querySelector('#edit-tab-content');
+
+    function renderTab(tab) {
+      activeTab = tab;
+      screen.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      if (tab === 'carts')      renderCartsTab();
+      if (tab === 'locations')  renderLocationsTab();
+      if (tab === 'properties') renderPropertiesTab();
+    }
+
+    screen.querySelector('.tabs').addEventListener('click', e => {
+      const btn = e.target.closest('.tab-btn');
+      if (btn) renderTab(btn.dataset.tab);
+    });
+
+    // ── Carts Tab ──
+    function renderCartsTab() {
+      tabContent.innerHTML = `
+        <div class="p-screen">
+          <div class="card">
+            <div class="card-title">הוספת / עדכון עגלה</div>
+            <div class="form-group">
+              <label class="form-label">מספר עגלה</label>
+              <input id="ec-cartid" class="form-input" placeholder="3-25(110)" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label">מיקום</label>
+              <input id="ec-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+            </div>
+            <div class="form-group" id="ec-subloc-group" hidden>
+              <label class="form-label">תת-מיקום</label>
+              <input id="ec-subloc" class="form-input" placeholder="שורה 3" autocomplete="off">
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer">
+              <input type="checkbox" id="ec-empty"> עגלה ריקה
+            </label>
+            <button id="ec-save" class="btn btn-primary btn-full">שמור עגלה</button>
+          </div>
+
+          <div class="card mt-12">
+            <div class="card-title">עגלות קיימות</div>
+            <div id="ec-list"></div>
+          </div>
+        </div>
+      `;
+
+      // render list
+      function renderList() {
+        const list = tabContent.querySelector('#ec-list');
+        const carts = DB.getAllCarts();
+        if (!carts.length) {
+          list.innerHTML = '<p class="card-meta">אין עגלות</p>';
+          return;
+        }
+        list.innerHTML = carts.sort((a,b) => a.cartId.localeCompare(b.cartId)).map(c => `
+          <div class="list-item">
+            <div class="list-item-body">
+              <div class="list-item-title">${c.cartId}</div>
+              <div class="list-item-sub">${c.location || 'ללא מיקום'}${c.isEmpty ? ' · ריקה' : (c.itemCount ? ' · ' + c.itemCount + ' פריטים' : '')}</div>
+            </div>
+            <div class="list-item-actions">
+              <button class="btn-icon ec-edit-btn" data-id="${esc(c.cartId)}" title="ערוך">✏️</button>
+              <button class="btn-icon ec-del-btn"  data-id="${esc(c.cartId)}" title="מחק">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+      }
+      renderList();
+      makeAutocomplete(tabContent.querySelector('#ec-cartid'), () => DB.getMetadata().carts);
+      setupLocationFields(
+        tabContent.querySelector('#ec-loc'),
+        tabContent.querySelector('#ec-subloc-group'),
+        tabContent.querySelector('#ec-subloc')
+      );
+
+      // save
+      tabContent.querySelector('#ec-save').addEventListener('click', () => {
+        const cartId  = tabContent.querySelector('#ec-cartid').value.trim();
+        if (!cartId) { Toast.show('יש להזין מספר עגלה', 'error'); return; }
+        const loc     = tabContent.querySelector('#ec-loc').value.trim();
+        const subLoc  = tabContent.querySelector('#ec-subloc-group').hidden
+          ? '' : tabContent.querySelector('#ec-subloc').value.trim();
+        const isEmpty = tabContent.querySelector('#ec-empty').checked;
+        DB.upsertCart({ cartId, location: loc, subLocation: subLoc, isEmpty,
+                        itemCount: 0, itemIds: [], properties: {} });
+        Toast.show('עגלה נשמרה', 'success');
+        renderList();
+        tabContent.querySelector('#ec-cartid').value = '';
+        tabContent.querySelector('#ec-loc').value = '';
+        tabContent.querySelector('#ec-subloc').value = '';
+        tabContent.querySelector('#ec-empty').checked = false;
+      });
+
+      // edit / delete delegation
+      tabContent.querySelector('#ec-list').addEventListener('click', e => {
+        const editBtn = e.target.closest('.ec-edit-btn');
+        const delBtn  = e.target.closest('.ec-del-btn');
+        if (editBtn) {
+          const cart = DB.getCart(editBtn.dataset.id);
+          if (!cart) return;
+          tabContent.querySelector('#ec-cartid').value = cart.cartId;
+          const ecLoc = tabContent.querySelector('#ec-loc');
+          ecLoc.value = cart.location || '';
+          ecLoc.dispatchEvent(new Event('change', { bubbles: true }));
+          tabContent.querySelector('#ec-subloc').value = cart.subLocation || '';
+          tabContent.querySelector('#ec-empty').checked = !!cart.isEmpty;
+          tabContent.querySelector('#ec-cartid').scrollIntoView({ behavior: 'smooth' });
+        }
+        if (delBtn) {
+          Modal.open({
+            title: 'מחיקת עגלה',
+            html: `<p>האם למחוק את העגלה <strong>${delBtn.dataset.id}</strong>?</p>`,
+            actions: [
+              { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
+                DB.deleteCart(delBtn.dataset.id);
+                Modal.close();
+                Toast.show('עגלה נמחקה', 'info');
+                renderList();
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+        }
+      });
+    }
+
+    // ── Locations Tab ──
+    function renderLocationsTab() {
+      tabContent.innerHTML = `
+        <div class="p-screen">
+          <div class="card">
+            <div class="card-title">הוספת מיקום</div>
+            <div class="form-group">
+              <label class="form-label">שם מיקום</label>
+              <input id="el-name" class="form-input" placeholder="משני">
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer">
+              <input type="checkbox" id="el-inmap"> הצג במיפוי
+            </label>
+            <button id="el-save" class="btn btn-primary btn-full">שמור מיקום</button>
+          </div>
+
+          <div class="card mt-12">
+            <div class="card-title">מיקומים קיימים</div>
+            <div id="el-list"></div>
+          </div>
+
+          <div class="card mt-12">
+            <div class="card-title">ניהול תתי-מיקומים</div>
+            <div class="form-group">
+              <label class="form-label">בחר מיקום</label>
+              <select id="el-sub-loc-sel" class="form-select">
+                <option value="">— בחר מיקום —</option>
+              </select>
+            </div>
+            <div id="el-sub-list"></div>
+            <div id="el-sub-add-row" class="prop-add-row" hidden>
+              <input id="el-sub-input" class="form-input btn-sm" placeholder="שם תת-מיקום">
+              <button id="el-sub-add" class="btn btn-outline btn-sm">הוסף</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      function renderList() {
+        const list = tabContent.querySelector('#el-list');
+        const locs = DB.getMetadata().locations;
+        if (!locs.length) { list.innerHTML = '<p class="card-meta">אין מיקומים</p>'; return; }
+        list.innerHTML = locs.map(l => {
+          const subs = (l.subLocations || []);
+          const subStr = subs.length ? subs.join(', ') : '';
+          return `
+            <div class="list-item">
+              <div class="list-item-body">
+                <div class="list-item-title">${l.name}</div>
+                <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}</div>
+              </div>
+              <div class="list-item-actions">
+                <button class="btn-icon el-toggle-btn" data-name="${esc(l.name)}" title="${l.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי'}">${l.inMap ? '🗺️' : '📍'}</button>
+                <button class="btn-icon el-del-btn" data-name="${esc(l.name)}" title="מחק">🗑️</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function refreshSubLocSelect() {
+        const sel  = tabContent.querySelector('#el-sub-loc-sel');
+        const locs = DB.getMetadata().locations;
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">— בחר מיקום —</option>' +
+          locs.map(l => `<option value="${esc(l.name)}" ${l.name === prev ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+      }
+
+      function renderSubList(locName) {
+        const subList  = tabContent.querySelector('#el-sub-list');
+        const addRow   = tabContent.querySelector('#el-sub-add-row');
+        if (!locName) { subList.innerHTML = ''; addRow.hidden = true; return; }
+        addRow.hidden = false;
+        const loc  = DB.getMetadata().locations.find(l => l.name === locName);
+        const subs = (loc && loc.subLocations) || [];
+        if (!subs.length) {
+          subList.innerHTML = '<p class="card-meta" style="margin-bottom:8px">אין תתי-מיקומים</p>';
+          return;
+        }
+        subList.innerHTML = subs.map(s => `
+          <div class="prop-option-row">
+            <span>• ${s}</span>
+            <button class="btn-icon el-sub-del" data-loc="${esc(locName)}" data-sub="${esc(s)}">✕</button>
+          </div>
+        `).join('');
+      }
+
+      renderList();
+      refreshSubLocSelect();
+
+      tabContent.querySelector('#el-save').addEventListener('click', () => {
+        const name  = tabContent.querySelector('#el-name').value.trim();
+        if (!name) { Toast.show('יש להזין שם מיקום', 'error'); return; }
+        const inMap = tabContent.querySelector('#el-inmap').checked;
+        DB.upsertLocation({ name, inMap });
+        Toast.show('מיקום נשמר', 'success');
+        renderList();
+        refreshSubLocSelect();
+        tabContent.querySelector('#el-name').value = '';
+        tabContent.querySelector('#el-inmap').checked = false;
+      });
+
+      tabContent.querySelector('#el-list').addEventListener('click', e => {
+        const toggleBtn = e.target.closest('.el-toggle-btn');
+        const delBtn    = e.target.closest('.el-del-btn');
+        if (toggleBtn) {
+          const name = toggleBtn.dataset.name;
+          const loc  = DB.getMetadata().locations.find(l => l.name === name);
+          if (loc) { DB.upsertLocation({ name, inMap: !loc.inMap }); renderList(); }
+        }
+        if (delBtn) {
+          DB.deleteLocation(delBtn.dataset.name);
+          Toast.show('מיקום נמחק', 'info');
+          renderList();
+          refreshSubLocSelect();
+          renderSubList(tabContent.querySelector('#el-sub-loc-sel').value);
+        }
+      });
+
+      // sublocation select change
+      tabContent.querySelector('#el-sub-loc-sel').addEventListener('change', e => {
+        renderSubList(e.target.value);
+      });
+
+      // add sublocation
+      tabContent.querySelector('#el-sub-add').addEventListener('click', () => {
+        const locName = tabContent.querySelector('#el-sub-loc-sel').value;
+        const input   = tabContent.querySelector('#el-sub-input');
+        const sub     = input.value.trim();
+        if (!locName) { Toast.show('יש לבחור מיקום', 'error'); return; }
+        if (!sub)     { Toast.show('יש להזין שם תת-מיקום', 'error'); return; }
+        const loc  = DB.getMetadata().locations.find(l => l.name === locName);
+        const subs = [...((loc && loc.subLocations) || [])];
+        if (!subs.includes(sub)) {
+          subs.push(sub);
+          DB.upsertLocation({ name: locName, subLocations: subs });
+          Toast.show('תת-מיקום נוסף', 'success');
+        }
+        input.value = '';
+        renderSubList(locName);
+        renderList();
+      });
+
+      // allow Enter in sublocation input
+      tabContent.querySelector('#el-sub-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') tabContent.querySelector('#el-sub-add').click();
+      });
+
+      // delete sublocation (event delegation on the sub-list)
+      tabContent.querySelector('#el-sub-list').addEventListener('click', e => {
+        const delBtn = e.target.closest('.el-sub-del');
+        if (!delBtn) return;
+        const locName = delBtn.dataset.loc;
+        const sub     = delBtn.dataset.sub;
+        const loc     = DB.getMetadata().locations.find(l => l.name === locName);
+        if (!loc) return;
+        const subs = (loc.subLocations || []).filter(s => s !== sub);
+        DB.upsertLocation({ name: locName, subLocations: subs });
+        renderSubList(locName);
+        renderList();
+      });
+    }
+
+    // ── Properties Tab ──
+    function renderPropertiesTab() {
+      tabContent.innerHTML = `
+        <div class="p-screen">
+          <div class="card">
+            <div class="card-title">הוספת מאפיין</div>
+            <div class="form-group">
+              <label class="form-label">שם מאפיין</label>
+              <input id="ep-name" class="form-input" placeholder="מרעום">
+            </div>
+            <button id="ep-save" class="btn btn-primary btn-full">הוסף מאפיין</button>
+          </div>
+
+          <div class="card mt-12">
+            <div class="card-title">מאפיינים קיימים</div>
+            <div id="ep-list"></div>
+          </div>
+        </div>
+      `;
+
+      function renderList() {
+        const list  = tabContent.querySelector('#ep-list');
+        const props = DB.getMetadata().properties;
+        if (!props.length) { list.innerHTML = '<p class="card-meta">אין מאפיינים</p>'; return; }
+        list.innerHTML = props.map(p => `
+          <div class="prop-group" data-prop="${esc(p.name)}">
+            <div class="prop-group-header">
+              <div class="prop-group-header-left">
+                <i class="prop-chevron">▶</i>
+                <strong>${esc(p.name)}</strong>
+              </div>
+              <button class="btn-icon ep-del-prop" data-prop="${esc(p.name)}" title="מחק מאפיין">✕</button>
+            </div>
+            <div class="prop-options">
+              ${p.options.map(o => `
+                <div class="prop-option-row">
+                  <span>• ${esc(o)}</span>
+                  <button class="btn-icon ep-del-opt" data-prop="${esc(p.name)}" data-opt="${esc(o)}">✕</button>
+                </div>
+              `).join('')}
+              <div class="prop-add-row">
+                <input class="form-input btn-sm ep-opt-input" data-prop="${esc(p.name)}" placeholder="אפשרות חדשה">
+                <button class="btn btn-outline btn-sm ep-add-opt" data-prop="${esc(p.name)}">הוסף</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+      renderList();
+
+      tabContent.querySelector('#ep-save').addEventListener('click', () => {
+        const name = tabContent.querySelector('#ep-name').value.trim();
+        if (!name) { Toast.show('יש להזין שם מאפיין', 'error'); return; }
+        DB.upsertProperty({ name, options: [] });
+        Toast.show('מאפיין נוסף', 'success');
+        renderList();
+        tabContent.querySelector('#ep-name').value = '';
+      });
+
+      tabContent.querySelector('#ep-list').addEventListener('click', e => {
+        // expand/collapse
+        const header = e.target.closest('.prop-group-header');
+        if (header && !e.target.closest('button')) {
+          header.closest('.prop-group').classList.toggle('expanded');
+          return;
+        }
+        // delete property
+        const delProp = e.target.closest('.ep-del-prop');
+        if (delProp) {
+          DB.deleteProperty(delProp.dataset.prop);
+          Toast.show('מאפיין נמחק', 'info');
+          renderList();
+          return;
+        }
+        // delete option
+        const delOpt = e.target.closest('.ep-del-opt');
+        if (delOpt) {
+          DB.removePropertyOption(delOpt.dataset.prop, delOpt.dataset.opt);
+          renderList();
+          return;
+        }
+        // add option
+        const addOpt = e.target.closest('.ep-add-opt');
+        if (addOpt) {
+          const propName = addOpt.dataset.prop;
+          const input = Array.from(tabContent.querySelectorAll('.ep-opt-input')).find(el => el.dataset.prop === propName);
+          const val   = input ? input.value.trim() : '';
+          if (!val) return;
+          DB.addPropertyOption(propName, val);
+          renderList();
+          // re-expand the group
+          const group = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
+          if (group) group.classList.add('expanded');
+          return;
+        }
+      });
+
+      // allow Enter in option input
+      tabContent.querySelector('#ep-list').addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          const addBtn = e.target.closest('.ep-opt-input');
+          if (addBtn) {
+            const propName = addBtn.dataset.prop;
+            const btn = Array.from(tabContent.querySelectorAll('.ep-add-opt')).find(el => el.dataset.prop === propName);
+            if (btn) btn.click();
+          }
+        }
+      });
+    }
+
+    Router.register('edit', {
+      onShow() { renderTab(activeTab); }
+    });
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 6 — Screen: Transfer
+  ════════════════════════════════════════════════════ -->
+  <script>
+  function initTransfer() {
+    const screen = document.getElementById('screen-transfer');
+
+    screen.innerHTML = `
+      <div class="screen-header">
+        <span class="header-icon">🔄</span>
+        <h1>העברת עגלה / פריטים</h1>
+      </div>
+      <div class="p-screen">
+        <div class="form-group">
+          <div class="pill-toggle" id="tr-mode-toggle">
+            <button class="active" data-mode="cart">עגלה</button>
+            <button data-mode="floor">רצפה</button>
+          </div>
+        </div>
+
+        <!-- cart mode -->
+        <div id="tr-cart-section">
+          <div id="tr-cart-form-host"></div>
+        </div>
+
+        <!-- floor mode -->
+        <div id="tr-floor-section" hidden>
+          <div class="form-group">
+            <label class="form-label">קבוצת רצפה</label>
+            <select id="tr-fi-select" class="form-select">
+              <option value="">— בחר קבוצת רצפה —</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- shared fields -->
+        <div id="tr-shared-fields" hidden>
+          <div id="tr-current-info" class="card" style="margin:0 0 14px;"></div>
+
+          <div class="form-group">
+            <label class="form-label">מיקום יעד</label>
+            <input id="tr-dest-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+          </div>
+          <div class="form-group" id="tr-dest-subloc-group" hidden>
+            <label class="form-label">תת-מיקום יעד</label>
+            <input id="tr-dest-subloc" class="form-input" placeholder="שורה 3" autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">מספר פריטים</label>
+            <input id="tr-count" class="form-input" type="number" min="0" placeholder="0">
+          </div>
+          <div id="tr-item-rows" class="item-rows"></div>
+          <div id="tr-prop-fields" class="mt-12"></div>
+
+          <div class="row mt-16">
+            <button id="tr-copy-btn" class="btn btn-outline">📋 העתק</button>
+            <button id="tr-save-btn" class="btn btn-primary">💾 שמור</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    let _mode = 'cart';       // 'cart' | 'floor'
+    let _cartRef = null;      // CartForm instance
+    let _currentData = null;  // current cart or floor item object
+    let _currentType = null;  // 'cart' | 'fi'
+
+    // Set up location + conditional sublocation autocomplete
+    setupLocationFields(
+      screen.querySelector('#tr-dest-loc'),
+      screen.querySelector('#tr-dest-subloc-group'),
+      screen.querySelector('#tr-dest-subloc')
+    );
+
+    // populate floor item select
+    function refreshFISelect() {
+      const sel = screen.querySelector('#tr-fi-select');
+      const fis = DB.getAllFloorItems();
+      sel.innerHTML = '<option value="">— בחר קבוצת רצפה —</option>';
+      // group by location
+      const byLoc = {};
+      fis.forEach(fi => {
+        const loc = fi.location || 'ללא מיקום';
+        if (!byLoc[loc]) byLoc[loc] = [];
+        byLoc[loc].push(fi);
+      });
+      for (const [loc, items] of Object.entries(byLoc)) {
+        const grp = document.createElement('optgroup');
+        grp.label = loc;
+        items.forEach(fi => {
+          const propStr = Object.values(fi.properties || {}).filter(Boolean).join(' ');
+          const opt = document.createElement('option');
+          opt.value = fi.id;
+          opt.textContent = `[רצפה] ${fi.itemCount || 0} ${propStr}`.trim();
+          grp.appendChild(opt);
+        });
+        sel.appendChild(grp);
+      }
+    }
+
+    function setMode(mode) {
+      _mode = mode;
+      screen.querySelectorAll('#tr-mode-toggle button').forEach(b =>
+        b.classList.toggle('active', b.dataset.mode === mode));
+      screen.querySelector('#tr-cart-section').hidden  = (mode !== 'cart');
+      screen.querySelector('#tr-floor-section').hidden = (mode !== 'floor');
+      screen.querySelector('#tr-shared-fields').hidden = true;
+      _currentData = null; _currentType = null;
+    }
+
+    function showSharedFields(data, type) {
+      _currentData = data;
+      _currentType = type;
+      const shared = screen.querySelector('#tr-shared-fields');
+      shared.hidden = false;
+
+      // current info
+      const info = screen.querySelector('#tr-current-info');
+      if (type === 'cart') {
+        info.innerHTML = `
+          <div class="card-title">עגלה: ${data.cartId}</div>
+          <div class="card-meta">מיקום נוכחי: ${data.location || 'לא ידוע'}</div>
+        `;
+      } else {
+        const propStr = Object.values(data.properties || {}).filter(Boolean).join(' ');
+        info.innerHTML = `
+          <div class="card-title">[רצפה] ${propStr || data.id}</div>
+          <div class="card-meta">מיקום נוכחי: ${data.location || 'לא ידוע'} · ${data.itemCount || 0} פריטים</div>
+        `;
+      }
+
+      // pre-fill count + item rows
+      const countInput = screen.querySelector('#tr-count');
+      countInput.value = data.itemCount || 0;
+      renderItemRows(data.itemCount || 0, data.itemIds || []);
+
+      // properties
+      const propContainer = screen.querySelector('#tr-prop-fields');
+      buildPropertyFields(propContainer, data.properties || {});
+    }
+
+    function renderItemRows(n, existing) {
+      const container = screen.querySelector('#tr-item-rows');
+      const rows = [];
+      for (let i = 0; i < n; i++) {
+        rows.push(`
+          <div class="item-row">
+            <span class="item-row-num">${i+1}</span>
+            <input class="item-id-input" placeholder="מספר סידורי" value="${(existing[i] || '')}">
+          </div>
+        `);
+      }
+      container.innerHTML = rows.join('');
+    }
+
+    // count input changes
+    screen.querySelector('#tr-count').addEventListener('input', () => {
+      const n = parseInt(screen.querySelector('#tr-count').value) || 0;
+      const existing = [...screen.querySelectorAll('.item-id-input')].map(i => i.value);
+      renderItemRows(n, existing);
+    });
+
+    // mode toggle
+    screen.querySelector('#tr-mode-toggle').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-mode]');
+      if (btn) setMode(btn.dataset.mode);
+    });
+
+    // cart form
+    _cartRef = CartForm(screen.querySelector('#tr-cart-form-host'), {
+      onCartLoaded(cart) {
+        if (cart) {
+          showSharedFields(cart, 'cart');
+        } else {
+          screen.querySelector('#tr-shared-fields').hidden = true;
+        }
+      }
+    });
+
+    // floor item select
+    screen.querySelector('#tr-fi-select').addEventListener('change', e => {
+      const fi = DB.getFloorItem(e.target.value);
+      if (fi) showSharedFields(fi, 'fi');
+      else screen.querySelector('#tr-shared-fields').hidden = true;
+    });
+
+    // save
+    screen.querySelector('#tr-save-btn').addEventListener('click', () => {
+      if (!_currentData) { Toast.show('בחר עגלה או קבוצת רצפה', 'error'); return; }
+      const destLoc    = screen.querySelector('#tr-dest-loc').value.trim();
+      const destSubLoc = screen.querySelector('#tr-dest-subloc-group').hidden
+        ? '' : screen.querySelector('#tr-dest-subloc').value.trim();
+      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
+      const count   = parseInt(screen.querySelector('#tr-count').value) || 0;
+      const itemIds = [...screen.querySelectorAll('.item-id-input')].map(i => i.value.trim()).filter(Boolean);
+      const props   = readPropertyFields(screen.querySelector('#tr-prop-fields'));
+
+      if (_currentType === 'cart') {
+        DB.upsertCart({
+          cartId:      _currentData.cartId,
+          location:    destLoc,
+          subLocation: destSubLoc,
+          itemCount:   count,
+          itemIds,
+          properties:  props,
+          isEmpty:     count === 0
+        });
+        Toast.show('עגלה הועברה', 'success');
+      } else {
+        DB.upsertFloorItem({
+          id:          _currentData.id,
+          location:    destLoc,
+          subLocation: destSubLoc,
+          itemCount:   count,
+          itemIds,
+          properties:  props,
+          isEmpty:     count === 0
+        });
+        Toast.show('פריטי רצפה הועברו', 'success');
+      }
+    });
+
+    // copy
+    screen.querySelector('#tr-copy-btn').addEventListener('click', () => {
+      if (!_currentData) return;
+      const from = _currentData.location || '';
+      const dest = screen.querySelector('#tr-dest-loc').value.trim();
+      const count = parseInt(screen.querySelector('#tr-count').value) || 0;
+      const props = readPropertyFields(screen.querySelector('#tr-prop-fields'));
+      let msg;
+      if (_currentType === 'cart') {
+        msg = Utils.copyMessage(_currentData.cartId, count, props, from, dest);
+      } else {
+        const propStr = Object.values(props).filter(Boolean).join(' ');
+        msg = `[רצפה] ${count} ${propStr} | מועבר מ${from} ל${dest}`;
+      }
+      Utils.copyToClipboard(msg)
+        .then(() => Toast.show('הועתק', 'success'))
+        .catch(() => Modal.open({
+          title: 'העתקה ידנית',
+          html: `<textarea rows="3" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.9rem;direction:rtl" readonly onclick="this.select()">${esc(msg)}</textarea>`,
+          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+        }));
+    });
+
+    Router.register('transfer', {
+      onShow({ cartId, floorItemId } = {}) {
+        refreshFISelect();
+        if (cartId) {
+          setMode('cart');
+          setTimeout(() => _cartRef.setValue(cartId), 50);
+        } else if (floorItemId) {
+          setMode('floor');
+          setTimeout(() => {
+            const sel = screen.querySelector('#tr-fi-select');
+            sel.value = floorItemId;
+            sel.dispatchEvent(new Event('change'));
+          }, 50);
+        } else {
+          setMode(_mode);
+        }
+      }
+    });
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 7 — Screen: Load/Unload
+  ════════════════════════════════════════════════════ -->
+  <script>
+  function initLoadUnload() {
+    const screen = document.getElementById('screen-loadunload');
+
+    screen.innerHTML = `
+      <div class="screen-header">
+        <span class="header-icon">📦</span>
+        <h1>העמסה / פירוק</h1>
+      </div>
+      <div class="p-screen">
+        <div class="form-group">
+          <div class="pill-toggle" id="lu-op-toggle">
+            <button class="active" data-op="load">העמסה</button>
+            <button data-op="unload">פירוק</button>
+          </div>
+        </div>
+
+        <!-- source section -->
+        <div id="lu-source-section">
+          <div class="form-group">
+            <label class="form-label">מקור</label>
+            <div class="pill-toggle" id="lu-src-toggle">
+              <button class="active" data-src="cart">עגלה</button>
+              <button data-src="floor">רצפה</button>
+            </div>
+          </div>
+          <div id="lu-src-cart">
+            <div id="lu-cart-form-host"></div>
+          </div>
+          <div id="lu-src-floor" hidden>
+            <div class="form-group">
+              <label class="form-label">מיקום מקור</label>
+              <input id="lu-src-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label">קבוצת רצפה</label>
+              <select id="lu-fi-select" class="form-select">
+                <option value="">— בחר —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- item details -->
+        <div id="lu-item-section" hidden>
+          <div id="lu-current-info" class="card" style="margin:0 0 14px;"></div>
+
+          <div class="form-group">
+            <label class="form-label">מיקום יעד</label>
+            <input id="lu-dest-loc" class="form-input" placeholder="מחסן 1" autocomplete="off">
+          </div>
+          <div class="form-group" id="lu-dest-subloc-group" hidden>
+            <label class="form-label">תת-מיקום יעד</label>
+            <input id="lu-dest-subloc" class="form-input" placeholder="שורה 3" autocomplete="off">
+          </div>
+
+          <!-- unload extra: send to floor option -->
+          <div id="lu-unload-floor-opt" hidden>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer">
+              <input type="checkbox" id="lu-send-to-floor"> שלח לרצפה ביעד
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">מספר פריטים</label>
+            <input id="lu-count" class="form-input" type="number" min="0" placeholder="0">
+          </div>
+          <div id="lu-item-rows" class="item-rows"></div>
+          <div id="lu-prop-fields" class="mt-12"></div>
+
+          <button id="lu-save-btn" class="btn btn-primary btn-full mt-16">💾 שמור</button>
+        </div>
+      </div>
+    `;
+
+    let _op  = 'load';   // 'load' | 'unload'
+    let _src = 'cart';   // 'cart' | 'floor'
+    let _currentData = null;
+    let _currentType = null;
+    let _cartRef = null;
+
+    // Location autocomplete for source (floor mode) and destination
+    makeAutocomplete(screen.querySelector('#lu-src-loc'), () => DB.getMetadata().locations.map(l => l.name));
+    setupLocationFields(
+      screen.querySelector('#lu-dest-loc'),
+      screen.querySelector('#lu-dest-subloc-group'),
+      screen.querySelector('#lu-dest-subloc')
+    );
+
+    function refreshFISelect(filterLoc) {
+      const sel = screen.querySelector('#lu-fi-select');
+      const fis = DB.getAllFloorItems().filter(fi => !filterLoc || fi.location === filterLoc);
+      sel.innerHTML = '<option value="">— בחר —</option>';
+      fis.forEach(fi => {
+        const propStr = Object.values(fi.properties || {}).filter(Boolean).join(' ');
+        const opt = document.createElement('option');
+        opt.value = fi.id;
+        opt.textContent = `[רצפה] ${fi.itemCount || 0} ${propStr}`.trim();
+        sel.appendChild(opt);
+      });
+    }
+
+    function renderItemRows(n, existing) {
+      const container = screen.querySelector('#lu-item-rows');
+      const rows = [];
+      for (let i = 0; i < n; i++) {
+        rows.push(`
+          <div class="item-row">
+            <span class="item-row-num">${i+1}</span>
+            <input class="item-id-input" placeholder="מספר סידורי" value="${(existing[i] || '')}">
+          </div>
+        `);
+      }
+      container.innerHTML = rows.join('');
+    }
+
+    function showItemSection(data, type) {
+      _currentData = data;
+      _currentType = type;
+      screen.querySelector('#lu-item-section').hidden = false;
+
+      const info = screen.querySelector('#lu-current-info');
+      if (type === 'cart') {
+        info.innerHTML = `
+          <div class="card-title">עגלה: ${data.cartId}</div>
+          <div class="card-meta">מיקום נוכחי: ${data.location || 'לא ידוע'}</div>
+        `;
+      } else {
+        const propStr = Object.values(data.properties || {}).filter(Boolean).join(' ');
+        info.innerHTML = `
+          <div class="card-title">[רצפה] ${propStr || data.id}</div>
+          <div class="card-meta">מיקום נוכחי: ${data.location || 'לא ידוע'} · ${data.itemCount || 0} פריטים</div>
+        `;
+      }
+
+      screen.querySelector('#lu-count').value = data.itemCount || 0;
+      renderItemRows(data.itemCount || 0, data.itemIds || []);
+      buildPropertyFields(screen.querySelector('#lu-prop-fields'), data.properties || {});
+
+      // show/hide unload floor option
+      screen.querySelector('#lu-unload-floor-opt').hidden = (_op !== 'unload');
+    }
+
+    function setOp(op) {
+      _op = op;
+      screen.querySelectorAll('#lu-op-toggle button').forEach(b =>
+        b.classList.toggle('active', b.dataset.op === op));
+      screen.querySelector('#lu-unload-floor-opt').hidden = (op !== 'unload' || screen.querySelector('#lu-item-section').hidden);
+    }
+
+    function setSrc(src) {
+      _src = src;
+      screen.querySelectorAll('#lu-src-toggle button').forEach(b =>
+        b.classList.toggle('active', b.dataset.src === src));
+      screen.querySelector('#lu-src-cart').hidden  = (src !== 'cart');
+      screen.querySelector('#lu-src-floor').hidden = (src !== 'floor');
+      screen.querySelector('#lu-item-section').hidden = true;
+      _currentData = null; _currentType = null;
+    }
+
+    screen.querySelector('#lu-op-toggle').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-op]');
+      if (btn) setOp(btn.dataset.op);
+    });
+
+    screen.querySelector('#lu-src-toggle').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-src]');
+      if (btn) setSrc(btn.dataset.src);
+    });
+
+    // cart form
+    _cartRef = CartForm(screen.querySelector('#lu-cart-form-host'), {
+      onCartLoaded(cart) {
+        if (cart) showItemSection(cart, 'cart');
+        else screen.querySelector('#lu-item-section').hidden = true;
+      }
+    });
+
+    // src location filter → refresh fi select
+    screen.querySelector('#lu-src-loc').addEventListener('change', e => {
+      refreshFISelect(e.target.value.trim());
+    });
+
+    // fi select
+    screen.querySelector('#lu-fi-select').addEventListener('change', e => {
+      const fi = DB.getFloorItem(e.target.value);
+      if (fi) showItemSection(fi, 'fi');
+      else screen.querySelector('#lu-item-section').hidden = true;
+    });
+
+    // count → item rows
+    screen.querySelector('#lu-count').addEventListener('input', () => {
+      const n = parseInt(screen.querySelector('#lu-count').value) || 0;
+      const existing = [...screen.querySelectorAll('#lu-item-rows .item-id-input')].map(i => i.value);
+      renderItemRows(n, existing);
+    });
+
+    // save
+    screen.querySelector('#lu-save-btn').addEventListener('click', () => {
+      if (!_currentData) { Toast.show('יש לבחור מקור', 'error'); return; }
+      const destLoc    = screen.querySelector('#lu-dest-loc').value.trim();
+      const destSubLoc = screen.querySelector('#lu-dest-subloc-group').hidden
+        ? '' : screen.querySelector('#lu-dest-subloc').value.trim();
+      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
+      const count   = parseInt(screen.querySelector('#lu-count').value) || 0;
+      const itemIds = [...screen.querySelectorAll('#lu-item-rows .item-id-input')].map(i => i.value.trim()).filter(Boolean);
+      const props   = readPropertyFields(screen.querySelector('#lu-prop-fields'));
+      const sendToFloor = screen.querySelector('#lu-send-to-floor').checked;
+
+      if (_op === 'load') {
+        // loading items onto a cart
+        if (_currentType === 'cart') {
+          DB.upsertCart({
+            cartId:      _currentData.cartId,
+            location:    destLoc,
+            subLocation: destSubLoc,
+            itemCount:   count,
+            itemIds,
+            properties:  props,
+            isEmpty:     count === 0
+          });
+        } else {
+          // loading from floor — update the floor item group
+          DB.upsertFloorItem({
+            id:          _currentData.id,
+            location:    destLoc,
+            subLocation: destSubLoc,
+            itemCount:   count,
+            itemIds,
+            properties:  props,
+            isEmpty:     count === 0
+          });
+        }
+        Toast.show('פריטים הועמסו', 'success');
+      } else {
+        // unload
+        if (sendToFloor) {
+          // create/update floor item group at destination
+          DB.upsertFloorItem({
+            location:    destLoc,
+            subLocation: destSubLoc,
+            itemCount:   count,
+            itemIds,
+            properties:  props,
+            isEmpty:     count === 0
+          });
+          // mark source as empty
+          if (_currentType === 'cart') {
+            DB.upsertCart({ cartId: _currentData.cartId, itemCount: 0, itemIds: [], isEmpty: true });
+          } else {
+            DB.upsertFloorItem({ id: _currentData.id, itemCount: 0, itemIds: [], isEmpty: true });
+          }
+          Toast.show('פורק לרצפה', 'success');
+        } else {
+          // unload to existing cart at destination
+          if (_currentType === 'cart') {
+            DB.upsertCart({
+              cartId:      _currentData.cartId,
+              location:    destLoc,
+              subLocation: destSubLoc,
+              itemCount:   count,
+              itemIds,
+              properties:  props,
+              isEmpty:     count === 0
+            });
+          } else {
+            DB.upsertFloorItem({
+              id:          _currentData.id,
+              location:    destLoc,
+              subLocation: destSubLoc,
+              itemCount:   count,
+              itemIds,
+              properties:  props,
+              isEmpty:     count === 0
+            });
+          }
+          Toast.show('פריטים פורקו', 'success');
+        }
+      }
+    });
+
+    Router.register('loadunload', {
+      onShow({ cartId, floorItemId } = {}) {
+        refreshFISelect();
+        if (cartId) {
+          setSrc('cart');
+          setTimeout(() => _cartRef.setValue(cartId), 50);
+        } else if (floorItemId) {
+          setSrc('floor');
+          setTimeout(() => {
+            refreshFISelect();
+            const sel = screen.querySelector('#lu-fi-select');
+            sel.value = floorItemId;
+            sel.dispatchEvent(new Event('change'));
+          }, 50);
+        }
+      }
+    });
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 8 — Screen: Search
+  ════════════════════════════════════════════════════ -->
+  <script>
+  function initSearch() {
+    const screen = document.getElementById('screen-search');
+
+    screen.innerHTML = `
+      <div class="screen-header">
+        <span class="header-icon">🔍</span>
+        <h1>חיפוש</h1>
+      </div>
+      <div class="search-bar">
+        <input id="sr-input" class="search-input" placeholder="חיפוש עגלה, מיקום, מאפיין..." autocomplete="off">
+      </div>
+      <div id="sr-results"></div>
+    `;
+
+    function propSummary(props) {
+      return Object.values(props || {}).filter(Boolean).join(' · ');
+    }
+
+    function renderResults(query) {
+      const results = document.getElementById('sr-results');
+      const q = (query || '').trim().toLowerCase();
+
+      const carts = DB.getAllCarts();
+      const fis   = DB.getAllFloorItems();
+
+      const matchedCarts = carts.filter(c => {
+        if (!q) return true;
+        const haystack = [c.cartId, c.location, c.subLocation, ...Object.values(c.properties || {})]
+          .join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+
+      const matchedFIs = fis.filter(fi => {
+        if (!q) return true;
+        const haystack = [fi.id, fi.location, fi.subLocation, ...Object.values(fi.properties || {})]
+          .join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+
+      if (!matchedCarts.length && !matchedFIs.length) {
+        results.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <div class="empty-state-text">לא נמצאו תוצאות</div>
+          </div>`;
+        return;
+      }
+
+      // group by location → subLocation
+      const groups = {};
+      const addItem = (item, type) => {
+        const locKey = item.location || 'ללא מיקום';
+        const subKey = item.subLocation || '';
+        const gk = locKey + '\0' + subKey;
+        if (!groups[gk]) groups[gk] = { loc: locKey, sub: subKey, items: [] };
+        groups[gk].items.push({ data: item, type });
+      };
+      matchedCarts.forEach(c  => addItem(c,  'cart'));
+      matchedFIs.forEach(fi   => addItem(fi, 'fi'));
+
+      const sortedGroups = Object.values(groups).sort((a,b) =>
+        a.loc.localeCompare(b.loc) || a.sub.localeCompare(b.sub));
+
+      results.innerHTML = sortedGroups.map(g => `
+        <div class="loc-group">
+          <div class="loc-group-header">
+            ${g.loc}${g.sub ? ' / ' + g.sub : ''}
+          </div>
+          ${g.items.map(({ data, type }) => {
+            if (type === 'cart') {
+              const ps = propSummary(data.properties);
+              return `
+                <div class="list-item sr-item" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
+                  <div class="list-item-body">
+                    <div class="list-item-title">${data.cartId}</div>
+                    <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}${ps ? ' · ' + ps : ''}</div>
+                  </div>
+                  <span>›</span>
+                </div>`;
+            } else {
+              const ps = propSummary(data.properties);
+              return `
+                <div class="list-item sr-item" data-type="fi" data-id="${esc(data.id)}" style="cursor:pointer">
+                  <div class="list-item-body">
+                    <div class="list-item-title"><span class="badge badge-floor">רצפה</span> ${ps || data.id}</div>
+                    <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}</div>
+                  </div>
+                  <span>›</span>
+                </div>`;
+            }
+          }).join('')}
+        </div>
+      `).join('');
+    }
+
+    // search input
+    screen.querySelector('#sr-input').addEventListener('input', e => {
+      renderResults(e.target.value);
+    });
+
+    // item click → modal
+    screen.querySelector('#sr-results').addEventListener('click', e => {
+      const item = e.target.closest('.sr-item');
+      if (!item) return;
+      const type = item.dataset.type;
+      const id   = item.dataset.id;
+
+      if (type === 'cart') {
+        const cart = DB.getCart(id);
+        if (!cart) return;
+        const ps = propSummary(cart.properties);
+        Modal.open({
+          title: `עגלה ${cart.cartId}`,
+          html: `
+            <p class="card-meta">מיקום: ${cart.location || 'לא ידוע'}</p>
+            ${cart.subLocation ? `<p class="card-meta">תת-מיקום: ${cart.subLocation}</p>` : ''}
+            <p class="card-meta">פריטים: ${cart.isEmpty ? 'ריקה' : (cart.itemCount || 0)}</p>
+            ${ps ? `<p class="card-meta">מאפיינים: ${ps}</p>` : ''}
+            <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(cart.lastUpdated)}</p>
+          `,
+          actions: [
+            { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
+              Modal.close();
+              Router.navigate('transfer', { cartId: id });
+              history.replaceState(null, '', '#transfer');
+            }},
+            { id: 'loadunload', label: '📦 העמסה / פירוק', cls: 'btn-outline', onClick: () => {
+              Modal.close();
+              Router.navigate('loadunload', { cartId: id });
+              history.replaceState(null, '', '#loadunload');
+            }},
+            { id: 'close', label: 'סגור', onClick: Modal.close }
+          ]
+        });
+      } else {
+        const fi = DB.getFloorItem(id);
+        if (!fi) return;
+        const ps = propSummary(fi.properties);
+        Modal.open({
+          title: `פריטי רצפה`,
+          html: `
+            <p class="card-meta">מיקום: ${fi.location || 'לא ידוע'}</p>
+            ${fi.subLocation ? `<p class="card-meta">תת-מיקום: ${fi.subLocation}</p>` : ''}
+            <p class="card-meta">פריטים: ${fi.isEmpty ? 'ריקה' : (fi.itemCount || 0)}</p>
+            ${ps ? `<p class="card-meta">מאפיינים: ${ps}</p>` : ''}
+            <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(fi.lastUpdated)}</p>
+          `,
+          actions: [
+            { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
+              Modal.close();
+              Router.navigate('transfer', { floorItemId: id });
+              history.replaceState(null, '', '#transfer');
+            }},
+            { id: 'loadunload', label: '📦 העמסה / פירוק', cls: 'btn-outline', onClick: () => {
+              Modal.close();
+              Router.navigate('loadunload', { floorItemId: id });
+              history.replaceState(null, '', '#loadunload');
+            }},
+            { id: 'close', label: 'סגור', onClick: Modal.close }
+          ]
+        });
+      }
+    });
+
+    Router.register('search', {
+      onShow() {
+        renderResults(screen.querySelector('#sr-input').value);
+      }
+    });
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 9 — Screen: Main
+  ════════════════════════════════════════════════════ -->
+  <script>
+  function initMain() {
+    const screen = document.getElementById('screen-main');
+
+    screen.innerHTML = `
+      <div class="screen-header">
+        <span class="header-icon">🛒</span>
+        <h1>שינוע</h1>
+      </div>
+      <div class="p-screen">
+        <button class="hero-btn" id="main-export">
+          <div class="hero-btn-icon" style="background:#EBF4FF;color:#0F4C81;">📤</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">ייצוא נתונים</div>
+            <div class="hero-btn-sub">העתק גיבוי ללוח</div>
+          </div>
+        </button>
+
+        <button class="hero-btn" id="main-import">
+          <div class="hero-btn-icon" style="background:#F0FDF4;color:#16A34A;">📥</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">ייבוא נתונים</div>
+            <div class="hero-btn-sub">הדבק טקסט גיבוי</div>
+          </div>
+        </button>
+
+        <button class="hero-btn" id="main-map">
+          <div class="hero-btn-icon" style="background:#FFF7ED;color:#FF6B35;">🗺️</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">יצירת מיפוי</div>
+            <div class="hero-btn-sub">העתק מפת מיקומים ללוח</div>
+          </div>
+        </button>
+
+      </div>
+    `;
+
+    // export — copy to clipboard
+    screen.querySelector('#main-export').addEventListener('click', () => {
+      const text = Utils.generateExportText(DB.getRaw());
+      Utils.copyToClipboard(text)
+        .then(() => Toast.show('גיבוי הועתק ללוח', 'success'))
+        .catch(() => Modal.open({
+          title: 'ייצוא — העתקה ידנית',
+          html: `<p class="card-meta" style="margin-bottom:8px">לחץ על התיבה ובחר הכל:</p>
+                 <textarea rows="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:0.75rem;direction:ltr;text-align:left" readonly onclick="this.select()">${esc(text)}</textarea>`,
+          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+        }));
+    });
+
+    // import — paste via modal textarea
+    screen.querySelector('#main-import').addEventListener('click', () => {
+      Modal.open({
+        title: 'ייבוא נתונים',
+        html: `
+          <p class="card-meta" style="margin-bottom:10px">הדבק כאן את טקסט הגיבוי שהועתק בייצוא:</p>
+          <textarea id="import-paste-area" rows="6"
+            style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
+                   font-size:0.82rem;font-family:monospace;direction:ltr;text-align:left;resize:vertical"></textarea>
+        `,
+        actions: [
+          { id: 'do-import', label: 'ייבא', cls: 'btn-primary', onClick: () => {
+            const text = document.getElementById('import-paste-area').value.trim();
+            if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+            try {
+              const jsonStr = Utils.parseImportText(text);
+              DB.importJSON(jsonStr, 'merge');
+              Modal.close();
+              Toast.show('נתונים יובאו בהצלחה', 'success');
+            } catch(err) {
+              Toast.show('שגיאה: ' + err.message, 'error');
+            }
+          }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
+      });
+    });
+
+    // map
+    screen.querySelector('#main-map').addEventListener('click', () => {
+      const raw = DB.load();
+      const mapText = Utils.generateMapText(raw);
+      Utils.copyToClipboard(mapText)
+        .then(() => Toast.show('מיפוי הועתק ללוח', 'success'))
+        .catch(() => {
+          // fallback: show in modal
+          Modal.open({
+            title: 'מיפוי',
+            html: `<pre style="font-size:0.82rem;white-space:pre-wrap;word-break:break-word;direction:rtl;text-align:right">${mapText}</pre>`,
+            actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+          });
+        });
+    });
+
+    Router.register('main', {
+      onShow() {}
+    });
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       SCRIPT 10 — Bootstrap + SW Registration
+  ════════════════════════════════════════════════════ -->
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(console.warn);
+    }
+
+    // Build nav
+    BottomNav.render();
+
+    // Init all screens
+    initEdit();
+    initTransfer();
+    initLoadUnload();
+    initSearch();
+    initMain();
+
+    // Navigate to initial screen
+    const initial = location.hash.replace('#', '') || 'main';
+    Router.navigate(initial);
+  });
+  </script>
+</body>
+</html>
