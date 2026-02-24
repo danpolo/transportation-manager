@@ -383,6 +383,52 @@
     }
     .sr-filter-count { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
 
+    /* ─── Search Summary ─── */
+    .sr-summary { padding: 12px 12px 4px; background: var(--bg); }
+    .sr-total-card {
+      background: var(--surface); border-radius: 14px;
+      padding: 16px 20px; margin-bottom: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .sr-total-num { font-size: 2rem; font-weight: 800; color: var(--primary); line-height: 1; }
+    .sr-total-label { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+    .sr-total-split {
+      display: flex; gap: 16px; margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .sr-split-item { display: flex; flex-direction: column; gap: 2px; }
+    .sr-split-num { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+    .sr-split-lbl { font-size: 0.72rem; color: var(--muted); }
+    .sr-empty-card {
+      background: #FEF3C7; border-radius: 14px; padding: 14px 20px; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .sr-empty-card-num { font-size: 1.6rem; font-weight: 800; color: #92400E; }
+    .sr-empty-card-lbl { font-size: 0.82rem; color: #92400E; font-weight: 600; }
+    .sr-section-title {
+      font-size: 0.72rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 4px 6px;
+    }
+    .sr-loc-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .sr-loc-row:last-child { border-bottom: none; }
+    .sr-loc-name { font-size: 0.88rem; font-weight: 600; min-width: 80px; flex-shrink: 0; }
+    .sr-loc-bar-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .sr-loc-bar-fill { height: 100%; background: var(--primary); border-radius: 4px; }
+    .sr-loc-count { font-size: 0.82rem; font-weight: 700; color: var(--text); min-width: 32px; text-align: left; flex-shrink: 0; }
+    .sr-combo-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 4px; border-bottom: 1px solid var(--border);
+    }
+    .sr-combo-row:last-child { border-bottom: none; }
+    .sr-combo-label { font-size: 0.88rem; color: var(--text); }
+    .sr-combo-count {
+      font-size: 0.78rem; font-weight: 700; color: var(--primary);
+      background: #EBF4FF; border-radius: 20px; padding: 3px 10px; flex-shrink: 0;
+    }
+
     /* ─── Location Group ─── */
     .loc-group { margin-bottom: 4px; }
     .loc-group-header {
@@ -2236,6 +2282,7 @@
         <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
         <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">נקה סינון</button>
       </div>
+      <div id="sr-summary" hidden></div>
       <div id="sr-results"></div>
     `;
 
@@ -2244,6 +2291,7 @@
       locations: new Set(),
       cartIds:   new Set(),
       props:     {},         // propName → Set<value>
+      types:     new Set(),  // 'cart' | 'fi'; empty = both
       emptyOnly: false
     };
     const openPanels = new Set(); // panel IDs kept open across re-renders
@@ -2267,7 +2315,7 @@
                   data-value="${esc(item.value)}"
                   ${item.propName ? `data-prop="${esc(item.propName)}"` : ''}
                   ${item.checked ? 'checked' : ''}>
-                <span>${esc(item.value)}</span>
+                <span>${esc(item.label != null ? item.label : item.value)}</span>
               </label>
             `).join('')}
           </div>
@@ -2286,6 +2334,10 @@
 
       let html = '';
 
+      html += buildPanelHTML('sr-fp-type', 'סוג פריט', [
+        { key: 'type', value: 'cart', label: 'עגלות',       checked: state.types.has('cart') },
+        { key: 'type', value: 'fi',   label: 'פריטי רצפה', checked: state.types.has('fi')   }
+      ]);
       if (allLocations.length) {
         html += buildPanelHTML('sr-fp-loc', 'מיקומים',
           allLocations.map(name => ({ key: 'loc', value: name, checked: state.locations.has(name) })));
@@ -2321,7 +2373,7 @@
 
     // ── Actions bar ───────────────────────────────────────────────
     function countActive() {
-      return state.locations.size + state.cartIds.size +
+      return state.types.size + state.locations.size + state.cartIds.size +
         Object.values(state.props).reduce((s, set) => s + set.size, 0) +
         (state.emptyOnly ? 1 : 0);
     }
@@ -2335,6 +2387,10 @@
 
     // ── Filter logic ──────────────────────────────────────────────
     function itemPasses(item) {
+      if (state.types.size) {
+        const t = item.cartId ? 'cart' : 'fi';
+        if (!state.types.has(t)) return false;
+      }
       if (state.locations.size && !state.locations.has(item.location)) return false;
       if (state.cartIds.size) {
         if (!item.cartId || !state.cartIds.has(item.cartId)) return false;
@@ -2347,6 +2403,104 @@
       return true;
     }
 
+    // ── Summary panel ─────────────────────────────────────────────
+    function renderSummary(carts, fis) {
+      const el = document.getElementById('sr-summary');
+      const all = [...carts, ...fis];
+      if (!all.length) { el.hidden = true; el.innerHTML = ''; return; }
+
+      const totalItems  = all.reduce((s, x) => s + (x.itemCount || 0), 0);
+      const cartItems   = carts.reduce((s, c) => s + (c.itemCount || 0), 0);
+      const floorItems  = fis.reduce((s, f) => s + (f.itemCount || 0), 0);
+      const emptyCount  = all.filter(x => x.isEmpty).length;
+
+      // per-location stats
+      const locStats = {};
+      all.forEach(item => {
+        const loc = item.location || 'ללא מיקום';
+        if (!locStats[loc]) locStats[loc] = { items: 0, empty: 0 };
+        locStats[loc].items += (item.itemCount || 0);
+        if (item.isEmpty) locStats[loc].empty++;
+      });
+      const locEntries = Object.entries(locStats).sort((a,b) => b[1].items - a[1].items);
+      const maxLocItems = Math.max(1, ...locEntries.map(([,s]) => s.items));
+
+      // per property-combination stats (non-empty items only)
+      const meta = DB.getMetadata();
+      const propDefs = meta.properties || [];
+      const comboStats = {};
+      all.filter(x => !x.isEmpty && x.itemCount).forEach(item => {
+        const key   = propDefs.map(p => (item.properties || {})[p.name] || '').join('|');
+        const label = propDefs.map(p => (item.properties || {})[p.name]).filter(Boolean).join(' · ');
+        if (!comboStats[key]) comboStats[key] = { label: label || 'ללא מאפיינים', total: 0 };
+        comboStats[key].total += item.itemCount;
+      });
+      const comboEntries = Object.values(comboStats).sort((a,b) => b.total - a.total);
+
+      let html = '<div class="sr-summary">';
+
+      // total card (only when there are items)
+      if (totalItems > 0) {
+        const showSplit = carts.length && fis.length; // both types present
+        html += `
+          <div class="sr-total-card">
+            <div class="sr-total-num">${totalItems}</div>
+            <div class="sr-total-label">פריטים</div>
+            ${showSplit ? `
+            <div class="sr-total-split">
+              <div class="sr-split-item">
+                <span class="sr-split-num">${cartItems}</span>
+                <span class="sr-split-lbl">בעגלות</span>
+              </div>
+              <div class="sr-split-item">
+                <span class="sr-split-num">${floorItems}</span>
+                <span class="sr-split-lbl">ברצפה</span>
+              </div>
+            </div>` : ''}
+          </div>`;
+      }
+
+      // empty card
+      if (emptyCount > 0) {
+        html += `
+          <div class="sr-empty-card">
+            <div class="sr-empty-card-num">${emptyCount}</div>
+            <div class="sr-empty-card-lbl">ריקות</div>
+          </div>`;
+      }
+
+      // location breakdown
+      if (locEntries.length > 1) {
+        html += '<div class="sr-section-title">לפי מיקום</div>';
+        html += locEntries.map(([loc, s]) => {
+          const pct = Math.round((s.items / maxLocItems) * 100);
+          const countLabel = s.items > 0
+            ? s.items + (s.empty ? ` (+${s.empty} ריקות)` : '')
+            : s.empty + ' ריקות';
+          return `
+            <div class="sr-loc-row">
+              <span class="sr-loc-name">${esc(loc)}</span>
+              <div class="sr-loc-bar-wrap"><div class="sr-loc-bar-fill" style="width:${pct}%"></div></div>
+              <span class="sr-loc-count">${countLabel}</span>
+            </div>`;
+        }).join('');
+      }
+
+      // property combination breakdown
+      if (comboEntries.length > 1 && propDefs.length) {
+        html += '<div class="sr-section-title">לפי שילוב מאפיינים</div>';
+        html += comboEntries.map(c => `
+          <div class="sr-combo-row">
+            <span class="sr-combo-label">${esc(c.label)}</span>
+            <span class="sr-combo-count">${c.total} פריטים</span>
+          </div>`).join('');
+      }
+
+      html += '</div>';
+      el.innerHTML = html;
+      el.hidden = false;
+    }
+
     // ── Render results ────────────────────────────────────────────
     function propSummary(props) {
       return Object.values(props || {}).filter(Boolean).join(' · ');
@@ -2355,6 +2509,8 @@
       const results = document.getElementById('sr-results');
       const carts   = DB.getAllCarts().filter(itemPasses);
       const fis     = DB.getAllFloorItems().filter(itemPasses);
+
+      renderSummary(carts, fis);
 
       if (!carts.length && !fis.length) {
         results.innerHTML = `
@@ -2431,7 +2587,9 @@
       const key   = cb.dataset.filterKey;
       const value = cb.dataset.value;
       const on    = cb.checked;
-      if (key === 'loc') {
+      if (key === 'type') {
+        on ? state.types.add(value) : state.types.delete(value);
+      } else if (key === 'loc') {
         on ? state.locations.add(value) : state.locations.delete(value);
       } else if (key === 'cart') {
         on ? state.cartIds.add(value) : state.cartIds.delete(value);
@@ -2454,6 +2612,7 @@
 
     // ── Clear all ─────────────────────────────────────────────────
     document.getElementById('sr-clear-btn').addEventListener('click', () => {
+      state.types.clear();
       state.locations.clear();
       state.cartIds.clear();
       state.props   = {};
