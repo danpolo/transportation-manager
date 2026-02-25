@@ -1981,19 +1981,27 @@
           </div>
         </div>
 
-        <!-- source section -->
-        <div id="lu-source-section">
+        <!-- ═══ LOAD SECTION ═══ -->
+        <div id="lu-load-section">
           <div class="form-group">
-            <label class="form-label">מקור</label>
-            <div class="pill-toggle" id="lu-src-toggle">
-              <button class="active" data-src="cart">עגלה</button>
-              <button data-src="floor">רצפה</button>
+            <div class="pill-toggle" id="lu-load-type-toggle">
+              <button class="active" data-lt="new">פריט חדש</button>
+              <button data-lt="floor">מרצפה</button>
             </div>
           </div>
-          <div id="lu-src-cart">
-            <div id="lu-cart-form-host"></div>
+
+          <!-- new item sub-section -->
+          <div id="lu-new-item-section">
+            <div class="form-group">
+              <label class="form-label">מספר פריטים</label>
+              <input id="lu-new-count" class="form-input" type="number" min="0" placeholder="0">
+            </div>
+            <div id="lu-new-item-rows" class="item-rows"></div>
+            <div id="lu-new-prop-fields" class="mt-12"></div>
           </div>
-          <div id="lu-src-floor" hidden>
+
+          <!-- floor source sub-section -->
+          <div id="lu-floor-src-section" hidden>
             <div class="form-group">
               <label class="form-label">מיקום מקור</label>
               <input id="lu-src-loc" class="form-input" placeholder="משני" autocomplete="off">
@@ -2004,54 +2012,65 @@
                 <option value="">— בחר —</option>
               </select>
             </div>
+            <div id="lu-floor-item-fields" hidden>
+              <div id="lu-floor-item-info" class="card" style="margin:0 0 14px;"></div>
+              <div class="form-group">
+                <label class="form-label">מספר פריטים</label>
+                <input id="lu-floor-count" class="form-input" type="number" min="0" placeholder="0">
+              </div>
+              <div id="lu-floor-item-rows" class="item-rows"></div>
+              <div id="lu-floor-prop-fields" class="mt-12"></div>
+            </div>
           </div>
+
+          <!-- destination cart (always visible in load section) -->
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label">עגלת יעד</label>
+            <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
+          </div>
+          <button id="lu-load-save-btn" class="btn btn-primary btn-full mt-16">💾 העמס</button>
         </div>
 
-        <!-- item details -->
-        <div id="lu-item-section" hidden>
-          <div id="lu-current-info" class="card" style="margin:0 0 14px;"></div>
-
-          <div class="form-group">
-            <label class="form-label">מיקום יעד</label>
-            <input id="lu-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
+        <!-- ═══ UNLOAD SECTION ═══ -->
+        <div id="lu-unload-section" hidden>
+          <div id="lu-unload-cart-form-host"></div>
+          <div id="lu-unload-fields" hidden>
+            <div id="lu-unload-cart-info" class="card" style="margin:0 0 14px;"></div>
+            <div class="form-group">
+              <label class="form-label">מספר פריטים לפירוק</label>
+              <input id="lu-unload-count" class="form-input" type="number" min="0" placeholder="0">
+            </div>
+            <div id="lu-unload-item-rows" class="item-rows"></div>
+            <div id="lu-unload-prop-fields" class="mt-12"></div>
+            <div class="form-group" style="margin-top:16px;">
+              <label class="form-label">מיקום יעד (רצפה)</label>
+              <input id="lu-unload-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
+            </div>
+            <div class="form-group" id="lu-unload-dest-subloc-group" hidden>
+              <label class="form-label">תת-מיקום יעד</label>
+              <input id="lu-unload-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+            </div>
           </div>
-          <div class="form-group" id="lu-dest-subloc-group" hidden>
-            <label class="form-label">תת-מיקום יעד</label>
-            <input id="lu-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
-          </div>
-
-          <!-- unload extra: send to floor option -->
-          <div id="lu-unload-floor-opt" hidden>
-            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer">
-              <input type="checkbox" id="lu-send-to-floor"> שלח לרצפה ביעד
-            </label>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">מספר פריטים</label>
-            <input id="lu-count" class="form-input" type="number" min="0" placeholder="0">
-          </div>
-          <div id="lu-item-rows" class="item-rows"></div>
-          <div id="lu-prop-fields" class="mt-12"></div>
-
-          <button id="lu-save-btn" class="btn btn-primary btn-full mt-16">💾 שמור</button>
+          <button id="lu-unload-save-btn" class="btn btn-primary btn-full mt-16">💾 פרוק</button>
         </div>
       </div>
     `;
 
-    let _op  = 'load';   // 'load' | 'unload'
-    let _src = 'cart';   // 'cart' | 'floor'
-    let _currentData = null;
-    let _currentType = null;
-    let _cartRef = null;
+    let _op            = 'load';   // 'load' | 'unload'
+    let _loadType      = 'new';    // 'new'  | 'floor'
+    let _selectedFI    = null;     // floor item object (load-from-floor mode)
+    let _srcCart       = null;     // source cart object (unload mode)
+    let _unloadCartRef = null;
 
-    // Location autocomplete for source (floor mode) and destination
     makeAutocomplete(screen.querySelector('#lu-src-loc'), () => DB.getMetadata().locations.map(l => l.name));
+    makeAutocomplete(screen.querySelector('#lu-dest-cart'), () => DB.getMetadata().carts);
     setupLocationFields(
-      screen.querySelector('#lu-dest-loc'),
-      screen.querySelector('#lu-dest-subloc-group'),
-      screen.querySelector('#lu-dest-subloc')
+      screen.querySelector('#lu-unload-dest-loc'),
+      screen.querySelector('#lu-unload-dest-subloc-group'),
+      screen.querySelector('#lu-unload-dest-subloc')
     );
+
+    buildPropertyFields(screen.querySelector('#lu-new-prop-fields'), {});
 
     function refreshFISelect(filterLoc) {
       const sel = screen.querySelector('#lu-fi-select');
@@ -2066,8 +2085,7 @@
       });
     }
 
-    function renderItemRows(n, existing) {
-      const container = screen.querySelector('#lu-item-rows');
+    function renderItemRows(container, n, existing) {
       const rows = [];
       for (let i = 0; i < n; i++) {
         rows.push(`
@@ -2080,48 +2098,22 @@
       container.innerHTML = rows.join('');
     }
 
-    function showItemSection(data, type) {
-      _currentData = data;
-      _currentType = type;
-      screen.querySelector('#lu-item-section').hidden = false;
-
-      const info = screen.querySelector('#lu-current-info');
-      if (type === 'cart') {
-        info.innerHTML = `
-          <div class="card-title">עגלה: ${data.cartId}</div>
-          <div class="card-meta">מיקום נוכחי: ${data.location || 'לא ידוע'}</div>
-        `;
-      } else {
-        const propStr = Object.values(data.properties || {}).filter(Boolean).join(' ');
-        info.innerHTML = `
-          <div class="card-title">[רצפה] ${propStr || data.id}</div>
-          <div class="card-meta">מיקום נוכחי: ${data.location || 'לא ידוע'} · ${data.itemCount || 0} פריטים</div>
-        `;
-      }
-
-      screen.querySelector('#lu-count').value = data.itemCount || 0;
-      renderItemRows(data.itemCount || 0, data.itemIds || []);
-      buildPropertyFields(screen.querySelector('#lu-prop-fields'), data.properties || {});
-
-      // show/hide unload floor option
-      screen.querySelector('#lu-unload-floor-opt').hidden = (_op !== 'unload');
-    }
-
     function setOp(op) {
       _op = op;
       screen.querySelectorAll('#lu-op-toggle button').forEach(b =>
         b.classList.toggle('active', b.dataset.op === op));
-      screen.querySelector('#lu-unload-floor-opt').hidden = (op !== 'unload' || screen.querySelector('#lu-item-section').hidden);
+      screen.querySelector('#lu-load-section').hidden   = (op !== 'load');
+      screen.querySelector('#lu-unload-section').hidden = (op !== 'unload');
     }
 
-    function setSrc(src) {
-      _src = src;
-      screen.querySelectorAll('#lu-src-toggle button').forEach(b =>
-        b.classList.toggle('active', b.dataset.src === src));
-      screen.querySelector('#lu-src-cart').hidden  = (src !== 'cart');
-      screen.querySelector('#lu-src-floor').hidden = (src !== 'floor');
-      screen.querySelector('#lu-item-section').hidden = true;
-      _currentData = null; _currentType = null;
+    function setLoadType(lt) {
+      _loadType = lt;
+      screen.querySelectorAll('#lu-load-type-toggle button').forEach(b =>
+        b.classList.toggle('active', b.dataset.lt === lt));
+      screen.querySelector('#lu-new-item-section').hidden  = (lt !== 'new');
+      screen.querySelector('#lu-floor-src-section').hidden = (lt !== 'floor');
+      _selectedFI = null;
+      screen.querySelector('#lu-floor-item-fields').hidden = true;
     }
 
     screen.querySelector('#lu-op-toggle').addEventListener('click', e => {
@@ -2129,16 +2121,25 @@
       if (btn) setOp(btn.dataset.op);
     });
 
-    screen.querySelector('#lu-src-toggle').addEventListener('click', e => {
-      const btn = e.target.closest('button[data-src]');
-      if (btn) setSrc(btn.dataset.src);
+    screen.querySelector('#lu-load-type-toggle').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-lt]');
+      if (btn) setLoadType(btn.dataset.lt);
     });
 
-    // cart form
-    _cartRef = CartForm(screen.querySelector('#lu-cart-form-host'), {
+    // unload cart form
+    _unloadCartRef = CartForm(screen.querySelector('#lu-unload-cart-form-host'), {
       onCartLoaded(cart) {
-        if (cart) showItemSection(cart, 'cart');
-        else screen.querySelector('#lu-item-section').hidden = true;
+        _srcCart = cart || null;
+        const fields = screen.querySelector('#lu-unload-fields');
+        if (!cart) { fields.hidden = true; return; }
+        fields.hidden = false;
+        screen.querySelector('#lu-unload-cart-info').innerHTML = `
+          <div class="card-title">עגלה: ${cart.cartId}</div>
+          <div class="card-meta">מיקום נוכחי: ${cart.location || 'לא ידוע'} · ${cart.itemCount || 0} פריטים</div>
+        `;
+        screen.querySelector('#lu-unload-count').value = cart.itemCount || 0;
+        renderItemRows(screen.querySelector('#lu-unload-item-rows'), cart.itemCount || 0, cart.itemIds || []);
+        buildPropertyFields(screen.querySelector('#lu-unload-prop-fields'), cart.properties || {});
       }
     });
 
@@ -2147,112 +2148,120 @@
       refreshFISelect(e.target.value.trim());
     });
 
-    // fi select
+    // floor item select → pre-fill fields
     screen.querySelector('#lu-fi-select').addEventListener('change', e => {
       const fi = DB.getFloorItem(e.target.value);
-      if (fi) showItemSection(fi, 'fi');
-      else screen.querySelector('#lu-item-section').hidden = true;
+      _selectedFI = fi || null;
+      const fieldsDiv = screen.querySelector('#lu-floor-item-fields');
+      if (!fi) { fieldsDiv.hidden = true; return; }
+      fieldsDiv.hidden = false;
+      const propStr = Object.values(fi.properties || {}).filter(Boolean).join(' ');
+      screen.querySelector('#lu-floor-item-info').innerHTML = `
+        <div class="card-title">[רצפה] ${propStr || fi.id}</div>
+        <div class="card-meta">מיקום: ${fi.location || 'לא ידוע'} · ${fi.itemCount || 0} פריטים</div>
+      `;
+      screen.querySelector('#lu-floor-count').value = fi.itemCount || 0;
+      renderItemRows(screen.querySelector('#lu-floor-item-rows'), fi.itemCount || 0, fi.itemIds || []);
+      buildPropertyFields(screen.querySelector('#lu-floor-prop-fields'), fi.properties || {});
     });
 
-    // count → item rows
-    screen.querySelector('#lu-count').addEventListener('input', () => {
-      const n = parseInt(screen.querySelector('#lu-count').value) || 0;
-      const existing = [...screen.querySelectorAll('#lu-item-rows .item-id-input')].map(i => i.value);
-      renderItemRows(n, existing);
+    // count → item rows (new-item mode)
+    screen.querySelector('#lu-new-count').addEventListener('input', () => {
+      const n = parseInt(screen.querySelector('#lu-new-count').value) || 0;
+      const existing = [...screen.querySelectorAll('#lu-new-item-rows .item-id-input')].map(i => i.value);
+      renderItemRows(screen.querySelector('#lu-new-item-rows'), n, existing);
     });
 
-    // save
-    screen.querySelector('#lu-save-btn').addEventListener('click', () => {
-      if (!_currentData) { Toast.show('יש לבחור מקור', 'error'); return; }
-      const destLoc    = screen.querySelector('#lu-dest-loc').value.trim();
-      const destSubLoc = screen.querySelector('#lu-dest-subloc-group').hidden
-        ? '' : screen.querySelector('#lu-dest-subloc').value.trim();
-      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
-      const count   = parseInt(screen.querySelector('#lu-count').value) || 0;
-      const itemIds = [...screen.querySelectorAll('#lu-item-rows .item-id-input')].map(i => i.value.trim()).filter(Boolean);
-      const props   = readPropertyFields(screen.querySelector('#lu-prop-fields'));
-      const sendToFloor = screen.querySelector('#lu-send-to-floor').checked;
+    // count → item rows (floor mode)
+    screen.querySelector('#lu-floor-count').addEventListener('input', () => {
+      const n = parseInt(screen.querySelector('#lu-floor-count').value) || 0;
+      const existing = [...screen.querySelectorAll('#lu-floor-item-rows .item-id-input')].map(i => i.value);
+      const firstN = (_selectedFI ? (_selectedFI.itemIds || []) : []).slice(0, n);
+      renderItemRows(screen.querySelector('#lu-floor-item-rows'), n, existing.length ? existing : firstN);
+    });
 
-      if (_op === 'load') {
-        // loading items onto a cart
-        if (_currentType === 'cart') {
-          DB.upsertCart({
-            cartId:      _currentData.cartId,
-            location:    destLoc,
-            subLocation: destSubLoc,
-            itemCount:   count,
-            itemIds,
-            properties:  props,
-            isEmpty:     count === 0
-          });
-        } else {
-          // loading from floor — update the floor item group
-          DB.upsertFloorItem({
-            id:          _currentData.id,
-            location:    destLoc,
-            subLocation: destSubLoc,
-            itemCount:   count,
-            itemIds,
-            properties:  props,
-            isEmpty:     count === 0
-          });
-        }
+    // count → item rows (unload mode), pre-fill with first N cart IDs
+    screen.querySelector('#lu-unload-count').addEventListener('input', () => {
+      const n = parseInt(screen.querySelector('#lu-unload-count').value) || 0;
+      const firstN = (_srcCart ? (_srcCart.itemIds || []) : []).slice(0, n);
+      renderItemRows(screen.querySelector('#lu-unload-item-rows'), n, firstN);
+    });
+
+    // load save
+    screen.querySelector('#lu-load-save-btn').addEventListener('click', () => {
+      const destCartId = screen.querySelector('#lu-dest-cart').value.trim();
+      if (!destCartId) { Toast.show('יש להזין עגלת יעד', 'error'); return; }
+
+      if (_loadType === 'new') {
+        const count   = parseInt(screen.querySelector('#lu-new-count').value) || 0;
+        const itemIds = [...screen.querySelectorAll('#lu-new-item-rows .item-id-input')]
+                          .map(i => i.value.trim()).filter(Boolean);
+        const props   = readPropertyFields(screen.querySelector('#lu-new-prop-fields'));
+        DB.upsertCart({ cartId: destCartId, itemCount: count, itemIds, properties: props, isEmpty: count === 0 });
         Toast.show('פריטים הועמסו', 'success');
+        // reset new-item fields
+        screen.querySelector('#lu-new-count').value = '';
+        screen.querySelector('#lu-new-item-rows').innerHTML = '';
+        buildPropertyFields(screen.querySelector('#lu-new-prop-fields'), {});
       } else {
-        // unload
-        if (sendToFloor) {
-          // create/update floor item group at destination
-          DB.upsertFloorItem({
-            location:    destLoc,
-            subLocation: destSubLoc,
-            itemCount:   count,
-            itemIds,
-            properties:  props,
-            isEmpty:     count === 0
-          });
-          // mark source as empty
-          if (_currentType === 'cart') {
-            DB.upsertCart({ cartId: _currentData.cartId, itemCount: 0, itemIds: [], isEmpty: true });
-          } else {
-            DB.upsertFloorItem({ id: _currentData.id, itemCount: 0, itemIds: [], isEmpty: true });
-          }
-          Toast.show('פורק לרצפה', 'success');
-        } else {
-          // unload to existing cart at destination
-          if (_currentType === 'cart') {
-            DB.upsertCart({
-              cartId:      _currentData.cartId,
-              location:    destLoc,
-              subLocation: destSubLoc,
-              itemCount:   count,
-              itemIds,
-              properties:  props,
-              isEmpty:     count === 0
-            });
-          } else {
-            DB.upsertFloorItem({
-              id:          _currentData.id,
-              location:    destLoc,
-              subLocation: destSubLoc,
-              itemCount:   count,
-              itemIds,
-              properties:  props,
-              isEmpty:     count === 0
-            });
-          }
-          Toast.show('פריטים פורקו', 'success');
-        }
+        // load from floor
+        if (!_selectedFI) { Toast.show('יש לבחור קבוצת רצפה', 'error'); return; }
+        const count   = parseInt(screen.querySelector('#lu-floor-count').value) || 0;
+        const itemIds = [...screen.querySelectorAll('#lu-floor-item-rows .item-id-input')]
+                          .map(i => i.value.trim()).filter(Boolean);
+        const props   = readPropertyFields(screen.querySelector('#lu-floor-prop-fields'));
+        DB.upsertCart({ cartId: destCartId, itemCount: count, itemIds, properties: props, isEmpty: count === 0 });
+        DB.upsertFloorItem({ id: _selectedFI.id, itemCount: 0, itemIds: [], isEmpty: true });
+        Toast.show('פריטים הועמסו מרצפה', 'success');
+        // reset floor fields
+        _selectedFI = null;
+        screen.querySelector('#lu-src-loc').value = '';
+        screen.querySelector('#lu-fi-select').value = '';
+        screen.querySelector('#lu-floor-item-fields').hidden = true;
       }
+      screen.querySelector('#lu-dest-cart').value = '';
+    });
+
+    // unload save (supports partial — only specified items leave the cart)
+    screen.querySelector('#lu-unload-save-btn').addEventListener('click', () => {
+      if (!_srcCart) { Toast.show('יש לבחור עגלת מקור', 'error'); return; }
+      const destLoc = screen.querySelector('#lu-unload-dest-loc').value.trim();
+      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
+      const destSubLoc = screen.querySelector('#lu-unload-dest-subloc-group').hidden
+        ? '' : screen.querySelector('#lu-unload-dest-subloc').value.trim();
+      const unloadCount = parseInt(screen.querySelector('#lu-unload-count').value) || 0;
+      const unloadIds   = [...screen.querySelectorAll('#lu-unload-item-rows .item-id-input')]
+                            .map(i => i.value.trim()).filter(Boolean);
+      const props = readPropertyFields(screen.querySelector('#lu-unload-prop-fields'));
+
+      // items remaining on cart = original IDs minus the ones being unloaded
+      const unloadedSet    = new Set(unloadIds);
+      const remainingIds   = (_srcCart.itemIds || []).filter(id => !unloadedSet.has(id));
+      const remainingCount = Math.max(0, (_srcCart.itemCount || 0) - unloadCount);
+
+      DB.upsertFloorItem({ location: destLoc, subLocation: destSubLoc,
+                           itemCount: unloadCount, itemIds: unloadIds,
+                           properties: props, isEmpty: unloadCount === 0 });
+      DB.upsertCart({ cartId: _srcCart.cartId,
+                      itemCount: remainingCount, itemIds: remainingIds,
+                      isEmpty: remainingCount === 0 });
+      Toast.show('פריטים פורקו לרצפה', 'success');
+      // reset unload fields
+      _srcCart = null;
+      screen.querySelector('#lu-unload-fields').hidden = true;
+      screen.querySelector('#lu-unload-dest-loc').value = '';
+      screen.querySelector('#lu-unload-dest-subloc').value = '';
     });
 
     Router.register('loadunload', {
       onShow({ cartId, floorItemId } = {}) {
         refreshFISelect();
         if (cartId) {
-          setSrc('cart');
-          setTimeout(() => _cartRef.setValue(cartId), 50);
+          setOp('unload');
+          setTimeout(() => _unloadCartRef.setValue(cartId), 50);
         } else if (floorItemId) {
-          setSrc('floor');
+          setOp('load');
+          setLoadType('floor');
           setTimeout(() => {
             refreshFISelect();
             const sel = screen.querySelector('#lu-fi-select');
