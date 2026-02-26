@@ -1831,28 +1831,18 @@
           <div id="tr-cart-form-host"></div>
         </div>
 
-        <!-- floor mode: pick source by location + properties -->
+        <!-- floor mode: pick source by location + properties + serial number -->
         <div id="tr-floor-section" hidden>
           <div class="form-group">
             <label class="form-label">מיקום מקור</label>
             <input id="tr-floor-src-loc" class="form-input" placeholder="משני" autocomplete="off">
           </div>
           <div id="tr-floor-src-props" class="mt-12"></div>
-          <!-- serial number checklist — shown when IDs are tracked -->
-          <div id="tr-floor-ids-section" hidden>
-            <div class="form-group" style="margin-top:14px;">
-              <label class="form-label">בחר מספרים סידוריים</label>
-              <div id="tr-floor-ids-list"
-                   style="max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:4px 0;"></div>
-            </div>
-            <div class="form-label mt-8" id="tr-floor-sel-count" style="color:var(--text-secondary);"></div>
-          </div>
-          <!-- fallback count input when no IDs recorded -->
-          <div id="tr-floor-count-fallback" class="form-group mt-12" hidden>
-            <label class="form-label">מספר פריטים</label>
-            <input id="tr-floor-count" class="form-input" type="number" min="0" placeholder="0">
-          </div>
           <div id="tr-floor-avail" class="card" style="margin:14px 0;" hidden></div>
+          <div class="form-group">
+            <label class="form-label">מספר סידורי</label>
+            <input id="tr-floor-serial" class="form-input" placeholder="הקלד מספר סידורי..." autocomplete="off">
+          </div>
         </div>
 
         <!-- shared fields (destination + cart item fields) -->
@@ -1900,53 +1890,28 @@
       () => DB.getMetadata().locations.map(l => l.name));
     buildPropertyFields(screen.querySelector('#tr-floor-src-props'), {});
 
-    function renderFloorIdsList(ids) {
-      const list = screen.querySelector('#tr-floor-ids-list');
-      list.innerHTML = ids.map(id => `
-        <label class="fp-check-label">
-          <input type="checkbox" class="fp-checkbox tr-floor-id-cb" value="${esc(id)}">
-          <span>${esc(id)}</span>
-        </label>`).join('');
-      updateFloorSelCount();
-    }
-
-    function updateFloorSelCount() {
-      const sel = [...screen.querySelectorAll('.tr-floor-id-cb:checked')];
-      screen.querySelector('#tr-floor-sel-count').textContent = `נבחרו ${sel.length} פריטים`;
-    }
-
     function updateFloorDisplay() {
       const loc   = screen.querySelector('#tr-floor-src-loc').value.trim();
       const props = readPropertyFields(screen.querySelector('#tr-floor-src-props'));
       const avail = screen.querySelector('#tr-floor-avail');
       if (!loc) {
         avail.hidden = true; _currentData = null; _currentType = null;
-        screen.querySelector('#tr-floor-ids-section').hidden = true;
-        screen.querySelector('#tr-floor-count-fallback').hidden = true;
         screen.querySelector('#tr-shared-fields').hidden = true; return;
       }
-      const fi    = DB.findFloorItem(loc, props);
-      const total = fi ? (fi.itemCount || 0) : 0;
+      const fi     = DB.findFloorItem(loc, props);
+      const total  = fi ? (fi.itemCount || 0) : 0;
       const allIds = fi ? (fi.itemIds || []) : [];
       _currentData = { location: loc, properties: props, itemCount: total, itemIds: allIds };
       _currentType = 'fi';
       avail.hidden = false;
       avail.innerHTML = `<div class="card-title">נמצאו ${total} פריטים</div><div class="card-meta">${esc(loc)}</div>`;
-      if (allIds.length > 0) {
-        screen.querySelector('#tr-floor-ids-section').hidden = false;
-        screen.querySelector('#tr-floor-count-fallback').hidden = true;
-        renderFloorIdsList(allIds);
-      } else {
-        screen.querySelector('#tr-floor-ids-section').hidden = true;
-        screen.querySelector('#tr-floor-count-fallback').hidden = false;
-        screen.querySelector('#tr-floor-count').value = total;
-      }
+      // autocomplete serial number from existing IDs at this location+props
+      makeAutocomplete(screen.querySelector('#tr-floor-serial'), () => allIds);
       showSharedFields(_currentData, 'fi');
     }
 
     screen.querySelector('#tr-floor-src-loc').addEventListener('change', updateFloorDisplay);
     screen.querySelector('#tr-floor-src-props').addEventListener('change', updateFloorDisplay);
-    screen.querySelector('#tr-floor-ids-list').addEventListener('change', updateFloorSelCount);
 
     function setMode(mode) {
       _mode = mode;
@@ -2050,36 +2015,32 @@
         msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc);
         Toast.show('עגלה הועברה', 'success');
       } else {
-        // floor mode
-        let movedIds, count;
-        const hasList = !screen.querySelector('#tr-floor-ids-section').hidden;
-        if (hasList) {
-          movedIds = [...screen.querySelectorAll('.tr-floor-id-cb:checked')].map(cb => cb.value);
-          if (!movedIds.length) { Toast.show('יש לבחור מספרים סידוריים', 'error'); return; }
-          count = movedIds.length;
-        } else {
-          count    = parseInt(screen.querySelector('#tr-floor-count').value) || 0;
-          movedIds = (_currentData.itemIds || []).slice(0, count);
-        }
+        // floor mode: single serial number transfer
+        const serial = screen.querySelector('#tr-floor-serial').value.trim();
+        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return; }
 
-        const srcFI    = DB.findFloorItem(_currentData.location, _currentData.properties);
-        const avail    = srcFI ? (srcFI.itemCount || 0) : 0;
-        if (count > avail) Toast.show(`אזהרה: זמין רק ${avail} פריטים`, 'warning');
-        const actual    = Math.min(count, avail);
-        const remaining = avail - actual;
-        const remainIds = (srcFI ? (srcFI.itemIds || []) : []).filter(id => !movedIds.includes(id));
-        DB.upsertFloorItem({ location: _currentData.location, properties: _currentData.properties,
-                             itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
-        // additive update of destination floor item
+        const srcFI       = DB.findFloorItem(_currentData.location, _currentData.properties);
+        const existsInSrc = srcFI && (srcFI.itemIds || []).includes(serial);
+        if (existsInSrc) {
+          // deduct from source
+          const remaining = Math.max(0, (srcFI.itemCount || 0) - 1);
+          const remainIds = (srcFI.itemIds || []).filter(id => id !== serial);
+          DB.upsertFloorItem({ location: _currentData.location, properties: _currentData.properties,
+                               itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
+        }
+        // additive update at destination regardless of whether found at source
         const destFI   = DB.findFloorItem(destLoc, _currentData.properties);
-        const newCount = (destFI ? (destFI.itemCount || 0) : 0) + actual;
-        const newIds   = [...(destFI ? (destFI.itemIds || []) : []), ...movedIds.slice(0, actual)];
+        const newCount = (destFI ? (destFI.itemCount || 0) : 0) + 1;
+        const newIds   = [...(destFI ? (destFI.itemIds || []) : []), serial];
         DB.upsertFloorItem({ location: destLoc, subLocation: destSubLoc,
                              itemCount: newCount, itemIds: newIds,
-                             properties: _currentData.properties, isEmpty: newCount === 0 });
+                             properties: _currentData.properties, isEmpty: false });
         const propStr = Object.values(_currentData.properties || {}).filter(Boolean).join(' ');
-        msg = `[רצפה] ${actual} ${propStr} | מועבר מ${_currentData.location || '?'} ל${destLoc}`.trim();
+        msg = `[רצפה] ${serial} ${propStr} | מועבר מ${_currentData.location || '?'} ל${destLoc}`.trim();
         Toast.show('פריטי רצפה הועברו', 'success');
+        screen.querySelector('#tr-floor-serial').value = '';
+        // refresh available count
+        updateFloorDisplay();
       }
 
       // copy the message
@@ -2133,7 +2094,6 @@
           <div class="pill-toggle" id="lu-op-toggle">
             <button class="active" data-op="load">העמסה</button>
             <button data-op="unload">פירוק</button>
-            <button data-op="tofloor">לרצפה</button>
           </div>
         </div>
 
@@ -2156,29 +2116,19 @@
             <div id="lu-new-prop-fields" class="mt-12"></div>
           </div>
 
-          <!-- floor source sub-section: pick by location + properties -->
+          <!-- floor source sub-section: pick by location + properties + serial number -->
           <div id="lu-floor-src-section" hidden>
             <div class="form-group">
               <label class="form-label">מיקום מקור</label>
               <input id="lu-src-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
             <div id="lu-floor-src-props" class="mt-12"></div>
-            <!-- serial number checklist — shown when IDs are tracked -->
-            <div id="lu-floor-ids-section" hidden>
-              <div class="form-group" style="margin-top:14px;">
-                <label class="form-label">בחר מספרים סידוריים</label>
-                <div id="lu-floor-ids-list"
-                     style="max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:4px 0;"></div>
-              </div>
-              <div class="form-label mt-8" id="lu-floor-sel-count" style="color:var(--text-secondary);"></div>
-            </div>
-            <!-- fallback count input when no IDs recorded -->
-            <div id="lu-floor-count-fallback" class="form-group mt-12" hidden>
-              <label class="form-label">מספר פריטים</label>
-              <input id="lu-floor-count" class="form-input" type="number" min="0" placeholder="0">
-            </div>
             <div id="lu-floor-avail" class="card" style="margin:14px 0;" hidden>
               <div id="lu-floor-avail-text"></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">מספר סידורי</label>
+              <input id="lu-floor-serial" class="form-input" placeholder="הקלד מספר סידורי..." autocomplete="off">
             </div>
           </div>
 
@@ -2187,7 +2137,7 @@
             <label class="form-label">עגלת יעד</label>
             <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
           </div>
-          <button id="lu-load-save-btn" class="btn btn-primary btn-full mt-16">📋 העמס והעתק</button>
+          <button id="lu-load-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
         </div>
 
         <!-- ═══ UNLOAD SECTION ═══ -->
@@ -2210,34 +2160,15 @@
               <input id="lu-unload-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
           </div>
-          <button id="lu-unload-save-btn" class="btn btn-primary btn-full mt-16">📋 פרוק והעתק</button>
-        </div>
-
-        <!-- ═══ TOFLOOR SECTION ═══ -->
-        <div id="lu-tofloor-section" hidden>
-          <div id="lu-tofloor-prop-fields" class="mt-12"></div>
-          <div class="form-group" style="margin-top:14px;">
-            <label class="form-label">מספר פריטים</label>
-            <input id="lu-tofloor-count" class="form-input" type="number" min="0" placeholder="0">
-          </div>
-          <div id="lu-tofloor-item-rows" class="item-rows"></div>
-          <div class="form-group" style="margin-top:16px;">
-            <label class="form-label">מיקום יעד</label>
-            <input id="lu-tofloor-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
-          </div>
-          <div class="form-group" id="lu-tofloor-dest-subloc-group" hidden>
-            <label class="form-label">תת-מיקום יעד</label>
-            <input id="lu-tofloor-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
-          </div>
-          <button id="lu-tofloor-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור לרצפה והעתק</button>
+          <button id="lu-unload-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
         </div>
       </div>
     `;
 
-    let _op            = 'load';   // 'load' | 'unload' | 'tofloor'
-    let _loadType      = 'new';    // 'new'  | 'floor'
-    let _floorSrc      = null;     // { location, properties, availableCount, allIds }
-    let _srcCart       = null;     // source cart object (unload mode)
+    let _op            = 'load';  // 'load' | 'unload'
+    let _loadType      = 'new';   // 'new'  | 'floor'
+    let _floorSrc      = null;    // { location, properties, availableCount, allIds }
+    let _srcCart       = null;    // source cart object (unload mode)
     let _unloadCartRef = null;
 
     // autocomplete + location setups
@@ -2248,62 +2179,28 @@
       screen.querySelector('#lu-unload-dest-subloc-group'),
       screen.querySelector('#lu-unload-dest-subloc')
     );
-    setupLocationFields(
-      screen.querySelector('#lu-tofloor-dest-loc'),
-      screen.querySelector('#lu-tofloor-dest-subloc-group'),
-      screen.querySelector('#lu-tofloor-dest-subloc')
-    );
 
     buildPropertyFields(screen.querySelector('#lu-new-prop-fields'), {});
     buildPropertyFields(screen.querySelector('#lu-floor-src-props'), {});
-    buildPropertyFields(screen.querySelector('#lu-tofloor-prop-fields'), {});
 
-    // ── Floor source helpers (load-from-floor mode) ──
-    function renderLuFloorIdsList(ids) {
-      const list = screen.querySelector('#lu-floor-ids-list');
-      list.innerHTML = ids.map(id => `
-        <label class="fp-check-label">
-          <input type="checkbox" class="fp-checkbox lu-floor-id-cb" value="${esc(id)}">
-          <span>${esc(id)}</span>
-        </label>`).join('');
-      updateLuFloorSelCount();
-    }
-
-    function updateLuFloorSelCount() {
-      const sel = [...screen.querySelectorAll('.lu-floor-id-cb:checked')];
-      screen.querySelector('#lu-floor-sel-count').textContent = `נבחרו ${sel.length} פריטים`;
-    }
-
+    // ── Floor source (load-from-floor mode) ──
     function updateFloorSrc() {
       const loc   = screen.querySelector('#lu-src-loc').value.trim();
       const props = readPropertyFields(screen.querySelector('#lu-floor-src-props'));
       const avail = screen.querySelector('#lu-floor-avail');
-      if (!loc) {
-        avail.hidden = true; _floorSrc = null;
-        screen.querySelector('#lu-floor-ids-section').hidden = true;
-        screen.querySelector('#lu-floor-count-fallback').hidden = true; return;
-      }
-      const fi    = DB.findFloorItem(loc, props);
-      const total = fi ? (fi.itemCount || 0) : 0;
+      if (!loc) { avail.hidden = true; _floorSrc = null; return; }
+      const fi     = DB.findFloorItem(loc, props);
+      const total  = fi ? (fi.itemCount || 0) : 0;
       const allIds = fi ? (fi.itemIds || []) : [];
       _floorSrc = { location: loc, properties: props, availableCount: total, allIds };
       avail.hidden = false;
       screen.querySelector('#lu-floor-avail-text').innerHTML =
         `<div class="card-title">זמין: ${total} פריטים</div><div class="card-meta">${esc(loc)}</div>`;
-      if (allIds.length > 0) {
-        screen.querySelector('#lu-floor-ids-section').hidden = false;
-        screen.querySelector('#lu-floor-count-fallback').hidden = true;
-        renderLuFloorIdsList(allIds);
-      } else {
-        screen.querySelector('#lu-floor-ids-section').hidden = true;
-        screen.querySelector('#lu-floor-count-fallback').hidden = false;
-        screen.querySelector('#lu-floor-count').value = total;
-      }
+      makeAutocomplete(screen.querySelector('#lu-floor-serial'), () => allIds);
     }
 
     screen.querySelector('#lu-src-loc').addEventListener('change', updateFloorSrc);
     screen.querySelector('#lu-floor-src-props').addEventListener('change', updateFloorSrc);
-    screen.querySelector('#lu-floor-ids-list').addEventListener('change', updateLuFloorSelCount);
 
     function renderItemRows(container, n, existing) {
       const rows = [];
@@ -2328,9 +2225,8 @@
       _op = op;
       screen.querySelectorAll('#lu-op-toggle button').forEach(b =>
         b.classList.toggle('active', b.dataset.op === op));
-      screen.querySelector('#lu-load-section').hidden    = (op !== 'load');
-      screen.querySelector('#lu-unload-section').hidden  = (op !== 'unload');
-      screen.querySelector('#lu-tofloor-section').hidden = (op !== 'tofloor');
+      screen.querySelector('#lu-load-section').hidden   = (op !== 'load');
+      screen.querySelector('#lu-unload-section').hidden = (op !== 'unload');
     }
 
     function setLoadType(lt) {
@@ -2341,8 +2237,6 @@
       screen.querySelector('#lu-floor-src-section').hidden = (lt !== 'floor');
       _floorSrc = null;
       screen.querySelector('#lu-floor-avail').hidden = true;
-      screen.querySelector('#lu-floor-ids-section').hidden = true;
-      screen.querySelector('#lu-floor-count-fallback').hidden = true;
     }
 
     screen.querySelector('#lu-op-toggle').addEventListener('click', e => {
@@ -2386,26 +2280,19 @@
       renderItemRows(screen.querySelector('#lu-unload-item-rows'), n, firstN);
     });
 
-    // count → item rows (tofloor mode)
-    screen.querySelector('#lu-tofloor-count').addEventListener('input', () => {
-      const n = parseInt(screen.querySelector('#lu-tofloor-count').value) || 0;
-      const existing = [...screen.querySelectorAll('#lu-tofloor-item-rows .item-id-input')].map(i => i.value);
-      renderItemRows(screen.querySelector('#lu-tofloor-item-rows'), n, existing);
-    });
-
     // ── load save ──
     screen.querySelector('#lu-load-save-btn').addEventListener('click', () => {
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
       const destCartId = rawDest.replace(/\([^)]+\)\s*$/, '').trim();
       if (!destCartId) { Toast.show('יש להזין עגלת יעד', 'error'); return; }
 
-      let count, itemIds, props, msg;
+      let props, msg;
 
       if (_loadType === 'new') {
-        count   = parseInt(screen.querySelector('#lu-new-count').value) || 0;
-        itemIds = [...screen.querySelectorAll('#lu-new-item-rows .item-id-input')]
-                    .map(i => i.value.trim()).filter(Boolean);
-        props   = readPropertyFields(screen.querySelector('#lu-new-prop-fields'));
+        const count   = parseInt(screen.querySelector('#lu-new-count').value) || 0;
+        const itemIds = [...screen.querySelectorAll('#lu-new-item-rows .item-id-input')]
+                          .map(i => i.value.trim()).filter(Boolean);
+        props = readPropertyFields(screen.querySelector('#lu-new-prop-fields'));
         DB.upsertCart({ cartId: destCartId, itemCount: count, itemIds, properties: props, isEmpty: count === 0 });
         const destCart = DB.getCart(destCartId);
         const label    = destCart ? cartLabel(destCart) : destCartId;
@@ -2416,45 +2303,35 @@
         screen.querySelector('#lu-new-item-rows').innerHTML = '';
         buildPropertyFields(screen.querySelector('#lu-new-prop-fields'), {});
       } else {
-        // load from floor
-        if (!_floorSrc) { Toast.show('יש לבחור מקור מרצפה', 'error'); return; }
-        const hasList = !screen.querySelector('#lu-floor-ids-section').hidden;
-        let movedIds;
-        if (hasList) {
-          movedIds = [...screen.querySelectorAll('.lu-floor-id-cb:checked')].map(cb => cb.value);
-          if (!movedIds.length) { Toast.show('יש לבחור מספרים סידוריים', 'error'); return; }
-          count = movedIds.length;
-        } else {
-          count    = parseInt(screen.querySelector('#lu-floor-count').value) || 0;
-          movedIds = _floorSrc.allIds.slice(0, count);
+        // load from floor: single serial number
+        if (!_floorSrc) { Toast.show('יש להזין מיקום מקור', 'error'); return; }
+        const serial = screen.querySelector('#lu-floor-serial').value.trim();
+        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return; }
+
+        const srcFI       = DB.findFloorItem(_floorSrc.location, _floorSrc.properties);
+        const existsInSrc = srcFI && (srcFI.itemIds || []).includes(serial);
+        if (existsInSrc) {
+          const remaining = Math.max(0, (srcFI.itemCount || 0) - 1);
+          const remainIds = (srcFI.itemIds || []).filter(id => id !== serial);
+          DB.upsertFloorItem({ location: _floorSrc.location, properties: _floorSrc.properties,
+                               itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
         }
-        const avail  = _floorSrc.availableCount;
-        const actual = Math.min(count, avail);
-        if (count > avail) Toast.show(`אזהרה: זמין רק ${avail} פריטים`, 'warning');
-
-        const remaining = avail - actual;
-        const srcFI = DB.findFloorItem(_floorSrc.location, _floorSrc.properties);
-        const remainIds = (srcFI ? (srcFI.itemIds || []) : []).filter(id => !movedIds.includes(id));
-        DB.upsertFloorItem({ location: _floorSrc.location, properties: _floorSrc.properties,
-                             itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
-
-        itemIds = movedIds.slice(0, actual);
-        props   = _floorSrc.properties;
-        DB.upsertCart({ cartId: destCartId, itemCount: actual, itemIds, properties: props, isEmpty: actual === 0 });
+        // additive update to cart
+        props = _floorSrc.properties;
+        const existingCart  = DB.getCart(destCartId);
+        const existingIds   = existingCart ? (existingCart.itemIds || []) : [];
+        const existingCount = existingCart ? (existingCart.itemCount || 0) : 0;
+        DB.upsertCart({ cartId: destCartId, itemCount: existingCount + 1,
+                        itemIds: [...existingIds, serial], properties: props, isEmpty: false });
 
         const destCart = DB.getCart(destCartId);
         const label    = destCart ? cartLabel(destCart) : destCartId;
         const propStr  = Object.values(props).filter(Boolean).join(' ');
-        msg = `עגלה ${label} | ${actual} ${propStr} | הועמסו מ${_floorSrc.location || '?'}`.trim();
-        Toast.show('פריטים הועמסו מרצפה', 'success');
+        msg = `עגלה ${label} | ${serial} ${propStr} | הועמס מ${_floorSrc.location || '?'}`.trim();
+        Toast.show('פריט הועמס מרצפה', 'success');
 
-        _floorSrc = null;
-        screen.querySelector('#lu-src-loc').value = '';
-        screen.querySelector('#lu-floor-src-props').innerHTML = '';
-        buildPropertyFields(screen.querySelector('#lu-floor-src-props'), {});
-        screen.querySelector('#lu-floor-avail').hidden = true;
-        screen.querySelector('#lu-floor-ids-section').hidden = true;
-        screen.querySelector('#lu-floor-count-fallback').hidden = true;
+        screen.querySelector('#lu-floor-serial').value = '';
+        updateFloorSrc(); // refresh available count
       }
       screen.querySelector('#lu-dest-cart').value = '';
       copyMsg(msg);
@@ -2496,35 +2373,6 @@
       screen.querySelector('#lu-unload-fields').hidden = true;
       screen.querySelector('#lu-unload-dest-loc').value = '';
       screen.querySelector('#lu-unload-dest-subloc').value = '';
-      copyMsg(msg);
-    });
-
-    // ── tofloor save ──
-    screen.querySelector('#lu-tofloor-save-btn').addEventListener('click', () => {
-      const destLoc = screen.querySelector('#lu-tofloor-dest-loc').value.trim();
-      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
-      const destSubLoc = screen.querySelector('#lu-tofloor-dest-subloc-group').hidden
-        ? '' : screen.querySelector('#lu-tofloor-dest-subloc').value.trim();
-      const count  = parseInt(screen.querySelector('#lu-tofloor-count').value) || 0;
-      const itemIds = [...screen.querySelectorAll('#lu-tofloor-item-rows .item-id-input')]
-                       .map(i => i.value.trim()).filter(Boolean);
-      const props  = readPropertyFields(screen.querySelector('#lu-tofloor-prop-fields'));
-
-      const existing = DB.findFloorItem(destLoc, props);
-      const newCount = (existing ? (existing.itemCount || 0) : 0) + count;
-      const newIds   = [...(existing ? (existing.itemIds || []) : []), ...itemIds];
-      DB.upsertFloorItem({ location: destLoc, subLocation: destSubLoc,
-                           itemCount: newCount, itemIds: newIds, properties: props, isEmpty: newCount === 0 });
-
-      const propStr = Object.values(props).filter(Boolean).join(' ');
-      const msg     = `[רצפה] ${count} ${propStr} | נוסף ל${destLoc}`.trim();
-      Toast.show('נשמר לרצפה', 'success');
-
-      screen.querySelector('#lu-tofloor-count').value = '';
-      screen.querySelector('#lu-tofloor-item-rows').innerHTML = '';
-      screen.querySelector('#lu-tofloor-dest-loc').value = '';
-      screen.querySelector('#lu-tofloor-dest-subloc').value = '';
-      buildPropertyFields(screen.querySelector('#lu-tofloor-prop-fields'), {});
       copyMsg(msg);
     });
 
