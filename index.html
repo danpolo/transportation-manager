@@ -1839,6 +1839,10 @@
             <label class="form-label">מיקום מקור</label>
             <input id="tr-floor-src-loc" class="form-input" placeholder="משני" autocomplete="off">
           </div>
+          <div class="form-group" id="tr-floor-src-subloc-group" hidden>
+            <label class="form-label">תת-מיקום מקור</label>
+            <input id="tr-floor-src-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+          </div>
           <div id="tr-floor-src-props" class="mt-12"></div>
           <div id="tr-floor-avail" class="card" style="margin:14px 0;" hidden></div>
           <div class="form-group">
@@ -1887,15 +1891,20 @@
       screen.querySelector('#tr-dest-subloc')
     );
 
-    // Floor source: location + property pickers
-    makeAutocomplete(screen.querySelector('#tr-floor-src-loc'),
-      () => DB.getMetadata().locations.map(l => l.name));
+    // Floor source: location (+ optional sub-location) + property pickers
+    setupLocationFields(
+      screen.querySelector('#tr-floor-src-loc'),
+      screen.querySelector('#tr-floor-src-subloc-group'),
+      screen.querySelector('#tr-floor-src-subloc')
+    );
     buildPropertyFields(screen.querySelector('#tr-floor-src-props'), {});
 
     function updateFloorDisplay() {
-      const loc   = screen.querySelector('#tr-floor-src-loc').value.trim();
-      const props = readPropertyFields(screen.querySelector('#tr-floor-src-props'));
-      const avail = screen.querySelector('#tr-floor-avail');
+      const loc    = screen.querySelector('#tr-floor-src-loc').value.trim();
+      const subLoc = screen.querySelector('#tr-floor-src-subloc-group').hidden
+        ? '' : screen.querySelector('#tr-floor-src-subloc').value.trim();
+      const props  = readPropertyFields(screen.querySelector('#tr-floor-src-props'));
+      const avail  = screen.querySelector('#tr-floor-avail');
       if (!loc) {
         avail.hidden = true; _currentData = null; _currentType = null;
         screen.querySelector('#tr-shared-fields').hidden = true; return;
@@ -1903,16 +1912,18 @@
       const fi     = DB.findFloorItem(loc, props);
       const total  = fi ? (fi.itemCount || 0) : 0;
       const allIds = fi ? (fi.itemIds || []) : [];
-      _currentData = { location: loc, properties: props, itemCount: total, itemIds: allIds };
+      _currentData = { location: loc, subLocation: subLoc, properties: props, itemCount: total, itemIds: allIds };
       _currentType = 'fi';
       avail.hidden = false;
-      avail.innerHTML = `<div class="card-title">נמצאו ${total} פריטים</div><div class="card-meta">${esc(loc)}</div>`;
+      const displayLoc = subLoc ? `${loc} · ${subLoc}` : loc;
+      avail.innerHTML = `<div class="card-title">נמצאו ${total} פריטים</div><div class="card-meta">${esc(displayLoc)}</div>`;
       // autocomplete serial number from existing IDs at this location+props
       makeAutocomplete(screen.querySelector('#tr-floor-serial'), () => allIds);
       showSharedFields(_currentData, 'fi');
     }
 
     screen.querySelector('#tr-floor-src-loc').addEventListener('change', updateFloorDisplay);
+    screen.querySelector('#tr-floor-src-subloc').addEventListener('change', updateFloorDisplay);
     screen.querySelector('#tr-floor-src-props').addEventListener('change', updateFloorDisplay);
 
     function setMode(mode) {
@@ -1945,9 +1956,10 @@
         buildPropertyFields(screen.querySelector('#tr-prop-fields'), data.properties || {});
       } else {
         const propStr = Object.values(data.properties || {}).filter(Boolean).join(' ');
+        const locDisplay = data.subLocation ? `${data.location} · ${data.subLocation}` : (data.location || 'לא ידוע');
         info.innerHTML = `
           <div class="card-title">[רצפה] ${esc(propStr)} · ${data.itemCount || 0} פריטים</div>
-          <div class="card-meta">מיקום: ${esc(data.location || 'לא ידוע')}</div>
+          <div class="card-meta">מיקום: ${esc(locDisplay)}</div>
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = true;
       }
