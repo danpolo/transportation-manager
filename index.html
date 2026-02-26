@@ -1247,8 +1247,9 @@
 
   // ── CartForm ──
   // Creates a cart ID input with autocomplete datalist inside `container`
+  let _cartFormSeq = 0;
   function CartForm(container, { onCartLoaded } = {}) {
-    const inputId = 'cart-id-input-' + Date.now();
+    const inputId = 'cart-id-input-' + (++_cartFormSeq);
     container.innerHTML = `
       <div class="form-group">
         <label class="form-label">מספר עגלה</label>
@@ -1263,7 +1264,8 @@
       const raw = input.value.trim();
       const id  = raw.replace(/\([^)]+\)\s*$/, '').trim(); // strip "(TYPE)" suffix
       if (!id) { if (onCartLoaded) onCartLoaded(null); return; }
-      const cart = DB.getCart(id);
+      // fall back to raw value if stripped ID not found (handles cart IDs that contain parentheses)
+      const cart = DB.getCart(id) || DB.getCart(raw);
       if (onCartLoaded) onCartLoaded(cart || null);
     }
 
@@ -1272,7 +1274,7 @@
       // only auto-lookup if the value (after stripping type) exactly matches a known cart
       const raw = input.value.trim();
       const id  = raw.replace(/\([^)]+\)\s*$/, '').trim();
-      if (DB.getCart(id)) lookup();
+      if (DB.getCart(id) || DB.getCart(raw)) lookup();
     });
 
     return {
