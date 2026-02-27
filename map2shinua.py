@@ -20,15 +20,35 @@ that can be pasted into the app's import screen.
 
 Usage:
     python map2shinua.py map.txt
+    python map2shinua.py map.txt --props-file props.json
     python map2shinua.py map.txt --props צבע גודל
     cat map.txt | python map2shinua.py -
     python map2shinua.py map.txt -o import.txt
 
 Options:
+    --props-file FILE
+        JSON file describing properties and their allowed values.
+        Supports two formats:
+
+        Array format (recommended — preserves order, includes options):
+            [
+              {"name": "צבע", "options": ["כחול", "אדום", "ירוק"]},
+              {"name": "גודל", "options": ["גדול", "קטן"]}
+            ]
+
+        Dict format (shorthand):
+            {"צבע": ["כחול", "אדום"], "גודל": ["גדול", "קטן"]}
+
+        With --props-file, property values in the map are matched
+        order-independently and case-insensitively (useful for English
+        values like "Blue" / "blue" / "BLUE").
+
     --props NAME [NAME ...]
-        Property names, in the order the values appear in the map.
-        Example: if carts show "כחול גדול", use --props צבע גודל
-        Without --props the raw prop string is ignored (properties left empty).
+        Simple positional fallback: property names in the order the
+        values appear in the map.  No options list — values are taken
+        as-is.  Example: if carts show "כחול גדול", use --props צבע גודל
+        Without either option the raw prop string is ignored.
+
     -o / --output FILE
         Write to FILE instead of stdout.
 """
@@ -125,19 +145,71 @@ def parse_map(text: str) -> list[tuple[str, list[dict]]]:
 
 # ── Build shinua DB dict ──────────────────────────────────────────────────────
 
-def props_dict(raw: str, names: list[str]) -> dict:
-    """Map a space-joined value string to {propName: value, ...}.
+def load_prop_defs(path: str) -> list[dict]:
+    """Load property definitions from a JSON file.
 
-    If names is empty, returns {} (properties ignored).
-    Extra values beyond len(names) are discarded; missing values get ''.
+    Accepts either:
+      - Array:  [{"name": "צבע", "options": ["כחול", "אדום"]}, ...]
+      - Dict:   {"צבע": ["כחול", "אדום"], ...}
+
+    Returns a list of {"name": str, "options": [str, ...]} dicts.
     """
-    if not names:
+    with open(path, encoding='utf-8') as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return [{'name': k, 'options': v} for k, v in data.items()]
+    raise ValueError('props.json must be a JSON array or object')
+
+
+def match_props(raw: str, prop_defs: list[dict]) -> dict:
+    """Map a raw value string to {propName: value}.
+
+    Two modes, selected automatically:
+
+    • **Order-independent** (when any prop has a non-empty options list):
+      Each whitespace-separated token in *raw* is compared case-insensitively
+      against every property's options list.  The first matching (prop, option)
+      pair wins; a property is assigned at most once.  Tokens that match no
+      option are silently discarded.  The canonical spelling from the options
+      list is used in the output.
+
+    • **Positional** (when all props have empty options lists, i.e. bare
+      ``--props`` names were supplied without a props file):
+      Values are assigned left-to-right in definition order; missing values
+      get an empty string, extra values are discarded.
+
+    Returns {} when prop_defs is empty.
+    """
+    if not prop_defs:
         return {}
-    values = raw.split() if raw else []
-    return {name: (values[i] if i < len(values) else '') for i, name in enumerate(names)}
+    tokens = raw.split() if raw else []
+    # Positional fallback: no prop has a defined options list
+    if not any(p.get('options') for p in prop_defs):
+        return {p['name']: (tokens[i] if i < len(tokens) else '')
+                for i, p in enumerate(prop_defs)}
+    # Order-independent matching
+    result: dict = {}
+    assigned: set = set()
+    for token in tokens:
+        tk = token.lower()
+        for prop in prop_defs:
+            name = prop['name']
+            if name in assigned:
+                continue
+            canonical = next(
+                (o for o in prop.get('options', []) if o.lower() == tk),
+                None,
+            )
+            if canonical is not None:
+                result[name] = canonical
+                assigned.add(name)
+                break
+    return result
 
 
-def build_db(locations: list[tuple[str, list[dict]]], prop_names: list[str]) -> dict:
+def build_db(locations: list[tuple[str, list[dict]]], prop_defs: list[dict]) -> dict:
     """Convert parsed locations → shinua DB dict."""
     now_ms = int(time.time() * 1000)
     fi_counter = [0]  # mutable counter for unique floor-item IDs
@@ -151,7 +223,7 @@ def build_db(locations: list[tuple[str, list[dict]]], prop_names: list[str]) -> 
         location_meta.append({'name': loc_name, 'inMap': True})
 
         for entry in entries:
-            props = props_dict(entry['rawProps'], prop_names)
+            props = match_props(entry['rawProps'], prop_defs)
 
             if entry['type'] == 'cart':
                 cid = entry['cartId']
@@ -183,14 +255,11 @@ def build_db(locations: list[tuple[str, list[dict]]], prop_names: list[str]) -> 
                     'lastUpdated': now_ms,
                 }
 
-    # property metadata: names supplied by user, options unknown → []
-    properties_meta = [{'name': n, 'options': []} for n in prop_names]
-
     return {
         'metadata': {
             'carts':      cart_id_list,
             'cartTypes':  [],
-            'properties': properties_meta,
+            'properties': prop_defs,
             'locations':  location_meta,
         },
         'carts':      carts,
@@ -259,10 +328,21 @@ examples:
         help='Map text file path, or - to read from stdin (default: -)',
     )
     parser.add_argument(
+        '--props-file', metavar='FILE',
+        help=(
+            'JSON file with property definitions (name + options). '
+            'Values in the map are matched order-independently and '
+            'case-insensitively. '
+            'Array format: [{"name":"צבע","options":["כחול","אדום"]},...] '
+            'or dict format: {"צבע":["כחול","אדום"],...}'
+        ),
+    )
+    parser.add_argument(
         '--props', nargs='*', default=[], metavar='NAME',
         help=(
-            'Property names in the order they appear after the item count. '
-            'Example: --props צבע גודל'
+            'Simple positional fallback: property names in the order they '
+            'appear after the item count. Example: --props צבע גודל. '
+            'Ignored when --props-file is given.'
         ),
     )
     parser.add_argument(
@@ -282,6 +362,35 @@ examples:
             print(f"error: file not found: {args.input}", file=sys.stderr)
             sys.exit(1)
 
+    # ── resolve prop definitions ──
+    if args.props_file:
+        try:
+            prop_defs = load_prop_defs(args.props_file)
+        except FileNotFoundError:
+            print(f"error: props file not found: {args.props_file}", file=sys.stderr)
+            sys.exit(1)
+        except (json.JSONDecodeError, ValueError) as exc:
+            print(f"error: invalid props file: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(
+            f"props file: {len(prop_defs)} propert{'y' if len(prop_defs)==1 else 'ies'} "
+            f"({', '.join(p['name'] for p in prop_defs)})",
+            file=sys.stderr,
+        )
+    elif args.props:
+        # positional names only — no options, positional matching still works
+        # via match_props but since options=[] no token will ever match;
+        # use a simple positional fallback instead
+        prop_defs = [{'name': n, 'options': []} for n in args.props]
+        print(f"property names (positional): {args.props}", file=sys.stderr)
+    else:
+        prop_defs = []
+        print(
+            "no --props-file or --props given: property values in the map "
+            "will be ignored.",
+            file=sys.stderr,
+        )
+
     # ── parse ──
     locations = parse_map(text)
     if not locations:
@@ -295,17 +404,9 @@ examples:
         f"parsed {len(locations)} location(s), {cart_count} cart(s), {floor_count} floor item(s)",
         file=sys.stderr,
     )
-    if args.props:
-        print(f"property names: {args.props}", file=sys.stderr)
-    else:
-        print(
-            "no --props given: property values in the map will be ignored. "
-            "pass --props to map them to named properties.",
-            file=sys.stderr,
-        )
 
     # ── build + encode ──
-    db = build_db(locations, args.props or [])
+    db = build_db(locations, prop_defs)
     output = encode_import(db)
 
     # ── write output ──
