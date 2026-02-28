@@ -121,6 +121,19 @@
       font-size: 0.8rem;
       color: var(--muted);
     }
+    /* ─── Item-slot card (multi-type carts) ─── */
+    .item-slot-card {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .item-slot-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
 
     /* ─── Form Elements ─── */
     .form-group { margin-bottom: 14px; }
@@ -663,6 +676,8 @@
         if (!_cache.metadata.cartTypes)   _cache.metadata.cartTypes = [];
         if (!_cache.carts)                _cache.carts = {};
         if (!_cache.floorItems)           _cache.floorItems = {};
+        // migrate carts: ensure multi-slot field exists
+        Object.values(_cache.carts).forEach(c => { if (!c.extraItems) c.extraItems = []; });
       } catch(e) {
         _cache = _empty();
       }
@@ -682,7 +697,13 @@
     function upsertCart(data) {
       const db = load();
       const existing = db.carts[data.cartId] || {};
-      db.carts[data.cartId] = Object.assign({}, existing, data, { lastUpdated: Date.now() });
+      const merged = Object.assign({}, existing, data, { lastUpdated: Date.now() });
+      if (!merged.extraItems) merged.extraItems = [];
+      // recompute isEmpty from all slots
+      const slot0Empty = !(merged.itemCount || 0);
+      const extraEmpty = merged.extraItems.every(s => !(s.itemCount || 0));
+      merged.isEmpty = slot0Empty && extraEmpty;
+      db.carts[data.cartId] = merged;
       // ensure cartId is in metadata.carts list
       if (!db.metadata.carts.includes(data.cartId)) {
         db.metadata.carts.push(data.cartId);
@@ -1245,6 +1266,15 @@
     return cart.cartId + (cart.cartType ? '(' + cart.cartType + ')' : '');
   }
 
+  // ── cartTotalCount ──
+  // Total items across all slots (slot 0 + extraItems)
+  function cartTotalCount(cart) {
+    if (!cart) return 0;
+    const slot0  = cart.itemCount || 0;
+    const extras = (cart.extraItems || []).reduce((s, e) => s + (e.itemCount || 0), 0);
+    return slot0 + extras;
+  }
+
   // ── CartForm ──
   // Creates a cart ID input with autocomplete datalist inside `container`
   let _cartFormSeq = 0;
@@ -1428,7 +1458,7 @@
           <div class="list-item">
             <div class="list-item-body">
               <div class="list-item-title">${esc(cartLabel(c))}</div>
-              <div class="list-item-sub">${c.location || 'ללא מיקום'}${c.itemCount ? ' · ' + c.itemCount + ' פריטים' : ''}</div>
+              <div class="list-item-sub">${c.location || 'ללא מיקום'}${cartTotalCount(c) ? ' · ' + cartTotalCount(c) + ' פריטים' : ''}</div>
             </div>
             <div class="list-item-actions">
               <button class="btn-icon ec-edit-btn" data-id="${esc(c.cartId)}" title="ערוך">✏️</button>
@@ -2110,12 +2140,8 @@
 
           <!-- new item sub-section -->
           <div id="lu-new-item-section">
-            <div class="form-group">
-              <label class="form-label">מספר פריטים</label>
-              <input id="lu-new-count" class="form-input" type="number" min="0" placeholder="0">
-            </div>
-            <div id="lu-new-item-rows" class="item-rows"></div>
-            <div id="lu-new-prop-fields" class="mt-12"></div>
+            <div id="lu-slots-container"></div>
+            <button id="lu-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
           </div>
 
           <!-- floor source sub-section: pick by location + properties + serial number -->
@@ -2147,12 +2173,7 @@
           <div id="lu-unload-cart-form-host"></div>
           <div id="lu-unload-fields" hidden>
             <div id="lu-unload-cart-info" class="card" style="margin:0 0 14px;"></div>
-            <div class="form-group">
-              <label class="form-label">מספר פריטים לפירוק</label>
-              <input id="lu-unload-count" class="form-input" type="number" min="0" placeholder="0">
-            </div>
-            <div id="lu-unload-item-rows" class="item-rows"></div>
-            <div id="lu-unload-prop-fields" class="mt-12"></div>
+            <div id="lu-unload-slots-container"></div>
             <div class="form-group" style="margin-top:16px;">
               <label class="form-label">מיקום יעד (רצפה)</label>
               <input id="lu-unload-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
@@ -2182,7 +2203,6 @@
       screen.querySelector('#lu-unload-dest-subloc')
     );
 
-    buildPropertyFields(screen.querySelector('#lu-new-prop-fields'), {});
     buildPropertyFields(screen.querySelector('#lu-floor-src-props'), {});
 
     // ── Floor source (load-from-floor mode) ──
@@ -2223,6 +2243,89 @@
         .catch(() => Toast.show('נשמר', 'success'));
     }
 
+    // ── Slot management (multi-type carts) ──────────────────────────
+    function makeSlotEl(idx, slot) {
+      const div = document.createElement('div');
+      div.className = 'item-slot-card';
+      div.dataset.slotIdx = String(idx);
+      const existingCount = slot ? (slot.itemCount || 0) : 0;
+      const existingIds   = slot ? (slot.itemIds   || []) : [];
+      div.innerHTML = `
+        <div class="item-slot-header">
+          <span class="card-meta" style="font-weight:600"></span>
+          <button class="btn-icon slot-del-btn" title="הסר סוג" style="font-size:1rem;padding:0 4px">✕</button>
+        </div>
+        <div class="slot-props"></div>
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">כמות</label>
+          <input class="form-input slot-count-input" type="number" min="0" placeholder="0" value="${existingCount}">
+        </div>
+        <div class="item-rows slot-item-rows"></div>
+      `;
+      buildPropertyFields(div.querySelector('.slot-props'), slot ? (slot.properties || {}) : {});
+      renderItemRows(div.querySelector('.slot-item-rows'), existingCount, existingIds);
+      div.querySelector('.slot-count-input').addEventListener('input', () => {
+        const n    = parseInt(div.querySelector('.slot-count-input').value) || 0;
+        const prev = [...div.querySelectorAll('.item-id-input')].map(i => i.value);
+        renderItemRows(div.querySelector('.slot-item-rows'), n, prev);
+      });
+      div.querySelector('.slot-del-btn').addEventListener('click', () => {
+        const parent = div.parentElement;
+        div.remove();
+        renumberSlots(parent);
+      });
+      return div;
+    }
+
+    function renumberSlots(container) {
+      if (!container) return;
+      const slots = container.querySelectorAll('.item-slot-card');
+      slots.forEach((el, idx) => {
+        el.dataset.slotIdx = String(idx);
+        const lbl = el.querySelector('.item-slot-header span');
+        if (lbl) lbl.textContent = idx === 0 ? 'סוג ראשון' : `סוג ${idx + 1}`;
+        const del = el.querySelector('.slot-del-btn');
+        if (del) del.hidden = (slots.length === 1);
+      });
+    }
+
+    function readSlot(slotEl) {
+      const count      = parseInt(slotEl.querySelector('.slot-count-input').value) || 0;
+      const itemIds    = [...slotEl.querySelectorAll('.item-id-input')].map(i => i.value.trim()).filter(Boolean);
+      const properties = readPropertyFields(slotEl.querySelector('.slot-props'));
+      return { properties, itemCount: count, itemIds };
+    }
+
+    function readAllSlots(container) {
+      return [...container.querySelectorAll('.item-slot-card')].map(readSlot);
+    }
+
+    function populateSlots(container, cart) {
+      container.innerHTML = '';
+      const slots = [
+        { properties: cart.properties || {}, itemCount: cart.itemCount || 0, itemIds: cart.itemIds || [] },
+        ...(cart.extraItems || [])
+      ];
+      slots.forEach((slot, idx) => container.appendChild(makeSlotEl(idx, slot)));
+      renumberSlots(container);
+    }
+
+    function initEmptySlots(container) {
+      container.innerHTML = '';
+      container.appendChild(makeSlotEl(0, null));
+      renumberSlots(container);
+    }
+
+    // initialise load slots
+    initEmptySlots(screen.querySelector('#lu-slots-container'));
+
+    screen.querySelector('#lu-add-slot-btn').addEventListener('click', () => {
+      const container = screen.querySelector('#lu-slots-container');
+      const idx = container.querySelectorAll('.item-slot-card').length;
+      container.appendChild(makeSlotEl(idx, null));
+      renumberSlots(container);
+    });
+
     function setOp(op) {
       _op = op;
       screen.querySelectorAll('#lu-op-toggle button').forEach(b =>
@@ -2258,28 +2361,13 @@
         const fields = screen.querySelector('#lu-unload-fields');
         if (!cart) { fields.hidden = true; return; }
         fields.hidden = false;
+        const total = cartTotalCount(cart);
         screen.querySelector('#lu-unload-cart-info').innerHTML = `
           <div class="card-title">עגלה: ${esc(cartLabel(cart))}</div>
-          <div class="card-meta">מיקום נוכחי: ${esc(cart.location || 'לא ידוע')} · ${cart.itemCount || 0} פריטים</div>
+          <div class="card-meta">מיקום נוכחי: ${esc(cart.location || 'לא ידוע')} · ${total} פריטים</div>
         `;
-        screen.querySelector('#lu-unload-count').value = cart.itemCount || 0;
-        renderItemRows(screen.querySelector('#lu-unload-item-rows'), cart.itemCount || 0, cart.itemIds || []);
-        buildPropertyFields(screen.querySelector('#lu-unload-prop-fields'), cart.properties || {});
+        populateSlots(screen.querySelector('#lu-unload-slots-container'), cart);
       }
-    });
-
-    // count → item rows (new-item mode)
-    screen.querySelector('#lu-new-count').addEventListener('input', () => {
-      const n = parseInt(screen.querySelector('#lu-new-count').value) || 0;
-      const existing = [...screen.querySelectorAll('#lu-new-item-rows .item-id-input')].map(i => i.value);
-      renderItemRows(screen.querySelector('#lu-new-item-rows'), n, existing);
-    });
-
-    // count → item rows (unload mode), pre-fill with first N cart IDs
-    screen.querySelector('#lu-unload-count').addEventListener('input', () => {
-      const n = parseInt(screen.querySelector('#lu-unload-count').value) || 0;
-      const firstN = (_srcCart ? (_srcCart.itemIds || []) : []).slice(0, n);
-      renderItemRows(screen.querySelector('#lu-unload-item-rows'), n, firstN);
     });
 
     // ── load save ──
@@ -2288,22 +2376,26 @@
       const destCartId = rawDest.replace(/\([^)]+\)\s*$/, '').trim();
       if (!destCartId) { Toast.show('יש להזין עגלת יעד', 'error'); return; }
 
-      let props, msg;
+      let msg;
 
       if (_loadType === 'new') {
-        const count   = parseInt(screen.querySelector('#lu-new-count').value) || 0;
-        const itemIds = [...screen.querySelectorAll('#lu-new-item-rows .item-id-input')]
-                          .map(i => i.value.trim()).filter(Boolean);
-        props = readPropertyFields(screen.querySelector('#lu-new-prop-fields'));
-        DB.upsertCart({ cartId: destCartId, itemCount: count, itemIds, properties: props, isEmpty: count === 0 });
+        const slotsContainer = screen.querySelector('#lu-slots-container');
+        const allSlots = readAllSlots(slotsContainer);
+        const slot0    = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
+        const extras   = allSlots.slice(1);
+        DB.upsertCart({
+          cartId: destCartId,
+          itemCount: slot0.itemCount, itemIds: slot0.itemIds, properties: slot0.properties,
+          extraItems: extras
+        });
         const destCart = DB.getCart(destCartId);
         const label    = destCart ? cartLabel(destCart) : destCartId;
-        const propStr  = Object.values(props).filter(Boolean).join(' ');
-        msg = `עגלה ${label} | ${count} ${propStr} | הועמסו פריטים`.trim();
+        const total    = allSlots.reduce((s, sl) => s + sl.itemCount, 0);
+        const msgSlots = allSlots.filter(sl => sl.itemCount)
+          .map(sl => `${sl.itemCount}${Object.values(sl.properties).filter(Boolean).map(v => ' ' + v).join('')}`);
+        msg = `עגלה ${label} | ${msgSlots.join(' + ')} | הועמסו פריטים`.trim();
         Toast.show('פריטים הועמסו', 'success');
-        screen.querySelector('#lu-new-count').value = '';
-        screen.querySelector('#lu-new-item-rows').innerHTML = '';
-        buildPropertyFields(screen.querySelector('#lu-new-prop-fields'), {});
+        initEmptySlots(slotsContainer);
       } else {
         // load from floor: single serial number
         if (!_floorSrc) { Toast.show('יש להזין מיקום מקור', 'error'); return; }
@@ -2346,29 +2438,47 @@
       if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
       const destSubLoc = screen.querySelector('#lu-unload-dest-subloc-group').hidden
         ? '' : screen.querySelector('#lu-unload-dest-subloc').value.trim();
-      const unloadCount = parseInt(screen.querySelector('#lu-unload-count').value) || 0;
-      const unloadIds   = [...screen.querySelectorAll('#lu-unload-item-rows .item-id-input')]
-                            .map(i => i.value.trim()).filter(Boolean);
-      const props = readPropertyFields(screen.querySelector('#lu-unload-prop-fields'));
 
-      const unloadedSet    = new Set(unloadIds);
-      const remainingIds   = (_srcCart.itemIds || []).filter(id => !unloadedSet.has(id));
-      const remainingCount = Math.max(0, (_srcCart.itemCount || 0) - unloadCount);
+      const slotsContainer = screen.querySelector('#lu-unload-slots-container');
+      const allSlots = readAllSlots(slotsContainer);
 
-      // additive update of destination floor item
-      const destFI   = DB.findFloorItem(destLoc, props);
-      const newCount = (destFI ? (destFI.itemCount || 0) : 0) + unloadCount;
-      const newIds   = [...(destFI ? (destFI.itemIds || []) : []), ...unloadIds];
-      DB.upsertFloorItem({ location: destLoc, subLocation: destSubLoc,
-                           itemCount: newCount, itemIds: newIds,
-                           properties: props, isEmpty: newCount === 0 });
+      // Determine what remains on the cart after unloading
+      // Slot 0 (primary top-level fields)
+      const unload0 = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
+      const unload0Set   = new Set(unload0.itemIds);
+      const remain0Ids   = (_srcCart.itemIds || []).filter(id => !unload0Set.has(id));
+      const remain0Count = Math.max(0, (_srcCart.itemCount || 0) - unload0.itemCount);
+
+      // Extra slots
+      const newExtras = (_srcCart.extraItems || []).map((ex, idx) => {
+        const unloadSlot = allSlots[idx + 1];
+        if (!unloadSlot) return ex;
+        const unloadedSet = new Set(unloadSlot.itemIds);
+        const newIds      = (ex.itemIds || []).filter(id => !unloadedSet.has(id));
+        const newCount    = Math.max(0, (ex.itemCount || 0) - unloadSlot.itemCount);
+        return { ...ex, itemCount: newCount, itemIds: newIds };
+      });
+
+      // Upsert floor items for each slot being unloaded (additive merge by location+props)
+      const msgParts = [];
+      for (const slot of allSlots) {
+        if (!slot.itemCount) continue;
+        const destFI   = DB.findFloorItem(destLoc, slot.properties);
+        const newCount = (destFI ? (destFI.itemCount || 0) : 0) + slot.itemCount;
+        const newIds   = [...(destFI ? (destFI.itemIds || []) : []), ...slot.itemIds];
+        DB.upsertFloorItem({ location: destLoc, subLocation: destSubLoc,
+                             itemCount: newCount, itemIds: newIds,
+                             properties: slot.properties, isEmpty: false });
+        const propStr = Object.values(slot.properties).filter(Boolean).join(' ');
+        msgParts.push(`${slot.itemCount}${propStr ? ' ' + propStr : ''}`);
+      }
+
       DB.upsertCart({ cartId: _srcCart.cartId,
-                      itemCount: remainingCount, itemIds: remainingIds,
-                      isEmpty: remainingCount === 0 });
+                      itemCount: remain0Count, itemIds: remain0Ids,
+                      extraItems: newExtras });
 
-      const label   = cartLabel(_srcCart);
-      const propStr = Object.values(props).filter(Boolean).join(' ');
-      const msg     = `עגלה ${label} | ${unloadCount} ${propStr} | פורקו ל${destLoc}`.trim();
+      const label = cartLabel(_srcCart);
+      const msg   = `עגלה ${label} | ${msgParts.join(' + ')} | פורקו ל${destLoc}`.trim();
       Toast.show('פריטים פורקו לרצפה', 'success');
 
       _srcCart = null;
@@ -2695,7 +2805,7 @@
                 <div class="list-item sr-item" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
                   <div class="list-item-body">
                     <div class="list-item-title">${esc(cartLabel(data))}</div>
-                    <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}${ps ? ' · ' + ps : ''}</div>
+                    <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (cartTotalCount(data) ? cartTotalCount(data) + ' פריטים' : '')}${ps ? ' · ' + ps : ''}</div>
                   </div>
                   <span>›</span>
                 </div>`;
@@ -2783,14 +2893,20 @@
       if (type === 'cart') {
         const cart = DB.getCart(id);
         if (!cart) return;
-        const ps = propSummary(cart.properties);
+        const allSlots = [
+          { properties: cart.properties || {}, itemCount: cart.itemCount || 0, itemIds: cart.itemIds || [] },
+          ...(cart.extraItems || [])
+        ].filter((s, i) => i === 0 || s.itemCount);
+        const slotsHtml = allSlots.map((s, i) => {
+          const ps = propSummary(s.properties);
+          return `<p class="card-meta">${allSlots.length > 1 ? `סוג ${i+1}: ` : ''}${s.itemCount} פריטים${ps ? ' · ' + ps : ''}</p>`;
+        }).join('');
         Modal.open({
           title: `עגלה ${esc(cartLabel(cart))}`,
           html: `
             <p class="card-meta">מיקום: ${esc(cart.location || 'לא ידוע')}</p>
             ${cart.subLocation ? `<p class="card-meta">תת-מיקום: ${esc(cart.subLocation)}</p>` : ''}
-            <p class="card-meta">פריטים: ${cart.isEmpty ? 'ריקה' : (cart.itemCount || 0)}</p>
-            ${ps ? `<p class="card-meta">מאפיינים: ${ps}</p>` : ''}
+            ${cart.isEmpty ? '<p class="card-meta">ריקה</p>' : slotsHtml}
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(cart.lastUpdated)}</p>
           `,
           actions: [
