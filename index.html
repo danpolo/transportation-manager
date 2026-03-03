@@ -676,8 +676,11 @@
         if (!_cache.metadata.cartTypes)   _cache.metadata.cartTypes = [];
         if (!_cache.carts)                _cache.carts = {};
         if (!_cache.floorItems)           _cache.floorItems = {};
-        // migrate carts: ensure multi-slot field exists
-        Object.values(_cache.carts).forEach(c => { if (!c.extraItems) c.extraItems = []; });
+        // migrate carts: ensure multi-slot + nesting fields exist
+        Object.values(_cache.carts).forEach(c => {
+          if (!c.extraItems) c.extraItems = [];
+          if (c.parentCartId === undefined) c.parentCartId = null;
+        });
       } catch(e) {
         _cache = _empty();
       }
@@ -699,6 +702,7 @@
       const existing = db.carts[data.cartId] || {};
       const merged = Object.assign({}, existing, data, { lastUpdated: Date.now() });
       if (!merged.extraItems) merged.extraItems = [];
+      if (merged.parentCartId === undefined) merged.parentCartId = null;
       // recompute isEmpty from all slots
       const slot0Empty = !(merged.itemCount || 0);
       const extraEmpty = merged.extraItems.every(s => !(s.itemCount || 0));
@@ -714,8 +718,27 @@
 
     function deleteCart(id) {
       const db = load();
+      // orphan children before deleting
+      Object.values(db.carts).forEach(c => {
+        if (c.parentCartId === id) c.parentCartId = null;
+      });
       delete db.carts[id];
       db.metadata.carts = db.metadata.carts.filter(c => c !== id);
+      save();
+    }
+
+    function getChildCarts(parentId) {
+      return Object.values(load().carts).filter(c => c.parentCartId === parentId);
+    }
+
+    function cascadeLocationUpdate(cartId, location, subLocation) {
+      const children = getChildCarts(cartId);
+      children.forEach(child => {
+        child.location = location;
+        child.subLocation = subLocation || '';
+        child.lastUpdated = Date.now();
+        cascadeLocationUpdate(child.cartId, location, subLocation);
+      });
       save();
     }
 
@@ -905,6 +928,7 @@
 
     return {
       load, save, getMetadata, getCart, getAllCarts, upsertCart, deleteCart,
+      getChildCarts, cascadeLocationUpdate,
       getFloorItem, getAllFloorItems, findFloorItem, upsertFloorItem, deleteFloorItem,
       addCartType, deleteCartType,
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
@@ -995,18 +1019,34 @@
 
       if (!locs.length) return `מיפוי\n${now}\n(אין מיקומים מסומנים בעמוד המיפוי)`;
 
+      // index children by parent for nesting display
+      const childrenOf = {};
+      Object.values(carts).forEach(c => {
+        if (c.parentCartId) {
+          if (!childrenOf[c.parentCartId]) childrenOf[c.parentCartId] = [];
+          childrenOf[c.parentCartId].push(c);
+        }
+      });
+
+      function cartLine(c, prefix) {
+        if (c.isEmpty || !c.itemCount) {
+          return `${prefix}${c.cartId}: empty\n`;
+        }
+        const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
+        return (`${prefix}${c.cartId}: ${c.itemCount} ${propVals}`).trim() + '\n';
+      }
+
       let out = `מיפוי\n${now}\n`;
       for (const loc of locs) {
         out += `${loc.name}:\n`;
-        // carts at this location
-        const locCarts = Object.values(carts).filter(c => c.location === loc.name);
+        // carts at this location (skip nested — they appear under their parent)
+        const locCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId);
         locCarts.forEach(c => {
-          if (c.isEmpty || !c.itemCount) {
-            out += `${c.cartId}: empty\n`;
-          } else {
-            const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
-            out += `${c.cartId}: ${c.itemCount} ${propVals}\n`.trim() + '\n';
-          }
+          out += cartLine(c, '');
+          // show nested children indented
+          (childrenOf[c.cartId] || []).forEach(ch => {
+            out += cartLine(ch, '  └ ');
+          });
         });
         // floor items at this location
         const locFIs = Object.values(fis).filter(fi => fi.location === loc.name);
@@ -1363,6 +1403,7 @@
         <button class="tab-btn active" data-tab="carts">עגלות</button>
         <button class="tab-btn" data-tab="locations">מיקומים</button>
         <button class="tab-btn" data-tab="properties">מאפיינים</button>
+        <button class="tab-btn" data-tab="floor">רצפה</button>
       </div>
       <div id="edit-tab-content"></div>
     `;
@@ -1375,6 +1416,7 @@
       if (tab === 'carts')      renderCartsTab();
       if (tab === 'locations')  renderLocationsTab();
       if (tab === 'properties') renderPropertiesTab();
+      if (tab === 'floor')     renderFloorTab();
     }
 
     screen.querySelector('.tabs').addEventListener('click', e => {
@@ -1405,6 +1447,12 @@
             <div class="form-group" id="ec-subloc-group" hidden>
               <label class="form-label">תת-מיקום</label>
               <input id="ec-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label">טעון על עגלה (אופציונלי)</label>
+              <select id="ec-parent" class="form-select">
+                <option value="">— ללא —</option>
+              </select>
             </div>
             <button id="ec-save" class="btn btn-primary btn-full">שמור עגלה</button>
           </div>
@@ -1454,23 +1502,59 @@
           list.innerHTML = '<p class="card-meta">אין עגלות</p>';
           return;
         }
-        list.innerHTML = carts.sort((a,b) => a.cartId.localeCompare(b.cartId)).map(c => `
+        list.innerHTML = carts.sort((a,b) => a.cartId.localeCompare(b.cartId)).map(c => {
+          const parts = [c.location || 'ללא מיקום'];
+          if (cartTotalCount(c)) parts.push(cartTotalCount(c) + ' פריטים');
+          if (c.parentCartId) {
+            const p = DB.getCart(c.parentCartId);
+            parts.push('על ' + (p ? cartLabel(p) : c.parentCartId));
+          }
+          const childCount = DB.getChildCarts(c.cartId).length;
+          if (childCount) parts.push(childCount + ' טעונות');
+          return `
           <div class="list-item">
             <div class="list-item-body">
               <div class="list-item-title">${esc(cartLabel(c))}</div>
-              <div class="list-item-sub">${c.location || 'ללא מיקום'}${cartTotalCount(c) ? ' · ' + cartTotalCount(c) + ' פריטים' : ''}</div>
+              <div class="list-item-sub">${parts.join(' · ')}</div>
             </div>
             <div class="list-item-actions">
               <button class="btn-icon ec-edit-btn" data-id="${esc(c.cartId)}" title="ערוך">✏️</button>
               <button class="btn-icon ec-del-btn"  data-id="${esc(c.cartId)}" title="מחק">🗑️</button>
             </div>
           </div>
-        `).join('');
+        `}).join('');
+      }
+
+      function getDescendantIds(cartId) {
+        const ids = new Set();
+        const queue = [cartId];
+        while (queue.length) {
+          const pid = queue.shift();
+          for (const ch of DB.getChildCarts(pid)) {
+            if (!ids.has(ch.cartId)) { ids.add(ch.cartId); queue.push(ch.cartId); }
+          }
+        }
+        return ids;
+      }
+
+      function renderParentOptions(excludeId) {
+        const sel = tabContent.querySelector('#ec-parent');
+        const carts = DB.getAllCarts();
+        const exclude = new Set();
+        if (excludeId) {
+          exclude.add(excludeId);
+          for (const id of getDescendantIds(excludeId)) exclude.add(id);
+        }
+        sel.innerHTML = '<option value="">— ללא —</option>' +
+          carts.filter(c => !exclude.has(c.cartId))
+               .sort((a,b) => a.cartId.localeCompare(b.cartId))
+               .map(c => `<option value="${esc(c.cartId)}">${esc(cartLabel(c))}</option>`).join('');
       }
 
       renderList();
       renderCartTypeOptions();
       renderTypeList();
+      renderParentOptions(null);
       makeAutocomplete(tabContent.querySelector('#ec-cartid'), () => DB.getMetadata().carts);
       setupLocationFields(
         tabContent.querySelector('#ec-loc'),
@@ -1486,14 +1570,18 @@
         const loc      = tabContent.querySelector('#ec-loc').value.trim();
         const subLoc   = tabContent.querySelector('#ec-subloc-group').hidden
           ? '' : tabContent.querySelector('#ec-subloc').value.trim();
+        const parentCartId = tabContent.querySelector('#ec-parent').value || null;
         DB.upsertCart({ cartId, cartType, location: loc, subLocation: subLoc,
+                        parentCartId,
                         isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
         Toast.show('עגלה נשמרה', 'success');
         renderList();
+        renderParentOptions(null);
         tabContent.querySelector('#ec-cartid').value = '';
         tabContent.querySelector('#ec-carttype').value = '';
         tabContent.querySelector('#ec-loc').value = '';
         tabContent.querySelector('#ec-subloc').value = '';
+        tabContent.querySelector('#ec-parent').value = '';
       });
 
       // edit / delete delegation
@@ -1509,6 +1597,8 @@
           ecLoc.value = cart.location || '';
           ecLoc.dispatchEvent(new Event('change', { bubbles: true }));
           tabContent.querySelector('#ec-subloc').value = cart.subLocation || '';
+          renderParentOptions(cart.cartId);
+          tabContent.querySelector('#ec-parent').value = cart.parentCartId || '';
           tabContent.querySelector('#ec-cartid').scrollIntoView({ behavior: 'smooth' });
         }
         if (delBtn) {
@@ -1832,6 +1922,53 @@
       });
     }
 
+    // ── Floor Items Tab ──────────────────────────────────────
+    function renderFloorTab() {
+      tabContent.innerHTML = `
+        <div class="p-screen">
+          <div class="card">
+            <div class="card-title">קבוצות רצפה</div>
+            <div id="ef-list"></div>
+          </div>
+        </div>
+      `;
+      function renderList() {
+        const list = tabContent.querySelector('#ef-list');
+        const fis = DB.getAllFloorItems();
+        if (!fis.length) { list.innerHTML = '<p class="card-meta">אין פריטי רצפה</p>'; return; }
+        list.innerHTML = fis.sort((a,b) => (a.location||'').localeCompare(b.location||'')).map(fi => {
+          const ps = Object.values(fi.properties || {}).filter(Boolean).join(' · ');
+          return `
+            <div class="list-item">
+              <div class="list-item-body">
+                <div class="list-item-title">${esc(fi.location || 'ללא מיקום')}${ps ? ' · ' + ps : ''}</div>
+                <div class="list-item-sub">${fi.itemCount || 0} פריטים${fi.isEmpty ? ' (ריק)' : ''}</div>
+              </div>
+              <div class="list-item-actions">
+                <button class="btn-icon ef-del-btn" data-id="${esc(fi.id)}" title="מחק">🗑️</button>
+              </div>
+            </div>`;
+        }).join('');
+      }
+      renderList();
+      tabContent.querySelector('#ef-list').addEventListener('click', e => {
+        const delBtn = e.target.closest('.ef-del-btn');
+        if (delBtn) {
+          Modal.open({
+            title: 'מחיקת קבוצת רצפה',
+            html: '<p>האם למחוק את קבוצת הרצפה?</p>',
+            actions: [
+              { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
+                DB.deleteFloorItem(delBtn.dataset.id);
+                Modal.close(); Toast.show('קבוצת רצפה נמחקה', 'info'); renderList();
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+        }
+      });
+    }
+
     Router.register('edit', {
       onShow() { renderTab(activeTab); }
     });
@@ -1855,6 +1992,7 @@
           <div class="pill-toggle" id="tr-mode-toggle">
             <button class="active" data-mode="cart">עגלה</button>
             <button data-mode="floor">רצפה</button>
+            <button data-mode="nest">טעינה על עגלה</button>
           </div>
         </div>
 
@@ -1875,6 +2013,21 @@
             <label class="form-label">מספר סידורי</label>
             <input id="tr-floor-serial" class="form-input" placeholder="הקלד מספר סידורי..." autocomplete="off">
           </div>
+        </div>
+
+        <!-- nest mode: load one cart onto another -->
+        <div id="tr-nest-section" hidden>
+          <div class="card">
+            <div class="card-title">עגלה לטעינה</div>
+            <div id="tr-nest-child-host"></div>
+            <div id="tr-nest-child-info" class="card-meta" style="margin-top:8px;"></div>
+          </div>
+          <div class="card mt-12">
+            <div class="card-title">טעון על עגלה (או ללא לניתוק)</div>
+            <div id="tr-nest-parent-host"></div>
+            <div id="tr-nest-parent-info" class="card-meta" style="margin-top:8px;"></div>
+          </div>
+          <button id="tr-nest-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
         </div>
 
         <!-- shared fields (destination + cart item fields) -->
@@ -1951,9 +2104,11 @@
         b.classList.toggle('active', b.dataset.mode === mode));
       screen.querySelector('#tr-cart-section').hidden  = (mode !== 'cart');
       screen.querySelector('#tr-floor-section').hidden = (mode !== 'floor');
+      screen.querySelector('#tr-nest-section').hidden  = (mode !== 'nest');
       screen.querySelector('#tr-shared-fields').hidden = true;
       screen.querySelector('#tr-cart-item-fields').hidden = (mode !== 'cart');
       _currentData = null; _currentType = null;
+      if (mode === 'nest') initNestMode();
     }
 
     function showSharedFields(data, type) {
@@ -2021,6 +2176,64 @@
       }
     });
 
+    // ── Nest mode ──
+    let _nestChildRef = null, _nestParentRef = null;
+    let _nestChild = null, _nestParent = null;
+
+    function initNestMode() {
+      _nestChild = null; _nestParent = null;
+      const childInfo  = screen.querySelector('#tr-nest-child-info');
+      const parentInfo = screen.querySelector('#tr-nest-parent-info');
+      childInfo.textContent = '';
+      parentInfo.textContent = '';
+
+      if (!_nestChildRef) {
+        _nestChildRef = CartForm(screen.querySelector('#tr-nest-child-host'), {
+          onCartLoaded(cart) {
+            _nestChild = cart;
+            if (cart) {
+              const parentLabel = cart.parentCartId ? (DB.getCart(cart.parentCartId) ? cartLabel(DB.getCart(cart.parentCartId)) : cart.parentCartId) : 'ללא';
+              childInfo.textContent = `מיקום: ${cart.location || 'לא ידוע'} · טעון על: ${parentLabel}`;
+            } else { childInfo.textContent = ''; }
+          }
+        });
+      }
+      if (!_nestParentRef) {
+        _nestParentRef = CartForm(screen.querySelector('#tr-nest-parent-host'), {
+          onCartLoaded(cart) {
+            _nestParent = cart;
+            if (cart) {
+              parentInfo.textContent = `מיקום: ${cart.location || 'לא ידוע'} · ${cartTotalCount(cart)} פריטים`;
+            } else { parentInfo.textContent = ''; }
+          }
+        });
+      }
+    }
+
+    screen.querySelector('#tr-nest-save-btn').addEventListener('click', () => {
+      if (!_nestChild) { Toast.show('יש לבחור עגלה לטעינה', 'error'); return; }
+      const parentId = _nestParent ? _nestParent.cartId : null;
+      // prevent nesting onto self
+      if (parentId && parentId === _nestChild.cartId) { Toast.show('עגלה לא יכולה להיטען על עצמה', 'error'); return; }
+      DB.upsertCart({ cartId: _nestChild.cartId, parentCartId: parentId });
+      // sync child location to parent
+      if (_nestParent) {
+        DB.upsertCart({ cartId: _nestChild.cartId, location: _nestParent.location, subLocation: _nestParent.subLocation });
+      }
+      const parentLabel = _nestParent ? cartLabel(_nestParent) : 'ללא';
+      const msg = parentId
+        ? `עגלה ${cartLabel(_nestChild)} | טעונה על ${parentLabel}`
+        : `עגלה ${cartLabel(_nestChild)} | נותקה מעגלה`;
+      Toast.show(parentId ? 'עגלה נטענה' : 'עגלה נותקה', 'success');
+      Utils.copyToClipboard(msg)
+        .then(() => Toast.show('הועתק ✓', 'success'))
+        .catch(() => Modal.open({
+          title: 'העתקה ידנית',
+          html: `<textarea rows="3" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.9rem;direction:rtl" readonly onclick="this.select()">${esc(msg)}</textarea>`,
+          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+        }));
+    });
+
     // combined save + copy button
     screen.querySelector('#tr-save-btn').addEventListener('click', () => {
       if (!_currentData) { Toast.show('בחר עגלה או מקור רצפה', 'error'); return; }
@@ -2044,6 +2257,8 @@
           properties:  props,
           isEmpty:     count === 0
         });
+        // cascade location to nested children
+        DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
         msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc);
         Toast.show('עגלה הועברה', 'success');
       } else {
@@ -2538,6 +2753,7 @@
       cartTypes: new Set(),
       props:     {},         // propName → Set<value>
       types:     new Set(),  // 'cart' | 'fi'; empty = both
+      nesting:   new Set(),  // 'nested' | 'standalone' | 'hasChildren'
       emptyOnly: false
     };
     const openPanels = new Set(); // panel IDs kept open across re-renders
@@ -2600,6 +2816,12 @@
         html += buildPanelHTML('sr-fp-carttype', 'סוג עגלה',
           allCartTypes.map(t => ({ key: 'cartType', value: t, checked: state.cartTypes.has(t) })));
       }
+      html += buildPanelHTML('sr-fp-nesting', 'קינון', [
+        { key: 'nesting', value: 'nested',      label: 'טעון על עגלה',    checked: state.nesting.has('nested') },
+        { key: 'nesting', value: 'standalone',   label: 'עצמאי',           checked: state.nesting.has('standalone') },
+        { key: 'nesting', value: 'hasChildren',  label: 'עם עגלות טעונות', checked: state.nesting.has('hasChildren') }
+      ]);
+
       allProps.forEach(prop => {
         const propSet = state.props[prop.name] || new Set();
         const items = (prop.options || []).map(opt => ({
@@ -2628,6 +2850,7 @@
     // ── Actions bar ───────────────────────────────────────────────
     function countActive() {
       return state.types.size + state.locations.size + state.cartIds.size + state.cartTypes.size +
+        state.nesting.size +
         Object.values(state.props).reduce((s, set) => s + set.size, 0) +
         (state.emptyOnly ? 1 : 0);
     }
@@ -2657,6 +2880,16 @@
         if (!valSet.size) continue;
         if (!valSet.has((item.properties || {})[propName])) return false;
       }
+      if (state.nesting.size && item.cartId) {
+        const isNested     = !!item.parentCartId;
+        const hasChildren  = DB.getChildCarts(item.cartId).length > 0;
+        const isStandalone = !isNested && !hasChildren;
+        const match = (state.nesting.has('nested') && isNested) ||
+                      (state.nesting.has('standalone') && isStandalone) ||
+                      (state.nesting.has('hasChildren') && hasChildren);
+        if (!match) return false;
+      }
+      if (state.nesting.size && !item.cartId) return false; // floor items have no nesting
       if (state.emptyOnly && !item.isEmpty) return false;
       return true;
     }
@@ -2801,11 +3034,21 @@
           ${g.items.map(({ data, type }) => {
             if (type === 'cart') {
               const ps = propSummary(data.properties);
+              const subParts = [];
+              if (data.isEmpty) subParts.push('ריקה');
+              else if (cartTotalCount(data)) subParts.push(cartTotalCount(data) + ' פריטים');
+              if (ps) subParts.push(ps);
+              if (data.parentCartId) {
+                const pc = DB.getCart(data.parentCartId);
+                subParts.push('על ' + (pc ? cartLabel(pc) : data.parentCartId));
+              }
+              const childCt = DB.getChildCarts(data.cartId).length;
+              if (childCt) subParts.push(childCt + ' טעונות');
               return `
                 <div class="list-item sr-item" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
                   <div class="list-item-body">
                     <div class="list-item-title">${esc(cartLabel(data))}</div>
-                    <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (cartTotalCount(data) ? cartTotalCount(data) + ' פריטים' : '')}${ps ? ' · ' + ps : ''}</div>
+                    <div class="list-item-sub">${subParts.join(' · ')}</div>
                   </div>
                   <span>›</span>
                 </div>`;
@@ -2853,6 +3096,8 @@
         on ? state.cartIds.add(value) : state.cartIds.delete(value);
       } else if (key === 'cartType') {
         on ? state.cartTypes.add(value) : state.cartTypes.delete(value);
+      } else if (key === 'nesting') {
+        on ? state.nesting.add(value) : state.nesting.delete(value);
       } else if (key === 'prop') {
         const pn = cb.dataset.prop;
         if (!state.props[pn]) state.props[pn] = new Set();
@@ -2876,6 +3121,7 @@
       state.locations.clear();
       state.cartIds.clear();
       state.cartTypes.clear();
+      state.nesting.clear();
       state.props   = {};
       state.emptyOnly = false;
       buildFilterPanels();
@@ -2906,6 +3152,8 @@
           html: `
             <p class="card-meta">מיקום: ${esc(cart.location || 'לא ידוע')}</p>
             ${cart.subLocation ? `<p class="card-meta">תת-מיקום: ${esc(cart.subLocation)}</p>` : ''}
+            ${cart.parentCartId ? `<p class="card-meta">טעון על: ${esc((() => { const p = DB.getCart(cart.parentCartId); return p ? cartLabel(p) : cart.parentCartId; })())}</p>` : ''}
+            ${(() => { const ch = DB.getChildCarts(cart.cartId); return ch.length ? `<p class="card-meta">עגלות טעונות: ${ch.map(c => esc(cartLabel(c))).join(', ')}</p>` : ''; })()}
             ${cart.isEmpty ? '<p class="card-meta">ריקה</p>' : slotsHtml}
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(cart.lastUpdated)}</p>
           `,
