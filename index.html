@@ -660,7 +660,7 @@
     let _cache = null;
 
     function _empty() {
-      return { metadata: { carts: [], cartTypes: [], properties: [], locations: [] }, carts: {}, floorItems: {} };
+      return { metadata: { carts: [], cartTypes: [], containerTypes: ['עגלה'], properties: [], locations: [] }, carts: {}, floorItems: {} };
     }
 
     function load() {
@@ -674,12 +674,15 @@
         if (!_cache.metadata.properties)  _cache.metadata.properties = [];
         if (!_cache.metadata.locations)   _cache.metadata.locations = [];
         if (!_cache.metadata.cartTypes)   _cache.metadata.cartTypes = [];
+        if (!_cache.metadata.containerTypes) _cache.metadata.containerTypes = ['עגלה'];
+        if (!_cache.metadata.containerTypes.includes('עגלה')) _cache.metadata.containerTypes.unshift('עגלה');
         if (!_cache.carts)                _cache.carts = {};
         if (!_cache.floorItems)           _cache.floorItems = {};
-        // migrate carts: ensure multi-slot + nesting fields exist
+        // migrate carts: ensure multi-slot + nesting + containerType fields exist
         Object.values(_cache.carts).forEach(c => {
           if (!c.extraItems) c.extraItems = [];
           if (c.parentCartId === undefined) c.parentCartId = null;
+          if (!c.containerType) c.containerType = 'עגלה';
         });
       } catch(e) {
         _cache = _empty();
@@ -791,6 +794,24 @@
       save();
     }
 
+    function addContainerType(type) {
+      const db = load();
+      if (type && !db.metadata.containerTypes.includes(type)) {
+        db.metadata.containerTypes.push(type);
+        save();
+      }
+    }
+
+    function deleteContainerType(type) {
+      if (type === 'עגלה') return; // never delete the default
+      const db = load();
+      db.metadata.containerTypes = db.metadata.containerTypes.filter(t => t !== type);
+      Object.values(db.carts).forEach(c => {
+        if (c.containerType === type) c.containerType = 'עגלה';
+      });
+      save();
+    }
+
     function upsertLocation(locData) {
       // locData: { name, inMap }
       const db = load();
@@ -871,6 +892,7 @@
         for (const [id, cart] of Object.entries(inCarts)) {
           const existing = db.carts[id];
           if (!existing || (cart.lastUpdated || 0) > (existing.lastUpdated || 0)) {
+            if (!cart.containerType) cart.containerType = 'עגלה';
             db.carts[id] = cart;
             if (!db.metadata.carts.includes(id)) db.metadata.carts.push(id);
           }
@@ -892,6 +914,8 @@
         (inMeta.carts || []).forEach(c => { if (!db.metadata.carts.includes(c)) db.metadata.carts.push(c); });
         // cartTypes
         (inMeta.cartTypes || []).forEach(t => { if (!db.metadata.cartTypes.includes(t)) db.metadata.cartTypes.push(t); });
+        // containerTypes
+        (inMeta.containerTypes || []).forEach(t => { if (!db.metadata.containerTypes.includes(t)) db.metadata.containerTypes.push(t); });
         // locations by name
         (inMeta.locations || []).forEach(loc => {
           const idx = db.metadata.locations.findIndex(l => l.name === loc.name);
@@ -930,7 +954,7 @@
       load, save, getMetadata, getCart, getAllCarts, upsertCart, deleteCart,
       getChildCarts, cascadeLocationUpdate,
       getFloorItem, getAllFloorItems, findFloorItem, upsertFloorItem, deleteFloorItem,
-      addCartType, deleteCartType,
+      addCartType, deleteCartType, addContainerType, deleteContainerType,
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
       addPropertyOption, removePropertyOption, addMetaCart, removeMetaCart,
       importJSON, getRaw, clear
@@ -976,24 +1000,26 @@
       const carts = Object.values(parsed.carts || {});
       const fis   = Object.values(parsed.floorItems || {});
 
-      // summary by location
+      // summary by location, grouped by container type
       const locMap = {};
       carts.forEach(c => {
         const loc = c.location || 'ללא מיקום';
-        if (!locMap[loc]) locMap[loc] = { carts: 0, empty: 0, fi: 0 };
-        locMap[loc].carts++;
+        if (!locMap[loc]) locMap[loc] = { containers: {}, empty: 0, fi: 0 };
+        const ct = c.containerType || 'עגלה';
+        locMap[loc].containers[ct] = (locMap[loc].containers[ct] || 0) + 1;
         if (c.isEmpty) locMap[loc].empty++;
       });
       fis.forEach(fi => {
         const loc = fi.location || 'ללא מיקום';
-        if (!locMap[loc]) locMap[loc] = { carts: 0, empty: 0, fi: 0 };
+        if (!locMap[loc]) locMap[loc] = { containers: {}, empty: 0, fi: 0 };
         locMap[loc].fi++;
       });
 
       let summary = '';
       for (const [loc, s] of Object.entries(locMap)) {
         const parts = [];
-        if (s.carts) parts.push(`${s.carts} עגלות` + (s.empty ? ` (${s.empty} ריקות)` : ''));
+        for (const [ct, n] of Object.entries(s.containers)) parts.push(`${n} ${ct}`);
+        if (s.empty) parts.push(`(${s.empty} ריקות)`);
         if (s.fi)    parts.push(`${s.fi} קבוצות רצפה`);
         summary += `${loc}: ${parts.join(', ')}\n`;
       }
@@ -1029,11 +1055,12 @@
       });
 
       function cartLine(c, prefix) {
+        const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `[${c.containerType}] ` : '';
         if (c.isEmpty || !c.itemCount) {
-          return `${prefix}${c.cartId}: empty\n`;
+          return `${prefix}${ctLabel}${c.cartId}: empty\n`;
         }
         const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
-        return (`${prefix}${c.cartId}: ${c.itemCount} ${propVals}`).trim() + '\n';
+        return (`${prefix}${ctLabel}${c.cartId}: ${c.itemCount} ${propVals}`).trim() + '\n';
       }
 
       let out = `מיפוי\n${now}\n`;
@@ -1063,9 +1090,10 @@
       return out.trim();
     }
 
-    function copyMessage(cartId, count, props, from, to) {
+    function copyMessage(cartId, count, props, from, to, containerType) {
       const propStr = Object.values(props || {}).filter(Boolean).join(' ');
-      const parts = [`עגלה ${cartId}`];
+      const cType = containerType || 'עגלה';
+      const parts = [`${cType} ${cartId}`];
       if (count) parts.push(`${count}${propStr ? ' ' + propStr : ''}`);
       if (from || to) parts.push(`מועברת מ${from || '?'} ל${to || '?'}`);
       return parts.join(' | ');
@@ -1299,11 +1327,22 @@
     }
   };
 
+  // ── Container type helpers ──
+  const DEFAULT_CONTAINER = 'עגלה';
+
+  function containerName(cart) {
+    return (cart && cart.containerType) || DEFAULT_CONTAINER;
+  }
+
   // ── cartLabel ──
-  // Returns "cartId(cartType)" or just "cartId" when no type is set
+  // Returns "cartId(cartType)" or just "cartId", with container type badge if non-default
   function cartLabel(cart) {
     if (!cart) return '';
-    return cart.cartId + (cart.cartType ? '(' + cart.cartType + ')' : '');
+    let label = cart.cartId + (cart.cartType ? '(' + cart.cartType + ')' : '');
+    if (cart.containerType && cart.containerType !== DEFAULT_CONTAINER) {
+      label += ' [' + cart.containerType + ']';
+    }
+    return label;
   }
 
   // ── cartTotalCount ──
@@ -1429,15 +1468,19 @@
       tabContent.innerHTML = `
         <div class="p-screen">
           <div class="card">
-            <div class="card-title">הוספת / עדכון עגלה</div>
+            <div class="card-title" id="ec-form-title">הוספת / עדכון עגלה</div>
             <div class="form-group">
-              <label class="form-label">מספר עגלה</label>
+              <label class="form-label">קטגוריה</label>
+              <select id="ec-containertype" class="form-select"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">מספר מזהה</label>
               <input id="ec-cartid" class="form-input" placeholder="8-6" autocomplete="off">
             </div>
             <div class="form-group">
-              <label class="form-label">סוג עגלה</label>
+              <label class="form-label">סוג</label>
               <select id="ec-carttype" class="form-select">
-                <option value="">— ללא סוג —</option>
+                <option value="">— ללא —</option>
               </select>
             </div>
             <div class="form-group">
@@ -1449,7 +1492,7 @@
               <input id="ec-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
             <div class="form-group">
-              <label class="form-label">טעון על עגלה (אופציונלי)</label>
+              <label class="form-label">מועמס על: (אופציונלי)</label>
               <select id="ec-parent" class="form-select">
                 <option value="">— ללא —</option>
               </select>
@@ -1463,12 +1506,21 @@
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">סוגי עגלות</div>
+            <div class="card-title">סוגים</div>
             <div class="form-group" style="display:flex;gap:8px;">
               <input id="ec-newtype" class="form-input" placeholder="110" autocomplete="off" style="flex:1">
               <button id="ec-addtype-btn" class="btn btn-outline">+ הוסף</button>
             </div>
             <div id="ec-type-list"></div>
+          </div>
+
+          <div class="card mt-12">
+            <div class="card-title">קטגוריות</div>
+            <div class="form-group" style="display:flex;gap:8px;">
+              <input id="ec-newcontainertype" class="form-input" placeholder="משטח" autocomplete="off" style="flex:1">
+              <button id="ec-addcontainertype-btn" class="btn btn-outline">+ הוסף</button>
+            </div>
+            <div id="ec-containertype-list"></div>
           </div>
         </div>
       `;
@@ -1476,7 +1528,7 @@
       function renderCartTypeOptions() {
         const sel = tabContent.querySelector('#ec-carttype');
         const types = DB.getMetadata().cartTypes || [];
-        sel.innerHTML = '<option value="">— ללא סוג —</option>' +
+        sel.innerHTML = '<option value="">— ללא —</option>' +
           types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
       }
 
@@ -1494,12 +1546,38 @@
         `).join('');
       }
 
+      function renderContainerTypeOptions() {
+        const sel = tabContent.querySelector('#ec-containertype');
+        const types = DB.getMetadata().containerTypes || ['עגלה'];
+        sel.innerHTML = types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+      }
+
+      function renderContainerTypeList() {
+        const container = tabContent.querySelector('#ec-containertype-list');
+        const types = (DB.getMetadata().containerTypes || ['עגלה']).filter(t => t !== 'עגלה');
+        if (!types.length) { container.innerHTML = '<p class="card-meta">רק ברירת מחדל (עגלה)</p>'; return; }
+        container.innerHTML = types.map(t => `
+          <div class="list-item">
+            <div class="list-item-body"><div class="list-item-title">${esc(t)}</div></div>
+            <div class="list-item-actions">
+              <button class="btn-icon ec-delcontainertype-btn" data-type="${esc(t)}" title="מחק">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      function updateFormLabels() {
+        const ct = tabContent.querySelector('#ec-containertype').value || 'עגלה';
+        tabContent.querySelector('#ec-form-title').textContent = 'הוספת / עדכון ' + ct;
+        tabContent.querySelector('#ec-save').textContent = 'שמור ' + ct;
+      }
+
       // render list
       function renderList() {
         const list = tabContent.querySelector('#ec-list');
         const carts = DB.getAllCarts();
         if (!carts.length) {
-          list.innerHTML = '<p class="card-meta">אין עגלות</p>';
+          list.innerHTML = '<p class="card-meta">אין פריטים</p>';
           return;
         }
         list.innerHTML = carts.sort((a,b) => a.cartId.localeCompare(b.cartId)).map(c => {
@@ -1511,10 +1589,12 @@
           }
           const childCount = DB.getChildCarts(c.cartId).length;
           if (childCount) parts.push(childCount + ' טעונות');
+          const ctBadge = (c.containerType && c.containerType !== DEFAULT_CONTAINER)
+            ? ` <span style="background:#E0E7FF;color:#3730A3;padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">${esc(c.containerType)}</span>` : '';
           return `
           <div class="list-item">
             <div class="list-item-body">
-              <div class="list-item-title">${esc(cartLabel(c))}</div>
+              <div class="list-item-title">${ctBadge}${esc(cartLabel(c))}</div>
               <div class="list-item-sub">${parts.join(' · ')}</div>
             </div>
             <div class="list-item-actions">
@@ -1554,8 +1634,12 @@
       renderList();
       renderCartTypeOptions();
       renderTypeList();
+      renderContainerTypeOptions();
+      renderContainerTypeList();
       renderParentOptions(null);
+      updateFormLabels();
       makeAutocomplete(tabContent.querySelector('#ec-cartid'), () => DB.getMetadata().carts);
+      tabContent.querySelector('#ec-containertype').addEventListener('change', updateFormLabels);
       setupLocationFields(
         tabContent.querySelector('#ec-loc'),
         tabContent.querySelector('#ec-subloc-group'),
@@ -1565,16 +1649,17 @@
       // save
       tabContent.querySelector('#ec-save').addEventListener('click', () => {
         const cartId   = tabContent.querySelector('#ec-cartid').value.trim();
-        if (!cartId) { Toast.show('יש להזין מספר עגלה', 'error'); return; }
+        if (!cartId) { Toast.show('יש להזין מספר מזהה', 'error'); return; }
+        const containerType = tabContent.querySelector('#ec-containertype').value || 'עגלה';
         const cartType = tabContent.querySelector('#ec-carttype').value;
         const loc      = tabContent.querySelector('#ec-loc').value.trim();
         const subLoc   = tabContent.querySelector('#ec-subloc-group').hidden
           ? '' : tabContent.querySelector('#ec-subloc').value.trim();
         const parentCartId = tabContent.querySelector('#ec-parent').value || null;
-        DB.upsertCart({ cartId, cartType, location: loc, subLocation: subLoc,
+        DB.upsertCart({ cartId, cartType, containerType, location: loc, subLocation: subLoc,
                         parentCartId,
                         isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
-        Toast.show('עגלה נשמרה', 'success');
+        Toast.show(containerType + ' נשמרה', 'success');
         renderList();
         renderParentOptions(null);
         tabContent.querySelector('#ec-cartid').value = '';
@@ -1591,6 +1676,8 @@
         if (editBtn) {
           const cart = DB.getCart(editBtn.dataset.id);
           if (!cart) return;
+          tabContent.querySelector('#ec-containertype').value = cart.containerType || 'עגלה';
+          updateFormLabels();
           tabContent.querySelector('#ec-cartid').value = cart.cartId;
           tabContent.querySelector('#ec-carttype').value = cart.cartType || '';
           const ecLoc = tabContent.querySelector('#ec-loc');
@@ -1602,14 +1689,16 @@
           tabContent.querySelector('#ec-cartid').scrollIntoView({ behavior: 'smooth' });
         }
         if (delBtn) {
+          const delCart = DB.getCart(delBtn.dataset.id) || { cartId: delBtn.dataset.id };
+          const delCtName = containerName(delCart);
           Modal.open({
-            title: 'מחיקת עגלה',
-            html: `<p>האם למחוק את העגלה <strong>${esc(cartLabel(DB.getCart(delBtn.dataset.id) || { cartId: delBtn.dataset.id }))}</strong>?</p>`,
+            title: 'מחיקת ' + delCtName,
+            html: `<p>האם למחוק את ה${esc(delCtName)} <strong>${esc(cartLabel(delCart))}</strong>?</p>`,
             actions: [
               { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
                 DB.deleteCart(delBtn.dataset.id);
                 Modal.close();
-                Toast.show('עגלה נמחקה', 'info');
+                Toast.show(delCtName + ' נמחקה', 'info');
                 renderList();
               }},
               { id: 'cancel', label: 'ביטול', onClick: Modal.close }
@@ -1626,14 +1715,14 @@
         tabContent.querySelector('#ec-newtype').value = '';
         renderCartTypeOptions();
         renderTypeList();
-        Toast.show('סוג עגלה נוסף', 'success');
+        Toast.show('סוג נוסף', 'success');
       });
 
       tabContent.querySelector('#ec-type-list').addEventListener('click', e => {
         const delBtn = e.target.closest('.ec-deltype-btn');
         if (!delBtn) return;
         Modal.open({
-          title: 'מחיקת סוג עגלה',
+          title: 'מחיקת סוג',
           html: `<p>האם למחוק את הסוג <strong>${esc(delBtn.dataset.type)}</strong>?</p>`,
           actions: [
             { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
@@ -1642,6 +1731,37 @@
               renderCartTypeOptions();
               renderTypeList();
               Toast.show('סוג נמחק', 'info');
+            }},
+            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          ]
+        });
+      });
+
+      // container type add / delete
+      tabContent.querySelector('#ec-addcontainertype-btn').addEventListener('click', () => {
+        const val = tabContent.querySelector('#ec-newcontainertype').value.trim();
+        if (!val) return;
+        DB.addContainerType(val);
+        tabContent.querySelector('#ec-newcontainertype').value = '';
+        renderContainerTypeOptions();
+        renderContainerTypeList();
+        Toast.show('קטגוריה נוספה', 'success');
+      });
+
+      tabContent.querySelector('#ec-containertype-list').addEventListener('click', e => {
+        const delBtn = e.target.closest('.ec-delcontainertype-btn');
+        if (!delBtn) return;
+        Modal.open({
+          title: 'מחיקת קטגוריה',
+          html: `<p>האם למחוק את הקטגוריה <strong>${esc(delBtn.dataset.type)}</strong>? פריטים מקטגוריה זו יוחזרו לעגלה.</p>`,
+          actions: [
+            { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
+              DB.deleteContainerType(delBtn.dataset.type);
+              Modal.close();
+              renderContainerTypeOptions();
+              renderContainerTypeList();
+              renderList();
+              Toast.show('קטגוריה נמחקה', 'info');
             }},
             { id: 'cancel', label: 'ביטול', onClick: Modal.close }
           ]
@@ -1985,14 +2105,14 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">🔄</span>
-        <h1>העברת עגלה / פריטים</h1>
+        <h1>העברה / פריטים</h1>
       </div>
       <div class="p-screen">
         <div class="form-group">
           <div class="pill-toggle" id="tr-mode-toggle">
             <button class="active" data-mode="cart">עגלה</button>
             <button data-mode="floor">רצפה</button>
-            <button data-mode="nest">טעינה על עגלה</button>
+            <button data-mode="nest">העמסה</button>
           </div>
         </div>
 
@@ -2018,12 +2138,12 @@
         <!-- nest mode: load one cart onto another -->
         <div id="tr-nest-section" hidden>
           <div class="card">
-            <div class="card-title">עגלה לטעינה</div>
+            <div class="card-title">להעמסה</div>
             <div id="tr-nest-child-host"></div>
             <div id="tr-nest-child-info" class="card-meta" style="margin-top:8px;"></div>
           </div>
           <div class="card mt-12">
-            <div class="card-title">טעון על עגלה (או ללא לניתוק)</div>
+            <div class="card-title">העמס (או ללא לניתוק)</div>
             <div id="tr-nest-parent-host"></div>
             <div id="tr-nest-parent-info" class="card-meta" style="margin-top:8px;"></div>
           </div>
@@ -2120,7 +2240,7 @@
       const info = screen.querySelector('#tr-current-info');
       if (type === 'cart') {
         info.innerHTML = `
-          <div class="card-title">עגלה: ${esc(cartLabel(data))}</div>
+          <div class="card-title">${esc(containerName(data))}: ${esc(cartLabel(data))}</div>
           <div class="card-meta">מיקום נוכחי: ${esc(data.location || 'לא ידוע')}</div>
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = false;
@@ -2193,7 +2313,7 @@
             _nestChild = cart;
             if (cart) {
               const parentLabel = cart.parentCartId ? (DB.getCart(cart.parentCartId) ? cartLabel(DB.getCart(cart.parentCartId)) : cart.parentCartId) : 'ללא';
-              childInfo.textContent = `מיקום: ${cart.location || 'לא ידוע'} · טעון על: ${parentLabel}`;
+              childInfo.textContent = `${containerName(cart)} · מיקום: ${cart.location || 'לא ידוע'} · טעון על: ${parentLabel}`;
             } else { childInfo.textContent = ''; }
           }
         });
@@ -2203,7 +2323,7 @@
           onCartLoaded(cart) {
             _nestParent = cart;
             if (cart) {
-              parentInfo.textContent = `מיקום: ${cart.location || 'לא ידוע'} · ${cartTotalCount(cart)} פריטים`;
+              parentInfo.textContent = `${containerName(cart)} · מיקום: ${cart.location || 'לא ידוע'} · ${cartTotalCount(cart)} פריטים`;
             } else { parentInfo.textContent = ''; }
           }
         });
@@ -2211,20 +2331,21 @@
     }
 
     screen.querySelector('#tr-nest-save-btn').addEventListener('click', () => {
-      if (!_nestChild) { Toast.show('יש לבחור עגלה לטעינה', 'error'); return; }
+      if (!_nestChild) { Toast.show('להעמסה יש לבחור', 'error'); return; }
       const parentId = _nestParent ? _nestParent.cartId : null;
       // prevent nesting onto self
-      if (parentId && parentId === _nestChild.cartId) { Toast.show('עגלה לא יכולה להיטען על עצמה', 'error'); return; }
+      if (parentId && parentId === _nestChild.cartId) { Toast.show('לא ניתן להעמיס על עצמך', 'error'); return; }
       DB.upsertCart({ cartId: _nestChild.cartId, parentCartId: parentId });
       // sync child location to parent
       if (_nestParent) {
         DB.upsertCart({ cartId: _nestChild.cartId, location: _nestParent.location, subLocation: _nestParent.subLocation });
       }
+      const cName = containerName(_nestChild);
       const parentLabel = _nestParent ? cartLabel(_nestParent) : 'ללא';
       const msg = parentId
-        ? `עגלה ${cartLabel(_nestChild)} | טעונה על ${parentLabel}`
-        : `עגלה ${cartLabel(_nestChild)} | נותקה מעגלה`;
-      Toast.show(parentId ? 'עגלה נטענה' : 'עגלה נותקה', 'success');
+        ? `${cName} ${cartLabel(_nestChild)} | טעונה על ${parentLabel}`
+        : `${cName} ${cartLabel(_nestChild)} | נותקה`;
+      Toast.show(parentId ? cName + ' נטענה' : cName + ' נותקה', 'success');
       Utils.copyToClipboard(msg)
         .then(() => Toast.show('הועתק ✓', 'success'))
         .catch(() => Modal.open({
@@ -2259,8 +2380,8 @@
         });
         // cascade location to nested children
         DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
-        msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc);
-        Toast.show('עגלה הועברה', 'success');
+        msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc, _currentData.containerType);
+        Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
         // floor mode: single serial number transfer
         const serial = screen.querySelector('#tr-floor-serial').value.trim();
@@ -2377,7 +2498,7 @@
 
           <!-- destination cart (always visible in load section) -->
           <div class="form-group" style="margin-top:16px;">
-            <label class="form-label">עגלת יעד</label>
+            <label class="form-label">יעד להעמסה</label>
             <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
           </div>
           <button id="lu-load-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
@@ -2578,7 +2699,7 @@
         fields.hidden = false;
         const total = cartTotalCount(cart);
         screen.querySelector('#lu-unload-cart-info').innerHTML = `
-          <div class="card-title">עגלה: ${esc(cartLabel(cart))}</div>
+          <div class="card-title">${esc(containerName(cart))}: ${esc(cartLabel(cart))}</div>
           <div class="card-meta">מיקום נוכחי: ${esc(cart.location || 'לא ידוע')} · ${total} פריטים</div>
         `;
         populateSlots(screen.querySelector('#lu-unload-slots-container'), cart);
@@ -2589,7 +2710,7 @@
     screen.querySelector('#lu-load-save-btn').addEventListener('click', () => {
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
       const destCartId = rawDest.replace(/\([^)]+\)\s*$/, '').trim();
-      if (!destCartId) { Toast.show('יש להזין עגלת יעד', 'error'); return; }
+      if (!destCartId) { Toast.show('יש להזין יעד להעמסה', 'error'); return; }
 
       let msg;
 
@@ -2608,7 +2729,8 @@
         const total    = allSlots.reduce((s, sl) => s + sl.itemCount, 0);
         const msgSlots = allSlots.filter(sl => sl.itemCount)
           .map(sl => `${sl.itemCount}${Object.values(sl.properties).filter(Boolean).map(v => ' ' + v).join('')}`);
-        msg = `עגלה ${label} | ${msgSlots.join(' + ')} | הועמסו פריטים`.trim();
+        const ctName = destCart ? containerName(destCart) : 'עגלה';
+        msg = `${ctName} ${label} | ${msgSlots.join(' + ')} | הועמסו פריטים`.trim();
         Toast.show('פריטים הועמסו', 'success');
         initEmptySlots(slotsContainer);
       } else {
@@ -2636,7 +2758,8 @@
         const destCart = DB.getCart(destCartId);
         const label    = destCart ? cartLabel(destCart) : destCartId;
         const propStr  = Object.values(props).filter(Boolean).join(' ');
-        msg = `עגלה ${label} | ${serial} ${propStr} | הועמס מ${_floorSrc.location || '?'}`.trim();
+        const ctName2 = destCart ? containerName(destCart) : 'עגלה';
+        msg = `${ctName2} ${label} | ${serial} ${propStr} | הועמס מ${_floorSrc.location || '?'}`.trim();
         Toast.show('פריט הועמס מרצפה', 'success');
 
         screen.querySelector('#lu-floor-serial').value = '';
@@ -2648,7 +2771,7 @@
 
     // ── unload save ──
     screen.querySelector('#lu-unload-save-btn').addEventListener('click', () => {
-      if (!_srcCart) { Toast.show('יש לבחור עגלת מקור', 'error'); return; }
+      if (!_srcCart) { Toast.show('יש לבחור מקור לפירוק', 'error'); return; }
       const destLoc = screen.querySelector('#lu-unload-dest-loc').value.trim();
       if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
       const destSubLoc = screen.querySelector('#lu-unload-dest-subloc-group').hidden
@@ -2693,7 +2816,7 @@
                       extraItems: newExtras });
 
       const label = cartLabel(_srcCart);
-      const msg   = `עגלה ${label} | ${msgParts.join(' + ')} | פורקו ל${destLoc}`.trim();
+      const msg   = `${containerName(_srcCart)} ${label} | ${msgParts.join(' + ')} | פורקו ל${destLoc}`.trim();
       Toast.show('פריטים פורקו לרצפה', 'success');
 
       _srcCart = null;
@@ -2753,6 +2876,7 @@
       cartTypes: new Set(),
       props:     {},         // propName → Set<value>
       types:     new Set(),  // 'cart' | 'fi'; empty = both
+      containerTypes: new Set(),
       nesting:   new Set(),  // 'nested' | 'standalone' | 'hasChildren'
       emptyOnly: false
     };
@@ -2813,13 +2937,18 @@
       }
       const allCartTypes = DB.getMetadata().cartTypes || [];
       if (allCartTypes.length) {
-        html += buildPanelHTML('sr-fp-carttype', 'סוג עגלה',
+        html += buildPanelHTML('sr-fp-carttype', 'סוג',
           allCartTypes.map(t => ({ key: 'cartType', value: t, checked: state.cartTypes.has(t) })));
       }
+      const allContainerTypes = DB.getMetadata().containerTypes || ['עגלה'];
+      if (allContainerTypes.length > 1) {
+        html += buildPanelHTML('sr-fp-containertype', 'קטגוריה',
+          allContainerTypes.map(t => ({ key: 'containerType', value: t, checked: state.containerTypes.has(t) })));
+      }
       html += buildPanelHTML('sr-fp-nesting', 'קינון', [
-        { key: 'nesting', value: 'nested',      label: 'טעון על עגלה',    checked: state.nesting.has('nested') },
+        { key: 'nesting', value: 'nested',      label: 'נמצא על',    checked: state.nesting.has('nested') },
         { key: 'nesting', value: 'standalone',   label: 'עצמאי',           checked: state.nesting.has('standalone') },
-        { key: 'nesting', value: 'hasChildren',  label: 'עם עגלות טעונות', checked: state.nesting.has('hasChildren') }
+        { key: 'nesting', value: 'hasChildren',  label: 'נמצא עליו', checked: state.nesting.has('hasChildren') }
       ]);
 
       allProps.forEach(prop => {
@@ -2850,7 +2979,7 @@
     // ── Actions bar ───────────────────────────────────────────────
     function countActive() {
       return state.types.size + state.locations.size + state.cartIds.size + state.cartTypes.size +
-        state.nesting.size +
+        state.containerTypes.size + state.nesting.size +
         Object.values(state.props).reduce((s, set) => s + set.size, 0) +
         (state.emptyOnly ? 1 : 0);
     }
@@ -2880,6 +3009,10 @@
         if (!valSet.size) continue;
         if (!valSet.has((item.properties || {})[propName])) return false;
       }
+      if (state.containerTypes.size && item.cartId) {
+        if (!state.containerTypes.has(item.containerType || 'עגלה')) return false;
+      }
+      if (state.containerTypes.size && !item.cartId) return false; // floor items excluded when filtering by container type
       if (state.nesting.size && item.cartId) {
         const isNested     = !!item.parentCartId;
         const hasChildren  = DB.getChildCarts(item.cartId).length > 0;
@@ -3044,10 +3177,12 @@
               }
               const childCt = DB.getChildCarts(data.cartId).length;
               if (childCt) subParts.push(childCt + ' טעונות');
+              const ctBadge = (data.containerType && data.containerType !== DEFAULT_CONTAINER)
+                ? `<span style="background:#E0E7FF;color:#3730A3;padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-left:6px;">${esc(data.containerType)}</span>` : '';
               return `
                 <div class="list-item sr-item" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
                   <div class="list-item-body">
-                    <div class="list-item-title">${esc(cartLabel(data))}</div>
+                    <div class="list-item-title">${ctBadge}${esc(cartLabel(data))}</div>
                     <div class="list-item-sub">${subParts.join(' · ')}</div>
                   </div>
                   <span>›</span>
@@ -3096,6 +3231,8 @@
         on ? state.cartIds.add(value) : state.cartIds.delete(value);
       } else if (key === 'cartType') {
         on ? state.cartTypes.add(value) : state.cartTypes.delete(value);
+      } else if (key === 'containerType') {
+        on ? state.containerTypes.add(value) : state.containerTypes.delete(value);
       } else if (key === 'nesting') {
         on ? state.nesting.add(value) : state.nesting.delete(value);
       } else if (key === 'prop') {
@@ -3121,6 +3258,7 @@
       state.locations.clear();
       state.cartIds.clear();
       state.cartTypes.clear();
+      state.containerTypes.clear();
       state.nesting.clear();
       state.props   = {};
       state.emptyOnly = false;
@@ -3148,12 +3286,12 @@
           return `<p class="card-meta">${allSlots.length > 1 ? `סוג ${i+1}: ` : ''}${s.itemCount} פריטים${ps ? ' · ' + ps : ''}</p>`;
         }).join('');
         Modal.open({
-          title: `עגלה ${esc(cartLabel(cart))}`,
+          title: `${containerName(cart)} ${esc(cartLabel(cart))}`,
           html: `
             <p class="card-meta">מיקום: ${esc(cart.location || 'לא ידוע')}</p>
             ${cart.subLocation ? `<p class="card-meta">תת-מיקום: ${esc(cart.subLocation)}</p>` : ''}
             ${cart.parentCartId ? `<p class="card-meta">טעון על: ${esc((() => { const p = DB.getCart(cart.parentCartId); return p ? cartLabel(p) : cart.parentCartId; })())}</p>` : ''}
-            ${(() => { const ch = DB.getChildCarts(cart.cartId); return ch.length ? `<p class="card-meta">עגלות טעונות: ${ch.map(c => esc(cartLabel(c))).join(', ')}</p>` : ''; })()}
+            ${(() => { const ch = DB.getChildCarts(cart.cartId); return ch.length ? `<p class="card-meta">מועמסים: ${ch.map(c => esc(cartLabel(c))).join(', ')}</p>` : ''; })()}
             ${cart.isEmpty ? '<p class="card-meta">ריקה</p>' : slotsHtml}
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(cart.lastUpdated)}</p>
           `,
