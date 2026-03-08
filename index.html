@@ -1144,11 +1144,10 @@
       const screenEl = document.getElementById('screen-' + name);
       if (!screenEl) return;
 
-      // hide current
-      if (_current && _current !== name) {
-        const prev = document.getElementById('screen-' + _current);
-        if (prev) prev.hidden = true;
-      }
+      // hide ALL other screens (robust against stale _current / tab restore)
+      document.querySelectorAll('.screen').forEach(s => {
+        s.hidden = (s !== screenEl);
+      });
 
       screenEl.hidden = false;
       _current = name;
@@ -3386,6 +3385,14 @@
           </div>
         </button>
 
+        <button class="hero-btn" id="main-delete-all" style="margin-top:24px">
+          <div class="hero-btn-icon" style="background:#FEF2F2;color:#DC2626;">🗑️</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">מחיקת כל הנתונים</div>
+            <div class="hero-btn-sub">איפוס מלא של המידע המקומי</div>
+          </div>
+        </button>
+
       </div>
     `;
 
@@ -3446,6 +3453,23 @@
         });
     });
 
+    // delete all data
+    screen.querySelector('#main-delete-all').addEventListener('click', () => {
+      Modal.open({
+        title: 'מחיקת כל הנתונים',
+        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המכולות, פריטי רצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
+        actions: [
+          { id: 'confirm-delete', label: 'מחק הכל', cls: 'btn-danger', onClick: () => {
+            localStorage.removeItem('shinua_data');
+            Modal.close();
+            Toast.show('כל הנתונים נמחקו', 'success');
+            location.reload();
+          }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
+      });
+    });
+
     Router.register('main', {
       onShow() {}
     });
@@ -3475,6 +3499,14 @@
     // Navigate to initial screen
     const initial = location.hash.replace('#', '') || 'main';
     Router.navigate(initial);
+  });
+
+  // Re-navigate on tab/PWA restore (iOS/Android may freeze & resume pages)
+  window.addEventListener('pageshow', e => {
+    if (e.persisted) {
+      const name = Router.getCurrent() || location.hash.replace('#','') || 'main';
+      Router.navigate(name);
+    }
   });
   </script>
 </body>
