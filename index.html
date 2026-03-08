@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0F4C81">
+  <meta name="theme-color" content="#0f7a68">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="./manifest.json">
@@ -15,17 +15,55 @@
     html { height: 100%; }
 
     :root {
-      --primary:  #0F4C81;
-      --accent:   #FF6B35;
-      --bg:       #F7F8FC;
-      --surface:  #FFFFFF;
-      --text:     #1A1A2E;
-      --muted:    #6B7280;
-      --border:   #E5E7EB;
-      --success:  #16A34A;
-      --error:    #DC2626;
-      --nav-h:    64px;
-      --hdr-h:    56px;
+      --bg: #dff4ff;
+      --bg-2: #8fd3ff;
+      --card: rgba(255, 251, 241, 0.92);
+      --ink: #1a2328;
+      --muted: #56646c;
+      --line: #cbbd9f;
+      --brand: #0f7a68;
+      --brand-2: #227f92;
+      --danger: #b13d3d;
+      --focus: #f1ae4f;
+      --input-bg: #fffdf8;
+      --input-ink: #142026;
+      --placeholder: #7f8b91;
+      --area-bg: #fff8ea;
+      --theme-btn-bg: #ffffff;
+      --nav-h: 64px;
+      --hdr-h: 56px;
+      /* aliases for backward compat */
+      --primary: var(--brand);
+      --accent: var(--focus);
+      --surface: var(--card);
+      --text: var(--ink);
+      --border: var(--line);
+      --success: #16A34A;
+      --error: var(--danger);
+    }
+    body[data-theme="dark"] {
+      --bg: #0b1118;
+      --bg-2: #121a24;
+      --card: rgba(20, 29, 38, 0.92);
+      --ink: #edf4fa;
+      --muted: #a7bac8;
+      --line: #314354;
+      --brand: #2aa391;
+      --brand-2: #2e93a8;
+      --danger: #cc5555;
+      --focus: #d7b06c;
+      --input-bg: #101823;
+      --input-ink: #eef5fb;
+      --placeholder: #90a4b4;
+      --area-bg: #14202c;
+      --theme-btn-bg: #1a2633;
+      --primary: var(--brand);
+      --accent: var(--focus);
+      --surface: var(--card);
+      --text: var(--ink);
+      --border: var(--line);
+      --success: #2ecc71;
+      --error: var(--danger);
     }
 
     body {
@@ -33,7 +71,11 @@
       text-align: right;
       font-family: -apple-system, BlinkMacSystemFont, 'Heebo', 'Arial Hebrew',
                    'Noto Sans Hebrew', Arial, sans-serif;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at 88% 12%, rgba(96,193,255,0.34) 0%, transparent 40%),
+        radial-gradient(circle at 10% 82%, rgba(130,228,203,0.30) 0%, transparent 44%),
+        linear-gradient(145deg, var(--bg) 0%, var(--bg-2) 100%);
+      background-attachment: fixed;
       color: var(--text);
       height: 100%;
       overflow: hidden;
@@ -61,7 +103,7 @@
       position: sticky;
       top: 0;
       z-index: 10;
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
       color: #fff;
       height: var(--hdr-h);
       display: flex;
@@ -79,8 +121,10 @@
     /* ─── Bottom Nav ─── */
     #bottom-nav {
       display: flex;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid var(--line);
+      padding-top: 6px;
       padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .nav-item {
@@ -106,9 +150,11 @@
 
     /* ─── Cards ─── */
     .card {
-      background: var(--surface);
-      border-radius: 12px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      background: var(--card);
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+      backdrop-filter: blur(8px);
       padding: 14px 16px;
       margin: 0 12px 10px;
     }
@@ -147,21 +193,23 @@
     .form-input, .form-select {
       width: 100%;
       padding: 10px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
       font-size: 1rem;
       font-family: inherit;
-      background: var(--surface);
-      color: var(--text);
+      background: var(--input-bg);
+      color: var(--input-ink);
       direction: rtl;
       text-align: right;
       transition: border-color 0.15s;
       appearance: none;
       -webkit-appearance: none;
     }
+    .form-input::placeholder { color: var(--placeholder); }
     .form-input:focus, .form-select:focus {
-      outline: none;
-      border-color: var(--primary);
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+      border-color: var(--brand);
     }
     .form-select {
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
@@ -187,7 +235,11 @@
       -webkit-tap-highlight-color: transparent;
     }
     .btn:active { opacity: 0.8; transform: scale(0.98); }
-    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary {
+      background: linear-gradient(180deg, #2db59f, var(--brand));
+      color: #fff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 5px 12px rgba(0,0,0,0.16);
+    }
     .btn-accent  { background: var(--accent);  color: #fff; }
     .btn-outline {
       background: transparent;
@@ -260,14 +312,16 @@
     .item-id-input {
       flex: 1;
       padding: 8px 10px;
-      border: 1.5px solid var(--border);
-      border-radius: 7px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
       font-size: 0.9rem;
       font-family: inherit;
       direction: ltr;
       text-align: left;
+      background: var(--input-bg);
+      color: var(--input-ink);
     }
-    .item-id-input:focus { outline: none; border-color: var(--primary); }
+    .item-id-input:focus { outline: 2px solid var(--focus); outline-offset: 2px; border-color: var(--brand); }
 
     /* ─── Tags / Badges ─── */
     .badge {
@@ -380,9 +434,23 @@
       width: 18px; height: 18px; cursor: pointer;
       accent-color: var(--primary); flex-shrink: 0;
     }
-    .sr-empty-row { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 16px; }
+    .drag-handle {
+      touch-action: none; cursor: grab; color: var(--muted);
+      font-size: 1.1rem; padding: 2px 4px; user-select: none; opacity: 0.35;
+      line-height: 1; flex-shrink: 0;
+    }
+    .drag-handle:active { opacity: 0.7; }
+    .filter-panel.dragging, .fp-check-label.dragging {
+      opacity: 0.85; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      background: var(--surface); border-radius: 8px;
+    }
+    .drag-placeholder {
+      background: var(--border); border-radius: 4px; min-height: 4px;
+      transition: height 0.1s;
+    }
+    .sr-empty-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
     .sr-empty-label {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; align-items: center; gap: 10px; flex: 1;
       font-size: 0.95rem; font-weight: 600; cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
@@ -438,8 +506,8 @@
     .sr-combo-row:last-child { border-bottom: none; }
     .sr-combo-label { font-size: 0.88rem; color: var(--text); }
     .sr-combo-count {
-      font-size: 0.78rem; font-weight: 700; color: var(--primary);
-      background: #EBF4FF; border-radius: 20px; padding: 3px 10px; flex-shrink: 0;
+      font-size: 0.78rem; font-weight: 700; color: var(--brand);
+      background: var(--area-bg); border-radius: 20px; padding: 3px 10px; flex-shrink: 0;
     }
 
     /* ─── Location Group ─── */
@@ -448,8 +516,8 @@
       padding: 8px 16px;
       font-size: 0.78rem;
       font-weight: 700;
-      color: var(--primary);
-      background: #EBF4FF;
+      color: var(--brand);
+      background: var(--area-bg);
       text-transform: uppercase;
       letter-spacing: 0.03em;
     }
@@ -492,18 +560,19 @@
       align-items: center;
       gap: 16px;
       padding: 22px 20px;
-      background: var(--surface);
-      border: none;
-      border-radius: 14px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
       width: 100%;
       font-family: inherit;
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+      backdrop-filter: blur(8px);
       margin-bottom: 14px;
       transition: transform 0.1s, box-shadow 0.1s;
       -webkit-tap-highlight-color: transparent;
     }
-    .hero-btn:active { transform: scale(0.98); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .hero-btn:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .hero-btn-icon {
       width: 52px;
       height: 52px;
@@ -531,7 +600,8 @@
     }
     #modal-overlay[hidden] { display: none !important; }
     .modal-sheet {
-      background: var(--surface);
+      background: var(--card);
+      backdrop-filter: blur(12px);
       border-radius: 20px 20px 0 0;
       width: 100%;
       max-width: 540px;
@@ -635,6 +705,89 @@
     }
     .ac-item:last-child { border-bottom: none; }
     .ac-item:hover, .ac-item:active { background: var(--bg); }
+
+    /* ─── Theme toggle ─── */
+    .theme-toggle-btn {
+      padding: 6px 12px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.78rem;
+      font-family: inherit;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+    }
+
+    /* ─── Search screen inputs ─── */
+    .sr-search-inputs {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+    .sr-search-field {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--input-bg);
+      color: var(--input-ink);
+      font: inherit;
+      text-align: right;
+      direction: rtl;
+    }
+    .sr-search-field::placeholder { color: var(--placeholder); }
+    .sr-search-field:focus {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+      border-color: var(--brand);
+    }
+    .sr-search-field.sr-exclude {
+      border-color: var(--danger);
+      border-style: dashed;
+    }
+    .sr-suggest-wrap { position: relative; }
+    .sr-suggest-list {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      left: 0;
+      z-index: 20;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0 0 12px 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+      display: none;
+    }
+    .sr-suggest-list.open { display: block; }
+    .sr-suggest-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--line);
+      direction: rtl;
+      text-align: right;
+    }
+    .sr-suggest-item:last-child { border-bottom: none; }
+    .sr-suggest-item:hover, .sr-suggest-item.active {
+      background: color-mix(in srgb, var(--brand) 15%, var(--card));
+    }
+
+    /* ─── Search highlight ─── */
+    mark {
+      background: #ffe08a;
+      color: #272018;
+      border-radius: 4px;
+      padding: 0 2px;
+    }
+    body[data-theme="dark"] mark {
+      background: #6f5a24;
+      color: #fff3ca;
+    }
   </style>
 </head>
 <body>
@@ -749,24 +902,24 @@
 
     function getAllFloorItems() { return Object.values(load().floorItems); }
 
-    function _floorKey(location, properties) {
+    function _floorKey(location, properties, subLocation) {
       const props = Object.entries(properties || {})
         .filter(([,v]) => v).sort().map(([k,v]) => k + '=' + v).join(',');
-      return (location || '') + '|' + props;
+      return (location || '') + '|' + (subLocation || '') + '|' + props;
     }
 
-    function findFloorItem(location, props) {
-      const key = _floorKey(location || '', props);
+    function findFloorItem(location, props, subLocation) {
+      const key = _floorKey(location || '', props, subLocation);
       return Object.values(load().floorItems).find(fi =>
-        _floorKey(fi.location || '', fi.properties) === key
+        _floorKey(fi.location || '', fi.properties, fi.subLocation) === key
       ) || null;
     }
 
     function upsertFloorItem(data) {
       const db = load();
-      const key = _floorKey(data.location || '', data.properties);
+      const key = _floorKey(data.location || '', data.properties, data.subLocation);
       const existing = Object.values(db.floorItems).find(fi =>
-        _floorKey(fi.location || '', fi.properties) === key
+        _floorKey(fi.location || '', fi.properties, fi.subLocation) === key
       );
       const id = (existing && existing.id) || ('fi_' + Date.now());
       db.floorItems[id] = Object.assign({}, existing || {}, data, { id, lastUpdated: Date.now() });
@@ -897,11 +1050,11 @@
             if (!db.metadata.carts.includes(id)) db.metadata.carts.push(id);
           }
         }
-        // FloorItems: merge by location+properties key (not by ID)
+        // FloorItems: merge by location+subLocation+properties key (not by ID)
         const inFI = incoming.floorItems || {};
         for (const fi of Object.values(inFI)) {
           const existing = Object.values(db.floorItems).find(e =>
-            _floorKey(e.location || '', e.properties) === _floorKey(fi.location || '', fi.properties)
+            _floorKey(e.location || '', e.properties, e.subLocation) === _floorKey(fi.location || '', fi.properties, fi.subLocation)
           );
           if (!existing || (fi.lastUpdated || 0) > (existing.lastUpdated || 0)) {
             const id = (existing && existing.id) || ('fi_' + Date.now());
@@ -916,11 +1069,28 @@
         (inMeta.cartTypes || []).forEach(t => { if (!db.metadata.cartTypes.includes(t)) db.metadata.cartTypes.push(t); });
         // containerTypes
         (inMeta.containerTypes || []).forEach(t => { if (!db.metadata.containerTypes.includes(t)) db.metadata.containerTypes.push(t); });
-        // locations by name
+        // locations by name — merge subLocations
         (inMeta.locations || []).forEach(loc => {
-          const idx = db.metadata.locations.findIndex(l => l.name === loc.name);
-          if (idx < 0) db.metadata.locations.push(loc);
+          const existing = db.metadata.locations.find(l => l.name === loc.name);
+          if (!existing) {
+            db.metadata.locations.push(loc);
+          } else {
+            (loc.subLocations || []).forEach(s => {
+              if (!existing.subLocations) existing.subLocations = [];
+              if (!existing.subLocations.includes(s)) existing.subLocations.push(s);
+            });
+          }
         });
+        // collect subLocations from imported carts & floor items into location metadata
+        const _ensureSub = (locName, sub) => {
+          if (!locName || !sub) return;
+          let loc = db.metadata.locations.find(l => l.name === locName);
+          if (!loc) { loc = { name: locName, inMap: false, subLocations: [] }; db.metadata.locations.push(loc); }
+          if (!loc.subLocations) loc.subLocations = [];
+          if (!loc.subLocations.includes(sub)) loc.subLocations.push(sub);
+        };
+        Object.values(inCarts).forEach(c => _ensureSub(c.location, c.subLocation));
+        Object.values(inFI).forEach(fi => _ensureSub(fi.location, fi.subLocation));
         // properties by name, options union
         (inMeta.properties || []).forEach(prop => {
           const existing = db.metadata.properties.find(p => p.name === prop.name);
@@ -982,6 +1152,52 @@
       return decodeURIComponent(escape(atob(b64)));
     }
 
+    // ── Deflate compression (async) ──
+    async function deflateCompress(str) {
+      const bytes = new TextEncoder().encode(str);
+      const cs = new CompressionStream('deflate');
+      const writer = cs.writable.getWriter();
+      writer.write(bytes);
+      writer.close();
+      const chunks = [];
+      const reader = cs.readable.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const total = chunks.reduce((s, c) => s + c.length, 0);
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const c of chunks) { out.set(c, offset); offset += c.length; }
+      // uint8 → base64
+      let bin = '';
+      for (let i = 0; i < out.length; i++) bin += String.fromCharCode(out[i]);
+      return btoa(bin);
+    }
+
+    async function deflateDecompress(b64) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const ds = new DecompressionStream('deflate');
+      const writer = ds.writable.getWriter();
+      writer.write(bytes);
+      writer.close();
+      const chunks = [];
+      const reader = ds.readable.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const total = chunks.reduce((s, c) => s + c.length, 0);
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const c of chunks) { out.set(c, offset); offset += c.length; }
+      return new TextDecoder().decode(out);
+    }
+
     function formatDate(ts) {
       if (!ts) return '';
       const d = new Date(ts);
@@ -993,47 +1209,27 @@
       return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
     }
 
-    function generateExportText(dbJSON) {
-      let parsed;
-      try { parsed = JSON.parse(dbJSON); } catch(e) { parsed = {}; }
-      const now = formatDate(Date.now());
-      const carts = Object.values(parsed.carts || {});
-      const fis   = Object.values(parsed.floorItems || {});
-
-      // summary by location, grouped by container type
-      const locMap = {};
-      carts.forEach(c => {
-        const loc = c.location || 'ללא מיקום';
-        if (!locMap[loc]) locMap[loc] = { containers: {}, empty: 0, fi: 0 };
-        const ct = c.containerType || 'עגלה';
-        locMap[loc].containers[ct] = (locMap[loc].containers[ct] || 0) + 1;
-        if (c.isEmpty) locMap[loc].empty++;
-      });
-      fis.forEach(fi => {
-        const loc = fi.location || 'ללא מיקום';
-        if (!locMap[loc]) locMap[loc] = { containers: {}, empty: 0, fi: 0 };
-        locMap[loc].fi++;
-      });
-
-      let summary = '';
-      for (const [loc, s] of Object.entries(locMap)) {
-        const parts = [];
-        for (const [ct, n] of Object.entries(s.containers)) parts.push(`${n} ${ct}`);
-        if (s.empty) parts.push(`(${s.empty} ריקות)`);
-        if (s.fi)    parts.push(`${s.fi} קבוצות רצפה`);
-        summary += `${loc}: ${parts.join(', ')}\n`;
-      }
-
-      const b64 = base64Encode(dbJSON);
-      return `=== ייצוא נתונים — שינוע ===\nתאריך: ${now}\n\n${summary}\nSHINUA_DATA_START\n${b64}\nSHINUA_DATA_END`;
+    async function generateExportText(dbJSON) {
+      const compressed = await deflateCompress(dbJSON);
+      return `SH2S\n${compressed}\nSH2E`;
     }
 
-    function parseImportText(text) {
+    async function parseImportText(text) {
+      // V2 compressed format
+      const s2 = text.indexOf('SH2S');
+      const e2 = text.indexOf('SH2E');
+      if (s2 >= 0 && e2 > s2) {
+        const b64 = text.slice(s2 + 4, e2).trim();
+        return await deflateDecompress(b64);
+      }
+      // V1 legacy format (uncompressed base64)
       const start = text.indexOf('SHINUA_DATA_START');
       const end   = text.indexOf('SHINUA_DATA_END');
-      if (start < 0 || end < 0) throw new Error('פורמט לא תקין — לא נמצא SHINUA_DATA_START/END');
-      const b64 = text.slice(start + 'SHINUA_DATA_START'.length, end).trim();
-      return base64Decode(b64);
+      if (start >= 0 && end > start) {
+        const b64 = text.slice(start + 'SHINUA_DATA_START'.length, end).trim();
+        return base64Decode(b64);
+      }
+      throw new Error('פורמט לא תקין');
     }
 
     function generateMapText(db) {
@@ -1090,13 +1286,14 @@
       return out.trim();
     }
 
-    function copyMessage(cartId, count, props, from, to, containerType) {
+    function copyMessage(cartId, count, props, from, to, containerType, itemIds) {
       const propStr = Object.values(props || {}).filter(Boolean).join(' ');
       const cType = containerType || 'עגלה';
-      const parts = [`${cType} ${cartId}`];
-      if (count) parts.push(`${count}${propStr ? ' ' + propStr : ''}`);
-      if (from || to) parts.push(`מועברת מ${from || '?'} ל${to || '?'}`);
-      return parts.join(' | ');
+      const lines = [`${cType} ${cartId}`];
+      if (count) lines.push(`${count}${propStr ? ' ' + propStr : ''}`);
+      if (itemIds && itemIds.length) itemIds.forEach(id => lines.push(id));
+      if (from || to) lines.push(`מ${from || '?'} ל${to || '?'}`);
+      return lines.join('\n');
     }
 
     function copyToClipboard(text) {
@@ -1123,8 +1320,18 @@
       }));
     }
 
+    function shareViaWhatsApp(text) {
+      const encoded = encodeURIComponent(text);
+      window.open('https://wa.me/?text=' + encoded, '_blank');
+    }
+
+    function shareOrCopy(text) {
+      copyToClipboard(text).catch(() => {});
+      shareViaWhatsApp(text);
+    }
+
     return { base64Encode, base64Decode, formatDate, generateExportText,
-             parseImportText, generateMapText, copyMessage, copyToClipboard };
+             parseImportText, generateMapText, copyMessage, copyToClipboard, shareOrCopy };
   })();
   </script>
 
@@ -1441,7 +1648,6 @@
         <button class="tab-btn active" data-tab="carts">עגלות</button>
         <button class="tab-btn" data-tab="locations">מיקומים</button>
         <button class="tab-btn" data-tab="properties">מאפיינים</button>
-        <button class="tab-btn" data-tab="floor">רצפה</button>
       </div>
       <div id="edit-tab-content"></div>
     `;
@@ -1454,7 +1660,6 @@
       if (tab === 'carts')      renderCartsTab();
       if (tab === 'locations')  renderLocationsTab();
       if (tab === 'properties') renderPropertiesTab();
-      if (tab === 'floor')     renderFloorTab();
     }
 
     screen.querySelector('.tabs').addEventListener('click', e => {
@@ -2042,52 +2247,6 @@
     }
 
     // ── Floor Items Tab ──────────────────────────────────────
-    function renderFloorTab() {
-      tabContent.innerHTML = `
-        <div class="p-screen">
-          <div class="card">
-            <div class="card-title">קבוצות רצפה</div>
-            <div id="ef-list"></div>
-          </div>
-        </div>
-      `;
-      function renderList() {
-        const list = tabContent.querySelector('#ef-list');
-        const fis = DB.getAllFloorItems();
-        if (!fis.length) { list.innerHTML = '<p class="card-meta">אין פריטי רצפה</p>'; return; }
-        list.innerHTML = fis.sort((a,b) => (a.location||'').localeCompare(b.location||'')).map(fi => {
-          const ps = Object.values(fi.properties || {}).filter(Boolean).join(' · ');
-          return `
-            <div class="list-item">
-              <div class="list-item-body">
-                <div class="list-item-title">${esc(fi.location || 'ללא מיקום')}${ps ? ' · ' + ps : ''}</div>
-                <div class="list-item-sub">${fi.itemCount || 0} פריטים${fi.isEmpty ? ' (ריק)' : ''}</div>
-              </div>
-              <div class="list-item-actions">
-                <button class="btn-icon ef-del-btn" data-id="${esc(fi.id)}" title="מחק">🗑️</button>
-              </div>
-            </div>`;
-        }).join('');
-      }
-      renderList();
-      tabContent.querySelector('#ef-list').addEventListener('click', e => {
-        const delBtn = e.target.closest('.ef-del-btn');
-        if (delBtn) {
-          Modal.open({
-            title: 'מחיקת קבוצת רצפה',
-            html: '<p>האם למחוק את קבוצת הרצפה?</p>',
-            actions: [
-              { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
-                DB.deleteFloorItem(delBtn.dataset.id);
-                Modal.close(); Toast.show('קבוצת רצפה נמחקה', 'info'); renderList();
-              }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
-            ]
-          });
-        }
-      });
-    }
-
     Router.register('edit', {
       onShow() { renderTab(activeTab); }
     });
@@ -2111,7 +2270,6 @@
           <div class="pill-toggle" id="tr-mode-toggle">
             <button class="active" data-mode="cart">עגלה</button>
             <button data-mode="floor">רצפה</button>
-            <button data-mode="nest">העמסה</button>
           </div>
         </div>
 
@@ -2132,21 +2290,6 @@
             <label class="form-label">מספר סידורי</label>
             <input id="tr-floor-serial" class="form-input" placeholder="הקלד מספר סידורי..." autocomplete="off">
           </div>
-        </div>
-
-        <!-- nest mode: load one cart onto another -->
-        <div id="tr-nest-section" hidden>
-          <div class="card">
-            <div class="card-title">להעמסה</div>
-            <div id="tr-nest-child-host"></div>
-            <div id="tr-nest-child-info" class="card-meta" style="margin-top:8px;"></div>
-          </div>
-          <div class="card mt-12">
-            <div class="card-title">העמס (או ללא לניתוק)</div>
-            <div id="tr-nest-parent-host"></div>
-            <div id="tr-nest-parent-info" class="card-meta" style="margin-top:8px;"></div>
-          </div>
-          <button id="tr-nest-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
         </div>
 
         <!-- shared fields (destination + cart item fields) -->
@@ -2172,7 +2315,7 @@
             <div id="tr-prop-fields" class="mt-12"></div>
           </div>
 
-          <button id="tr-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
+          <button id="tr-save-btn" class="btn btn-primary btn-full mt-16">שמור ושלח 💬</button>
         </div>
       </div>
     `;
@@ -2223,11 +2366,9 @@
         b.classList.toggle('active', b.dataset.mode === mode));
       screen.querySelector('#tr-cart-section').hidden  = (mode !== 'cart');
       screen.querySelector('#tr-floor-section').hidden = (mode !== 'floor');
-      screen.querySelector('#tr-nest-section').hidden  = (mode !== 'nest');
       screen.querySelector('#tr-shared-fields').hidden = true;
       screen.querySelector('#tr-cart-item-fields').hidden = (mode !== 'cart');
       _currentData = null; _currentType = null;
-      if (mode === 'nest') initNestMode();
     }
 
     function showSharedFields(data, type) {
@@ -2295,65 +2436,6 @@
       }
     });
 
-    // ── Nest mode ──
-    let _nestChildRef = null, _nestParentRef = null;
-    let _nestChild = null, _nestParent = null;
-
-    function initNestMode() {
-      _nestChild = null; _nestParent = null;
-      const childInfo  = screen.querySelector('#tr-nest-child-info');
-      const parentInfo = screen.querySelector('#tr-nest-parent-info');
-      childInfo.textContent = '';
-      parentInfo.textContent = '';
-
-      if (!_nestChildRef) {
-        _nestChildRef = CartForm(screen.querySelector('#tr-nest-child-host'), {
-          onCartLoaded(cart) {
-            _nestChild = cart;
-            if (cart) {
-              const parentLabel = cart.parentCartId ? (DB.getCart(cart.parentCartId) ? cartLabel(DB.getCart(cart.parentCartId)) : cart.parentCartId) : 'ללא';
-              childInfo.textContent = `${containerName(cart)} · מיקום: ${cart.location || 'לא ידוע'} · טעון על: ${parentLabel}`;
-            } else { childInfo.textContent = ''; }
-          }
-        });
-      }
-      if (!_nestParentRef) {
-        _nestParentRef = CartForm(screen.querySelector('#tr-nest-parent-host'), {
-          onCartLoaded(cart) {
-            _nestParent = cart;
-            if (cart) {
-              parentInfo.textContent = `${containerName(cart)} · מיקום: ${cart.location || 'לא ידוע'} · ${cartTotalCount(cart)} פריטים`;
-            } else { parentInfo.textContent = ''; }
-          }
-        });
-      }
-    }
-
-    screen.querySelector('#tr-nest-save-btn').addEventListener('click', () => {
-      if (!_nestChild) { Toast.show('להעמסה יש לבחור', 'error'); return; }
-      const parentId = _nestParent ? _nestParent.cartId : null;
-      // prevent nesting onto self
-      if (parentId && parentId === _nestChild.cartId) { Toast.show('לא ניתן להעמיס על עצמך', 'error'); return; }
-      DB.upsertCart({ cartId: _nestChild.cartId, parentCartId: parentId });
-      // sync child location to parent
-      if (_nestParent) {
-        DB.upsertCart({ cartId: _nestChild.cartId, location: _nestParent.location, subLocation: _nestParent.subLocation });
-      }
-      const cName = containerName(_nestChild);
-      const parentLabel = _nestParent ? cartLabel(_nestParent) : 'ללא';
-      const msg = parentId
-        ? `${cName} ${cartLabel(_nestChild)} | טעונה על ${parentLabel}`
-        : `${cName} ${cartLabel(_nestChild)} | נותקה`;
-      Toast.show(parentId ? cName + ' נטענה' : cName + ' נותקה', 'success');
-      Utils.copyToClipboard(msg)
-        .then(() => Toast.show('הועתק ✓', 'success'))
-        .catch(() => Modal.open({
-          title: 'העתקה ידנית',
-          html: `<textarea rows="3" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.9rem;direction:rtl" readonly onclick="this.select()">${esc(msg)}</textarea>`,
-          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
-        }));
-    });
-
     // combined save + copy button
     screen.querySelector('#tr-save-btn').addEventListener('click', () => {
       if (!_currentData) { Toast.show('בחר עגלה או מקור רצפה', 'error'); return; }
@@ -2379,7 +2461,7 @@
         });
         // cascade location to nested children
         DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
-        msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc, _currentData.containerType);
+        msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc, _currentData.containerType, itemIds);
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
         // floor mode: single serial number transfer
@@ -2403,21 +2485,15 @@
                              itemCount: newCount, itemIds: newIds,
                              properties: _currentData.properties, isEmpty: false });
         const propStr = Object.values(_currentData.properties || {}).filter(Boolean).join(' ');
-        msg = `[רצפה] ${serial} ${propStr} | מועבר מ${_currentData.location || '?'} ל${destLoc}`.trim();
+        msg = `[רצפה] ${serial} ${propStr}\nמ${_currentData.location || '?'} ל${destLoc}`.trim();
         Toast.show('פריטי רצפה הועברו', 'success');
         screen.querySelector('#tr-floor-serial').value = '';
         // refresh available count
         updateFloorDisplay();
       }
 
-      // copy the message
-      Utils.copyToClipboard(msg)
-        .then(() => Toast.show('הועתק ✓', 'success'))
-        .catch(() => Modal.open({
-          title: 'העתקה ידנית',
-          html: `<textarea rows="3" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.9rem;direction:rtl" readonly onclick="this.select()">${esc(msg)}</textarea>`,
-          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
-        }));
+      // share via WhatsApp
+      Utils.shareOrCopy(msg);
     });
 
     Router.register('transfer', {
@@ -2500,7 +2576,7 @@
             <label class="form-label">יעד להעמסה</label>
             <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
           </div>
-          <button id="lu-load-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
+          <button id="lu-load-save-btn" class="btn btn-primary btn-full mt-16">שמור ושלח 💬</button>
         </div>
 
         <!-- ═══ UNLOAD SECTION ═══ -->
@@ -2518,7 +2594,7 @@
               <input id="lu-unload-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
           </div>
-          <button id="lu-unload-save-btn" class="btn btn-primary btn-full mt-16">📋 שמור והעתק</button>
+          <button id="lu-unload-save-btn" class="btn btn-primary btn-full mt-16">שמור ושלח 💬</button>
         </div>
       </div>
     `;
@@ -2573,9 +2649,7 @@
     }
 
     function copyMsg(msg) {
-      return Utils.copyToClipboard(msg)
-        .then(() => Toast.show('הועתק ✓', 'success'))
-        .catch(() => Toast.show('נשמר', 'success'));
+      Utils.shareOrCopy(msg);
     }
 
     // ── Slot management (multi-type carts) ──────────────────────────
@@ -2725,11 +2799,15 @@
         });
         const destCart = DB.getCart(destCartId);
         const label    = destCart ? cartLabel(destCart) : destCartId;
-        const total    = allSlots.reduce((s, sl) => s + sl.itemCount, 0);
-        const msgSlots = allSlots.filter(sl => sl.itemCount)
-          .map(sl => `${sl.itemCount}${Object.values(sl.properties).filter(Boolean).map(v => ' ' + v).join('')}`);
         const ctName = destCart ? containerName(destCart) : 'עגלה';
-        msg = `${ctName} ${label} | ${msgSlots.join(' + ')} | הועמסו פריטים`.trim();
+        const loc = destCart ? (destCart.location || '?') : '?';
+        const msgLines = [`${ctName} ${label}`, `מועמסת ב${loc}`];
+        allSlots.filter(sl => sl.itemCount).forEach(sl => {
+          const ps = Object.values(sl.properties).filter(Boolean).join(' ');
+          msgLines.push(`${sl.itemCount}${ps ? ' ' + ps : ''}`);
+          (sl.itemIds || []).forEach(id => msgLines.push(id));
+        });
+        msg = msgLines.join('\n');
         Toast.show('פריטים הועמסו', 'success');
         initEmptySlots(slotsContainer);
       } else {
@@ -2758,7 +2836,8 @@
         const label    = destCart ? cartLabel(destCart) : destCartId;
         const propStr  = Object.values(props).filter(Boolean).join(' ');
         const ctName2 = destCart ? containerName(destCart) : 'עגלה';
-        msg = `${ctName2} ${label} | ${serial} ${propStr} | הועמס מ${_floorSrc.location || '?'}`.trim();
+        const loc2 = destCart ? (destCart.location || '?') : '?';
+        msg = [`${ctName2} ${label}`, `מועמסת ב${loc2}`, `1${propStr ? ' ' + propStr : ''}`, serial].join('\n');
         Toast.show('פריט הועמס מרצפה', 'success');
 
         screen.querySelector('#lu-floor-serial').value = '';
@@ -2815,7 +2894,7 @@
                       extraItems: newExtras });
 
       const label = cartLabel(_srcCart);
-      const msg   = `${containerName(_srcCart)} ${label} | ${msgParts.join(' + ')} | פורקו ל${destLoc}`.trim();
+      const msg   = [`${containerName(_srcCart)} ${label}`, ...msgParts, `פורקו ל${destLoc}`].join('\n');
       Toast.show('פריטים פורקו לרצפה', 'success');
 
       _srcCart = null;
@@ -2857,9 +2936,23 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">🔍</span>
-        <h1>סינון</h1>
+        <h1>חיפוש</h1>
       </div>
-      <div id="sr-filter-panels"></div>
+      <div class="sr-search-inputs" id="sr-search-inputs">
+        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 1"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 2"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 3"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 4"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 5"></div>
+        <div class="sr-suggest-wrap"><input id="sr-exc-1" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 1 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 2 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 3 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap"><input id="sr-exc-4" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 4 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap"><input id="sr-exc-5" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 5 (לא לכלול)"></div>
+        <label class="sr-empty-label" style="padding:4px 0;">
+          <input type="checkbox" id="sr-empty-check"> הצג ריקות בלבד
+        </label>
+      </div>
       <div class="sr-filter-actions">
         <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
         <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">נקה סינון</button>
@@ -2868,162 +2961,187 @@
       <div id="sr-results"></div>
     `;
 
-    // ── Filter state ──────────────────────────────────────────────
+    // ── State ──────────────────────────────────────────────
     const state = {
-      locations: new Set(),
-      cartIds:   new Set(),
-      cartTypes: new Set(),
-      props:     {},         // propName → Set<value>
-      types:     new Set(),  // 'cart' | 'fi'; empty = both
-      containerTypes: new Set(),
-      nesting:   new Set(),  // 'nested' | 'standalone' | 'hasChildren'
+      includeTerms: [],   // lowercase normalized strings
+      excludeTerms: [],
       emptyOnly: false
     };
-    const openPanels = new Set(); // panel IDs kept open across re-renders
 
-    // ── Build panel HTML ──────────────────────────────────────────
-    function buildPanelHTML(id, title, items) {
-      const sel  = items.filter(i => i.checked).length;
-      const open = openPanels.has(id);
-      return `
-        <div class="filter-panel" id="${esc(id)}">
-          <button class="fp-header" aria-expanded="${open}">
-            <span class="fp-arrow">▾</span>
-            <span class="fp-title">${esc(title)}</span>
-            <span class="fp-badge${sel ? '' : ' fp-badge--hidden'}">${sel}</span>
-          </button>
-          <div class="fp-body${open ? ' open' : ''}">
-            ${items.map(item => `
-              <label class="fp-check-label">
-                <input type="checkbox" class="fp-checkbox"
-                  data-filter-key="${item.key}"
-                  data-value="${esc(item.value)}"
-                  ${item.propName ? `data-prop="${esc(item.propName)}"` : ''}
-                  ${item.checked ? 'checked' : ''}>
-                <span>${esc(item.label != null ? item.label : item.value)}</span>
-              </label>
-            `).join('')}
-          </div>
-        </div>`;
+    const incInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-inc-' + n));
+    const excInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-exc-' + n));
+
+    // ── Suggestion pool ───────────────────────────────────────────
+    let _suggestions = [];
+    function buildSuggestionPool() {
+      const pool = new Set();
+      const meta = DB.getMetadata();
+      const carts = DB.getAllCarts();
+      const fis = DB.getAllFloorItems();
+      // locations & sub-locations
+      (meta.locations || []).forEach(l => {
+        pool.add(l.name);
+        (l.subLocations || []).forEach(s => pool.add(s));
+      });
+      // cart types, container types
+      (meta.cartTypes || []).forEach(t => pool.add(t));
+      (meta.containerTypes || []).forEach(t => pool.add(t));
+      // property options
+      (meta.properties || []).forEach(p => (p.options || []).forEach(o => pool.add(o)));
+      // cart IDs, serial numbers
+      carts.forEach(c => {
+        pool.add(c.cartId);
+        if (c.cartType) pool.add(c.cartType);
+        (c.itemIds || []).forEach(id => pool.add(id));
+        (c.extraItems || []).forEach(ex => (ex.itemIds || []).forEach(id => pool.add(id)));
+      });
+      // floor item serial numbers
+      fis.forEach(fi => {
+        (fi.itemIds || []).forEach(id => pool.add(id));
+      });
+      _suggestions = [...pool].filter(Boolean).sort();
     }
 
-    // ── Rebuild filter panels (called on onShow and clear) ────────
-    function buildFilterPanels() {
-      const meta  = DB.getMetadata();
-      const carts = DB.getAllCarts();
-      const container = document.getElementById('sr-filter-panels');
+    // ── Autocomplete ─────────────────────────────────────────────
+    let _activeDropdown = null;
 
-      const allLocations = (meta.locations || []).map(l => l.name);
-      const allCartIds   = carts.map(c => c.cartId).sort();
-      const allProps     = meta.properties || [];
+    function showSuggestions(input, query) {
+      closeSuggestions();
+      if (!query) return;
+      const lower = query.toLowerCase();
+      const matches = _suggestions.filter(s => s.toLowerCase().includes(lower)).slice(0, 15);
+      if (!matches.length) return;
 
-      let html = '';
-
-      html += buildPanelHTML('sr-fp-type', 'סוג פריט', [
-        { key: 'type', value: 'cart', label: 'עגלות',       checked: state.types.has('cart') },
-        { key: 'type', value: 'fi',   label: 'פריטי רצפה', checked: state.types.has('fi')   }
-      ]);
-      if (allLocations.length) {
-        html += buildPanelHTML('sr-fp-loc', 'מיקומים',
-          allLocations.map(name => ({ key: 'loc', value: name, checked: state.locations.has(name) })));
-      }
-      if (allCartIds.length) {
-        html += buildPanelHTML('sr-fp-cart', 'עגלות',
-          allCartIds.map(id => {
-            const c = DB.getCart(id);
-            return { key: 'cart', value: id, label: c ? cartLabel(c) : id, checked: state.cartIds.has(id) };
-          }));
-      }
-      const allCartTypes = DB.getMetadata().cartTypes || [];
-      if (allCartTypes.length) {
-        html += buildPanelHTML('sr-fp-carttype', 'סוג',
-          allCartTypes.map(t => ({ key: 'cartType', value: t, checked: state.cartTypes.has(t) })));
-      }
-      const allContainerTypes = DB.getMetadata().containerTypes || ['עגלה'];
-      if (allContainerTypes.length > 1) {
-        html += buildPanelHTML('sr-fp-containertype', 'קטגוריה',
-          allContainerTypes.map(t => ({ key: 'containerType', value: t, checked: state.containerTypes.has(t) })));
-      }
-      html += buildPanelHTML('sr-fp-nesting', 'קינון', [
-        { key: 'nesting', value: 'nested',      label: 'נמצא על',    checked: state.nesting.has('nested') },
-        { key: 'nesting', value: 'standalone',   label: 'עצמאי',           checked: state.nesting.has('standalone') },
-        { key: 'nesting', value: 'hasChildren',  label: 'נמצא עליו', checked: state.nesting.has('hasChildren') }
-      ]);
-
-      allProps.forEach(prop => {
-        const propSet = state.props[prop.name] || new Set();
-        const items = (prop.options || []).map(opt => ({
-          key: 'prop', propName: prop.name, value: opt, checked: propSet.has(opt)
-        }));
-        if (items.length) html += buildPanelHTML('sr-fp-prop-' + prop.name, prop.name, items);
+      const wrap = input.closest('.sr-suggest-wrap');
+      const list = document.createElement('div');
+      list.className = 'sr-suggest-list open';
+      matches.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'sr-suggest-item';
+        item.textContent = m;
+        item.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          input.value = m;
+          closeSuggestions();
+          onSearchInput();
+        });
+        list.appendChild(item);
       });
+      wrap.appendChild(list);
+      _activeDropdown = list;
+    }
 
-      html += `
-        <div class="sr-empty-row">
-          <label class="sr-empty-label">
-            <input type="checkbox" id="sr-empty-check" ${state.emptyOnly ? 'checked' : ''}>
-            הצג ריקות בלבד
-          </label>
-        </div>`;
+    function closeSuggestions() {
+      if (_activeDropdown) { _activeDropdown.remove(); _activeDropdown = null; }
+    }
 
-      container.innerHTML = html;
-
-      document.getElementById('sr-empty-check').addEventListener('change', e => {
-        state.emptyOnly = e.target.checked;
+    // ── Debounced search input handler ────────────────────────────
+    let _debounceTimer = null;
+    function onSearchInput() {
+      clearTimeout(_debounceTimer);
+      _debounceTimer = setTimeout(() => {
+        state.includeTerms = incInputs.map(i => i.value.trim().toLowerCase()).filter(Boolean);
+        state.excludeTerms = excInputs.map(i => i.value.trim().toLowerCase()).filter(Boolean);
         updateActionsBar();
         renderResults();
-      });
+      }, 150);
     }
+
+    // Wire up input events
+    [...incInputs, ...excInputs].forEach(input => {
+      input.addEventListener('input', () => {
+        const q = input.value.trim();
+        if (q.length >= 1) showSuggestions(input, q);
+        else closeSuggestions();
+        onSearchInput();
+      });
+      input.addEventListener('focus', () => {
+        const q = input.value.trim();
+        if (q.length >= 1) showSuggestions(input, q);
+      });
+      input.addEventListener('blur', () => {
+        setTimeout(closeSuggestions, 150);
+      });
+    });
+
+    // Empty-only checkbox
+    screen.querySelector('#sr-empty-check').addEventListener('change', e => {
+      state.emptyOnly = e.target.checked;
+      updateActionsBar();
+      renderResults();
+    });
 
     // ── Actions bar ───────────────────────────────────────────────
     function countActive() {
-      return state.types.size + state.locations.size + state.cartIds.size + state.cartTypes.size +
-        state.containerTypes.size + state.nesting.size +
-        Object.values(state.props).reduce((s, set) => s + set.size, 0) +
-        (state.emptyOnly ? 1 : 0);
+      return state.includeTerms.length + state.excludeTerms.length + (state.emptyOnly ? 1 : 0);
     }
     function updateActionsBar() {
       const count    = countActive();
       const label    = document.getElementById('sr-filter-count');
       const clearBtn = document.getElementById('sr-clear-btn');
-      label.textContent = count ? count + ' פילטרים פעילים' : 'כל הפריטים';
+      label.textContent = count ? count + ' סינונים פעילים' : 'כל הפריטים';
       clearBtn.style.display = count ? '' : 'none';
     }
 
     // ── Filter logic ──────────────────────────────────────────────
+    function buildSearchableText(item) {
+      const parts = [item.cartId, item.location, item.subLocation,
+        item.cartType, item.containerType,
+        ...Object.values(item.properties || {}).filter(Boolean),
+        ...(item.itemIds || [])];
+      if (item.extraItems) {
+        item.extraItems.forEach(ex => {
+          parts.push(...Object.values(ex.properties || {}).filter(Boolean));
+          parts.push(...(ex.itemIds || []));
+        });
+      }
+      if (item.itemCount != null) parts.push(String(item.itemCount));
+      return parts.filter(Boolean).join(' ').toLowerCase();
+    }
+
     function itemPasses(item) {
-      if (state.types.size) {
-        const t = item.cartId ? 'cart' : 'fi';
-        if (!state.types.has(t)) return false;
-      }
-      if (state.locations.size && !state.locations.has(item.location)) return false;
-      if (state.cartIds.size) {
-        if (!item.cartId || !state.cartIds.has(item.cartId)) return false;
-      }
-      if (state.cartTypes.size && item.cartId) {
-        const cart = DB.getCart(item.cartId);
-        if (!cart || !state.cartTypes.has(cart.cartType)) return false;
-      }
-      for (const [propName, valSet] of Object.entries(state.props)) {
-        if (!valSet.size) continue;
-        if (!valSet.has((item.properties || {})[propName])) return false;
-      }
-      if (state.containerTypes.size && item.cartId) {
-        if (!state.containerTypes.has(item.containerType || 'עגלה')) return false;
-      }
-      if (state.containerTypes.size && !item.cartId) return false; // floor items excluded when filtering by container type
-      if (state.nesting.size && item.cartId) {
-        const isNested     = !!item.parentCartId;
-        const hasChildren  = DB.getChildCarts(item.cartId).length > 0;
-        const isStandalone = !isNested && !hasChildren;
-        const match = (state.nesting.has('nested') && isNested) ||
-                      (state.nesting.has('standalone') && isStandalone) ||
-                      (state.nesting.has('hasChildren') && hasChildren);
-        if (!match) return false;
-      }
-      if (state.nesting.size && !item.cartId) return false; // floor items have no nesting
       if (state.emptyOnly && !item.isEmpty) return false;
+      if (!state.includeTerms.length && !state.excludeTerms.length) return true;
+      const text = buildSearchableText(item);
+      for (const t of state.includeTerms) { if (!text.includes(t)) return false; }
+      for (const t of state.excludeTerms) { if (text.includes(t)) return false; }
       return true;
+    }
+
+    // ── Highlight helper ─────────────────────────────────────────
+    function highlightText(text, terms) {
+      if (!terms.length || !text) return esc(text);
+      const lower = text.toLowerCase();
+      const ranges = [];
+      for (const term of terms) {
+        let from = 0;
+        while (from < lower.length) {
+          const idx = lower.indexOf(term, from);
+          if (idx === -1) break;
+          ranges.push({ start: idx, end: idx + term.length });
+          from = idx + term.length;
+        }
+      }
+      if (!ranges.length) return esc(text);
+      // merge overlapping
+      ranges.sort((a, b) => a.start - b.start);
+      const merged = [ranges[0]];
+      for (let i = 1; i < ranges.length; i++) {
+        const prev = merged[merged.length - 1];
+        if (ranges[i].start <= prev.end) {
+          prev.end = Math.max(prev.end, ranges[i].end);
+        } else {
+          merged.push(ranges[i]);
+        }
+      }
+      let out = '', cursor = 0;
+      for (const r of merged) {
+        out += esc(text.slice(cursor, r.start));
+        out += '<mark>' + esc(text.slice(r.start, r.end)) + '</mark>';
+        cursor = r.end;
+      }
+      out += esc(text.slice(cursor));
+      return out;
     }
 
     // ── Summary panel ─────────────────────────────────────────────
@@ -3037,7 +3155,6 @@
       const floorItems  = fis.reduce((s, f) => s + (f.itemCount || 0), 0);
       const emptyCount  = all.filter(x => x.isEmpty).length;
 
-      // per-location stats
       const locStats = {};
       all.forEach(item => {
         const loc = item.location || 'ללא מיקום';
@@ -3048,7 +3165,6 @@
       const locEntries = Object.entries(locStats).sort((a,b) => b[1].items - a[1].items);
       const maxLocItems = Math.max(1, ...locEntries.map(([,s]) => s.items));
 
-      // per property-combination stats (non-empty items only)
       const meta = DB.getMetadata();
       const propDefs = meta.properties || [];
       const comboStats = {};
@@ -3061,64 +3177,34 @@
       const comboEntries = Object.values(comboStats).sort((a,b) => b.total - a.total);
 
       let html = '<div class="sr-summary">';
-
-      // total card (only when there are items)
       if (totalItems > 0) {
-        const showSplit = carts.length && fis.length; // both types present
+        const showSplit = carts.length && fis.length;
         html += `
           <div class="sr-total-card">
             <div class="sr-total-num">${totalItems}</div>
             <div class="sr-total-label">פריטים</div>
             ${showSplit ? `
             <div class="sr-total-split">
-              <div class="sr-split-item">
-                <span class="sr-split-num">${cartItems}</span>
-                <span class="sr-split-lbl">בעגלות</span>
-              </div>
-              <div class="sr-split-item">
-                <span class="sr-split-num">${floorItems}</span>
-                <span class="sr-split-lbl">ברצפה</span>
-              </div>
+              <div class="sr-split-item"><span class="sr-split-num">${cartItems}</span><span class="sr-split-lbl">בעגלות</span></div>
+              <div class="sr-split-item"><span class="sr-split-num">${floorItems}</span><span class="sr-split-lbl">ברצפה</span></div>
             </div>` : ''}
           </div>`;
       }
-
-      // empty card
       if (emptyCount > 0) {
-        html += `
-          <div class="sr-empty-card">
-            <div class="sr-empty-card-num">${emptyCount}</div>
-            <div class="sr-empty-card-lbl">ריקות</div>
-          </div>`;
+        html += `<div class="sr-empty-card"><div class="sr-empty-card-num">${emptyCount}</div><div class="sr-empty-card-lbl">ריקות</div></div>`;
       }
-
-      // location breakdown
       if (locEntries.length > 1) {
         html += '<div class="sr-section-title">לפי מיקום</div>';
         html += locEntries.map(([loc, s]) => {
           const pct = Math.round((s.items / maxLocItems) * 100);
-          const countLabel = s.items > 0
-            ? s.items + (s.empty ? ` (+${s.empty} ריקות)` : '')
-            : s.empty + ' ריקות';
-          return `
-            <div class="sr-loc-row">
-              <span class="sr-loc-name">${esc(loc)}</span>
-              <div class="sr-loc-bar-wrap"><div class="sr-loc-bar-fill" style="width:${pct}%"></div></div>
-              <span class="sr-loc-count">${countLabel}</span>
-            </div>`;
+          const countLabel = s.items > 0 ? s.items + (s.empty ? ` (+${s.empty} ריקות)` : '') : s.empty + ' ריקות';
+          return `<div class="sr-loc-row"><span class="sr-loc-name">${esc(loc)}</span><div class="sr-loc-bar-wrap"><div class="sr-loc-bar-fill" style="width:${pct}%"></div></div><span class="sr-loc-count">${countLabel}</span></div>`;
         }).join('');
       }
-
-      // property combination breakdown
       if (comboEntries.length > 1 && propDefs.length) {
         html += '<div class="sr-section-title">לפי שילוב מאפיינים</div>';
-        html += comboEntries.map(c => `
-          <div class="sr-combo-row">
-            <span class="sr-combo-label">${esc(c.label)}</span>
-            <span class="sr-combo-count">${c.total} פריטים</span>
-          </div>`).join('');
+        html += comboEntries.map(c => `<div class="sr-combo-row"><span class="sr-combo-label">${esc(c.label)}</span><span class="sr-combo-count">${c.total} פריטים</span></div>`).join('');
       }
-
       html += '</div>';
       el.innerHTML = html;
       el.hidden = false;
@@ -3144,6 +3230,8 @@
         return;
       }
 
+      const terms = state.includeTerms; // highlight include terms only
+
       const groups = {};
       const addItem = (item, type) => {
         const locKey = item.location || 'ללא מיקום';
@@ -3161,7 +3249,7 @@
       results.innerHTML = sortedGroups.map(g => `
         <div class="loc-group">
           <div class="loc-group-header">
-            ${esc(g.loc)}${g.sub ? ' / ' + esc(g.sub) : ''}
+            ${highlightText(g.loc + (g.sub ? ' / ' + g.sub : ''), terms)}
           </div>
           ${g.items.map(({ data, type }) => {
             if (type === 'cart') {
@@ -3177,12 +3265,12 @@
               const childCt = DB.getChildCarts(data.cartId).length;
               if (childCt) subParts.push(childCt + ' טעונות');
               const ctBadge = (data.containerType && data.containerType !== DEFAULT_CONTAINER)
-                ? `<span style="background:#E0E7FF;color:#3730A3;padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-left:6px;">${esc(data.containerType)}</span>` : '';
+                ? `<span style="background:var(--area-bg);color:var(--brand);padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-left:6px;">${esc(data.containerType)}</span>` : '';
               return `
                 <div class="list-item sr-item" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
                   <div class="list-item-body">
-                    <div class="list-item-title">${ctBadge}${esc(cartLabel(data))}</div>
-                    <div class="list-item-sub">${subParts.join(' · ')}</div>
+                    <div class="list-item-title">${ctBadge}${highlightText(cartLabel(data), terms)}</div>
+                    <div class="list-item-sub">${highlightText(subParts.join(' · '), terms)}</div>
                   </div>
                   <span>›</span>
                 </div>`;
@@ -3191,7 +3279,7 @@
               return `
                 <div class="list-item sr-item" data-type="fi" data-id="${esc(data.id)}" style="cursor:pointer">
                   <div class="list-item-body">
-                    <div class="list-item-title"><span class="badge badge-floor">רצפה</span> ${ps || esc(data.id)}</div>
+                    <div class="list-item-title"><span class="badge badge-floor">רצפה</span> ${highlightText(ps || data.id, terms)}</div>
                     <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}</div>
                   </div>
                   <span>›</span>
@@ -3202,66 +3290,15 @@
       `).join('');
     }
 
-    // ── Event delegation: accordion toggle ───────────────────────
-    document.getElementById('sr-filter-panels').addEventListener('click', e => {
-      const btn = e.target.closest('.fp-header');
-      if (!btn) return;
-      const panel  = btn.closest('.filter-panel');
-      const body   = btn.nextElementSibling;
-      const isOpen = btn.getAttribute('aria-expanded') === 'true';
-      btn.setAttribute('aria-expanded', String(!isOpen));
-      body.classList.toggle('open', !isOpen);
-      if (!isOpen) openPanels.add(panel.id);
-      else         openPanels.delete(panel.id);
-    });
-
-    // ── Event delegation: checkbox changes ───────────────────────
-    document.getElementById('sr-filter-panels').addEventListener('change', e => {
-      const cb = e.target.closest('.fp-checkbox');
-      if (!cb) return;
-      const key   = cb.dataset.filterKey;
-      const value = cb.dataset.value;
-      const on    = cb.checked;
-      if (key === 'type') {
-        on ? state.types.add(value) : state.types.delete(value);
-      } else if (key === 'loc') {
-        on ? state.locations.add(value) : state.locations.delete(value);
-      } else if (key === 'cart') {
-        on ? state.cartIds.add(value) : state.cartIds.delete(value);
-      } else if (key === 'cartType') {
-        on ? state.cartTypes.add(value) : state.cartTypes.delete(value);
-      } else if (key === 'containerType') {
-        on ? state.containerTypes.add(value) : state.containerTypes.delete(value);
-      } else if (key === 'nesting') {
-        on ? state.nesting.add(value) : state.nesting.delete(value);
-      } else if (key === 'prop') {
-        const pn = cb.dataset.prop;
-        if (!state.props[pn]) state.props[pn] = new Set();
-        on ? state.props[pn].add(value) : state.props[pn].delete(value);
-        if (!state.props[pn].size) delete state.props[pn];
-      }
-      // update badge in this panel
-      const panel = cb.closest('.filter-panel');
-      if (panel) {
-        const checked = panel.querySelectorAll('.fp-checkbox:checked').length;
-        const badge   = panel.querySelector('.fp-badge');
-        if (badge) { badge.textContent = checked; badge.classList.toggle('fp-badge--hidden', !checked); }
-      }
-      updateActionsBar();
-      renderResults();
-    });
-
     // ── Clear all ─────────────────────────────────────────────────
     document.getElementById('sr-clear-btn').addEventListener('click', () => {
-      state.types.clear();
-      state.locations.clear();
-      state.cartIds.clear();
-      state.cartTypes.clear();
-      state.containerTypes.clear();
-      state.nesting.clear();
-      state.props   = {};
+      incInputs.forEach(i => { i.value = ''; });
+      excInputs.forEach(i => { i.value = ''; });
+      state.includeTerms = [];
+      state.excludeTerms = [];
       state.emptyOnly = false;
-      buildFilterPanels();
+      screen.querySelector('#sr-empty-check').checked = false;
+      closeSuggestions();
       updateActionsBar();
       renderResults();
     });
@@ -3340,7 +3377,7 @@
 
     Router.register('search', {
       onShow() {
-        buildFilterPanels();
+        buildSuggestionPool();
         updateActionsBar();
         renderResults();
       }
@@ -3359,10 +3396,11 @@
       <div class="screen-header">
         <span class="header-icon">🛒</span>
         <h1>שינוע</h1>
+        <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
         <button class="hero-btn" id="main-export">
-          <div class="hero-btn-icon" style="background:#EBF4FF;color:#0F4C81;">📤</div>
+          <div class="hero-btn-icon" style="background:var(--area-bg);color:var(--brand);">📤</div>
           <div class="hero-btn-body">
             <div class="hero-btn-title">ייצוא נתונים</div>
             <div class="hero-btn-sub">העתק גיבוי ללוח</div>
@@ -3370,7 +3408,7 @@
         </button>
 
         <button class="hero-btn" id="main-import">
-          <div class="hero-btn-icon" style="background:#F0FDF4;color:#16A34A;">📥</div>
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--success) 12%, var(--card));color:var(--success);">📥</div>
           <div class="hero-btn-body">
             <div class="hero-btn-title">ייבוא נתונים</div>
             <div class="hero-btn-sub">הדבק טקסט גיבוי</div>
@@ -3378,7 +3416,7 @@
         </button>
 
         <button class="hero-btn" id="main-map">
-          <div class="hero-btn-icon" style="background:#FFF7ED;color:#FF6B35;">🗺️</div>
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--focus) 15%, var(--card));color:var(--focus);">🗺️</div>
           <div class="hero-btn-body">
             <div class="hero-btn-title">יצירת מיפוי</div>
             <div class="hero-btn-sub">העתק מפת מיקומים ללוח</div>
@@ -3386,7 +3424,7 @@
         </button>
 
         <button class="hero-btn" id="main-delete-all" style="margin-top:24px">
-          <div class="hero-btn-icon" style="background:#FEF2F2;color:#DC2626;">🗑️</div>
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--danger) 12%, var(--card));color:var(--danger);">🗑️</div>
           <div class="hero-btn-body">
             <div class="hero-btn-title">מחיקת כל הנתונים</div>
             <div class="hero-btn-sub">איפוס מלא של המידע המקומי</div>
@@ -3397,8 +3435,8 @@
     `;
 
     // export — copy to clipboard
-    screen.querySelector('#main-export').addEventListener('click', () => {
-      const text = Utils.generateExportText(DB.getRaw());
+    screen.querySelector('#main-export').addEventListener('click', async () => {
+      const text = await Utils.generateExportText(DB.getRaw());
       Utils.copyToClipboard(text)
         .then(() => Toast.show('גיבוי הועתק ללוח', 'success'))
         .catch(() => Modal.open({
@@ -3420,11 +3458,11 @@
                    font-size:0.82rem;font-family:monospace;direction:ltr;text-align:left;resize:vertical"></textarea>
         `,
         actions: [
-          { id: 'do-import', label: 'ייבא', cls: 'btn-primary', onClick: () => {
+          { id: 'do-import', label: 'ייבא', cls: 'btn-primary', onClick: async () => {
             const text = document.getElementById('import-paste-area').value.trim();
             if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
             try {
-              const jsonStr = Utils.parseImportText(text);
+              const jsonStr = await Utils.parseImportText(text);
               DB.importJSON(jsonStr, 'merge');
               Modal.close();
               Toast.show('נתונים יובאו בהצלחה', 'success');
@@ -3480,7 +3518,35 @@
        SCRIPT 10 — Bootstrap + SW Registration
   ════════════════════════════════════════════════════ -->
   <script>
+  // ── Theme management ─────────────────────────────
+  const THEME_KEY = 'shinua_theme';
+
+  function initTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'dark' || saved === 'light') {
+      setTheme(saved);
+      return;
+    }
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setTheme(prefersDark ? 'dark' : 'light');
+  }
+
+  function setTheme(mode) {
+    document.body.setAttribute('data-theme', mode);
+    localStorage.setItem(THEME_KEY, mode);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = mode === 'dark' ? 'מצב בהיר' : 'מצב כהה';
+  }
+
+  function toggleTheme() {
+    const current = document.body.getAttribute('data-theme') || 'light';
+    setTheme(current === 'dark' ? 'light' : 'dark');
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
+    // Apply theme before anything renders
+    initTheme();
+
     // Register service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(console.warn);
@@ -3495,6 +3561,10 @@
     initLoadUnload();
     initSearch();
     initMain();
+
+    // Wire up theme toggle
+    const themeBtn = document.getElementById('theme-toggle');
+    if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 
     // Navigate to initial screen
     const initial = location.hash.replace('#', '') || 'main';
