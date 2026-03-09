@@ -2409,7 +2409,7 @@
         <!-- shared fields (destination + cart item fields) -->
         <div id="tr-shared-fields" hidden>
           <div id="tr-current-info" class="card" style="margin:0 0 14px;"></div>
-          <button id="tr-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון מכולה</button>
+          <button id="tr-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון עגלה</button>
 
           <div class="form-group">
             <label class="form-label">מיקום יעד</label>
@@ -2622,7 +2622,7 @@
     screen.querySelector('#tr-empty-cart').addEventListener('click', () => {
       if (!_currentData || _currentType !== 'cart') { Toast.show('בחר עגלה', 'error'); return; }
       DB.upsertCart({ cartId: _currentData.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
-      Toast.show('מכולה רוקנה', 'success');
+      Toast.show('עגלה רוקנה', 'success');
       screen.querySelector('#tr-shared-fields').hidden = true;
       _currentData = null; _currentType = null;
     });
@@ -2718,7 +2718,7 @@
           <div id="lu-unload-cart-form-host"></div>
           <div id="lu-unload-fields" hidden>
             <div id="lu-unload-cart-info" class="card" style="margin:0 0 14px;"></div>
-            <button id="lu-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון מכולה</button>
+            <button id="lu-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון עגלה</button>
             <div id="lu-unload-slots-container"></div>
             <div class="form-group" style="margin-top:16px;">
               <label class="form-label">מיקום יעד (רצפה)</label>
@@ -3053,9 +3053,9 @@
 
     // empty cart (unload screen)
     screen.querySelector('#lu-empty-cart').addEventListener('click', () => {
-      if (!_srcCart) { Toast.show('בחר מכולה', 'error'); return; }
+      if (!_srcCart) { Toast.show('בחר עגלה', 'error'); return; }
       DB.upsertCart({ cartId: _srcCart.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
-      Toast.show('מכולה רוקנה', 'success');
+      Toast.show('עגלה רוקנה', 'success');
       _srcCart = null;
       screen.querySelector('#lu-unload-fields').hidden = true;
     });
@@ -3724,7 +3724,7 @@
           <div class="form-group"><label class="form-label">מספר פריטים</label><input id="ec-count" class="form-input" type="number" min="0" value="${count}"></div>
           <div id="ec-id-rows">${idRows}</div>
           ${propFieldsHtml}
-          <button id="ec-empty-btn" class="btn btn-outline btn-full mt-12" style="color:var(--danger);border-color:var(--danger)">ריקון מכולה</button>
+          <button id="ec-empty-btn" class="btn btn-outline btn-full mt-12" style="color:var(--danger);border-color:var(--danger)">ריקון עגלה</button>
         `,
         actions: [
           { id: 'ec-save', label: 'שמור', cls: 'btn-primary', onClick: () => {
@@ -3752,7 +3752,7 @@
       document.getElementById('ec-empty-btn').addEventListener('click', () => {
         DB.upsertCart({ cartId: cart.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
         Modal.close();
-        Toast.show('מכולה רוקנה', 'success');
+        Toast.show('עגלה רוקנה', 'success');
         renderResults();
       });
     }
