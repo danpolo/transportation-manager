@@ -3812,7 +3812,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v15</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v16</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -4177,11 +4177,12 @@
 
             for (const slot of entry.slots) {
               const props = _matchProps(slot.rawProps, propDefs);
-              // unmatched free text → comment + empty
+              // unmatched free text → comment + empty (only for single-slot carts)
               let slotComment = entry.comment || '';
               let slotCount = slot.itemCount;
               let slotEmpty = slot.isEmpty;
-              if (slot.rawProps && !slotComment && Object.values(props).every(v => !v) && !/^\d/.test(slot.rawProps)) {
+              if (entry.slots.length === 1 && slot.rawProps && !slotComment &&
+                  Object.values(props).every(v => !v) && !/^\d/.test(slot.rawProps)) {
                 slotComment = slot.rawProps;
                 slotCount = 0; slotEmpty = true;
               }
