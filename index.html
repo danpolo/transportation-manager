@@ -857,6 +857,7 @@
           if (!c.extraItems) c.extraItems = [];
           if (c.parentCartId === undefined) c.parentCartId = null;
           if (!c.containerType) c.containerType = 'עגלה';
+          if (c.comment === undefined) c.comment = '';
         });
       } catch(e) {
         _cache = _empty();
@@ -1273,11 +1274,15 @@
 
       function cartLine(c, prefix) {
         const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `[${c.containerType}] ` : '';
+        let line;
         if (c.isEmpty || !c.itemCount) {
-          return `${prefix}${ctLabel}${c.cartId}: empty\n`;
+          line = `${prefix}${ctLabel}${c.cartId}: empty`;
+        } else {
+          const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
+          line = (`${prefix}${ctLabel}${c.cartId}: ${c.itemCount} ${propVals}`).trim();
         }
-        const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
-        return (`${prefix}${ctLabel}${c.cartId}: ${c.itemCount} ${propVals}`).trim() + '\n';
+        if (c.comment) line += ` # ${c.comment}`;
+        return line + '\n';
       }
 
       let out = `מיפוי\n${now}\n`;
@@ -2520,6 +2525,7 @@
         info.innerHTML = `
           <div class="card-title">${esc(containerName(data))}: ${esc(cartLabel(data))}</div>
           <div class="card-meta">מיקום נוכחי: ${esc(data.location || 'לא ידוע')}</div>
+          ${data.comment ? `<div class="card-meta" style="color:var(--muted);font-style:italic">${esc(data.comment)}</div>` : ''}
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = false;
         const countInput = screen.querySelector('#tr-count');
@@ -2936,6 +2942,7 @@
         screen.querySelector('#lu-unload-cart-info').innerHTML = `
           <div class="card-title">${esc(containerName(cart))}: ${esc(cartLabel(cart))}</div>
           <div class="card-meta">מיקום נוכחי: ${esc(cart.location || 'לא ידוע')} · ${total} פריטים</div>
+          ${cart.comment ? `<div class="card-meta" style="color:var(--muted);font-style:italic">${esc(cart.comment)}</div>` : ''}
         `;
         populateSlots(screen.querySelector('#lu-unload-slots-container'), cart);
       }
@@ -3281,7 +3288,7 @@
     // ── Filter logic ──────────────────────────────────────────────
     function buildSearchableText(item) {
       const parts = [item.cartId, item.location, item.subLocation,
-        item.cartType, item.containerType,
+        item.cartType, item.containerType, item.comment || '',
         ...Object.values(item.properties || {}).filter(Boolean),
         ...(item.itemIds || [])];
       if (item.extraItems) {
@@ -3506,6 +3513,7 @@
                   <div class="list-item-body">
                     <div class="list-item-title">${ctBadge}${highlightText(cartLabel(data), terms)}</div>
                     <div class="list-item-sub">${highlightText(subParts.join(' · '), terms)}</div>
+                    ${data.comment ? `<div class="list-item-sub" style="color:var(--muted);font-style:italic">${highlightText(data.comment, terms)}</div>` : ''}
                   </div>
                   <span>›</span>
                 </div>`;
@@ -3749,6 +3757,7 @@
           <div class="form-group"><label class="form-label">מספר פריטים</label><input id="ec-count" class="form-input" type="number" min="0" value="${count}"></div>
           <div id="ec-id-rows">${idRows}</div>
           ${propFieldsHtml}
+          <div class="form-group"><label class="form-label">הערה</label><textarea id="ec-comment" class="form-input" rows="2" placeholder="הערה חופשית" style="resize:vertical">${esc(cart.comment || '')}</textarea></div>
           <button id="ec-empty-btn" class="btn btn-outline btn-full mt-12" style="color:var(--danger);border-color:var(--danger)">ריקון עגלה</button>
         `,
         actions: [
@@ -3757,7 +3766,8 @@
             const newIds = [...document.querySelectorAll('.ec-id')].map(i => i.value.trim()).filter(Boolean);
             const newProps = {};
             document.querySelectorAll('.ec-prop').forEach(i => { if (i.value.trim()) newProps[i.dataset.prop] = i.value.trim(); });
-            DB.upsertCart({ cartId: cart.cartId, itemCount: newCount, itemIds: newIds, properties: newProps, isEmpty: newCount === 0 });
+            const newComment = (document.getElementById('ec-comment').value || '').trim();
+            DB.upsertCart({ cartId: cart.cartId, itemCount: newCount, itemIds: newIds, properties: newProps, isEmpty: newCount === 0, comment: newComment });
             Modal.close();
             Toast.show('עגלה עודכנה', 'success');
             renderResults();
@@ -3802,7 +3812,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v14</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v15</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -4017,19 +4027,21 @@
         if (mCart) {
           if (mode === 'multiline') flushMultiline();
           if (mode === 'floor') { flushEntries(); mode = 'normal'; }
-          const rawId = mCart[1].trim(), content = mCart[2].trim();
+          const rawId = mCart[1].trim();
+          const [rawContent, entryComment] = _stripComment(mCart[2].trim());
+          const content = rawContent;
           const mId = RE_ID_TYPE.exec(rawId);
           const cartId = mId ? mId[1].trim() : rawId;
           const cartType = mId ? mId[2].trim() : '';
           if (!content) {
-            multilineCart = { type: 'cart', cartId, cartType, containerType: 'עגלה', slots: [] };
+            multilineCart = { type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment, slots: [] };
             mode = 'multiline';
           } else if (content === 'empty') {
-            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה',
+            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment,
               slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
           } else {
             const [count, rawProps] = _parseCountProps(content);
-            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה',
+            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment,
               slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
           }
           continue;
@@ -4047,7 +4059,9 @@
         // general "something: ..." line
         const mGen = RE_COLON_LINE.exec(line);
         if (mGen) {
-          const before = mGen[1].trim(), after = mGen[2].trim();
+          const before = mGen[1].trim();
+          const [afterRaw, genComment] = _stripComment(mGen[2].trim());
+          const after = afterRaw;
           if (after) {
             // content after colon → container-type cart
             const parts = before.split(/\s+/);
@@ -4059,11 +4073,11 @@
               containerType = 'עגלה'; cId = before;
             }
             if (after === 'empty') {
-              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType,
+              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
             } else {
               const [count, rawProps] = _parsePropsDashCount(after);
-              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType,
+              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
             }
           } else {
@@ -4092,6 +4106,11 @@
       if (mode === 'multiline') flushMultiline();
       flushEntries();
       return results;
+    }
+
+    function _stripComment(text) {
+      const idx = text.indexOf(' # ');
+      return idx >= 0 ? [text.slice(0, idx).trim(), text.slice(idx + 3).trim()] : [text, ''];
     }
 
     function _parseCountProps(text) {
@@ -4158,17 +4177,25 @@
 
             for (const slot of entry.slots) {
               const props = _matchProps(slot.rawProps, propDefs);
+              // unmatched free text → comment + empty
+              let slotComment = entry.comment || '';
+              let slotCount = slot.itemCount;
+              let slotEmpty = slot.isEmpty;
+              if (slot.rawProps && !slotComment && Object.values(props).every(v => !v) && !/^\d/.test(slot.rawProps)) {
+                slotComment = slot.rawProps;
+                slotCount = 0; slotEmpty = true;
+              }
               const slotData = {
-                properties: props, itemCount: slot.itemCount,
-                itemIds: [], isEmpty: slot.isEmpty
+                properties: props, itemCount: slotCount,
+                itemIds: [], isEmpty: slotEmpty
               };
 
               if (!carts[cid]) {
                 carts[cid] = {
                   cartId: cid, cartType: entry.cartType || '',
                   containerType: ct, location: locName, subLocation: subLoc,
-                  parentCartId: null, itemCount: slot.itemCount, itemIds: [],
-                  properties: props, isEmpty: slot.isEmpty,
+                  parentCartId: null, itemCount: slotCount, itemIds: [],
+                  properties: props, isEmpty: slotEmpty, comment: slotComment,
                   extraItems: [], lastUpdated: nowMs
                 };
                 cartIdList.push(cid);
