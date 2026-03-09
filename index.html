@@ -2598,7 +2598,9 @@
           isEmpty:     count === 0
         });
         DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
-        msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc, _currentData.containerType, itemIds);
+        const fromLabel = _currentData.subLocation || _currentData.location || '';
+        const toLabel   = destSubLoc || destLoc;
+        msg = Utils.copyMessage(cartLabel(_currentData), count, props, fromLabel, toLabel, _currentData.containerType, itemIds);
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
         const serial = screen.querySelector('#tr-floor-serial').value.trim();
@@ -2619,7 +2621,9 @@
                              itemCount: newCount, itemIds: newIds,
                              properties: _currentData.properties, isEmpty: false });
         const propStr = Object.values(_currentData.properties || {}).filter(Boolean).join(' ');
-        msg = `[רצפה] ${serial} ${propStr}\nמ${_currentData.location || '?'} ל${destLoc}`.trim();
+        const floorFrom = _currentData.subLocation || _currentData.location || '?';
+        const floorTo   = destSubLoc || destLoc;
+        msg = `[רצפה] ${serial} ${propStr}\nמ${floorFrom} ל${floorTo}`.trim();
         Toast.show('פריטי רצפה הועברו', 'success');
         screen.querySelector('#tr-floor-serial').value = '';
         updateFloorDisplay();
@@ -3053,7 +3057,8 @@
                       extraItems: newExtras });
 
       const label = cartLabel(_srcCart);
-      const msg   = [`${containerName(_srcCart)} ${label}`, ...msgParts, `פורקו ל${destLoc}`].join('\n');
+      const unloadDest = destSubLoc || destLoc;
+      const msg   = [`${containerName(_srcCart)} ${label}`, ...msgParts, `פורקו ל${unloadDest}`].join('\n');
       Toast.show('פריטים פורקו לרצפה', 'success');
 
       _srcCart = null;
