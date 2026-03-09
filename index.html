@@ -777,6 +777,27 @@
       background: color-mix(in srgb, var(--brand) 15%, var(--card));
     }
 
+    /* ─── Pin button in search results ─── */
+    .loc-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sr-pin-btn {
+      all: unset;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 2px 6px;
+      color: var(--muted);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sr-pin-btn.pinned {
+      color: #f3cf63;
+    }
+    body[data-theme="dark"] .sr-pin-btn.pinned {
+      color: #d4b55f;
+    }
+
     /* ─── Search highlight ─── */
     mark {
       background: #ffe08a;
@@ -1426,9 +1447,22 @@
 
     function hide() { dropdown.style.display = 'none'; dropdown.innerHTML = ''; }
 
+    // Close dropdown on scroll (prevents detachment from input)
+    function onScroll() { if (dropdown.style.display !== 'none') hide(); }
+    function addScrollListeners() {
+      let el = input.parentElement;
+      while (el) { el.addEventListener('scroll', onScroll, { passive: true }); el = el.parentElement; }
+      window.addEventListener('scroll', onScroll, { passive: true });
+    }
+    function removeScrollListeners() {
+      let el = input.parentElement;
+      while (el) { el.removeEventListener('scroll', onScroll); el = el.parentElement; }
+      window.removeEventListener('scroll', onScroll);
+    }
+
     input.addEventListener('input',   render);
-    input.addEventListener('focus',   render);
-    input.addEventListener('blur',    () => setTimeout(hide, 200));
+    input.addEventListener('focus',   () => { addScrollListeners(); render(); });
+    input.addEventListener('blur',    () => { setTimeout(hide, 200); removeScrollListeners(); });
     input.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
   }
 
@@ -1504,10 +1538,14 @@
         });
       });
 
-      // backdrop close
-      overlay.addEventListener('click', e => {
-        if (e.target === overlay) Modal.close();
-      }, { once: true });
+      // backdrop close — clicking outside the sheet
+      const backdropHandler = e => {
+        if (e.target === overlay) {
+          Modal.close();
+          overlay.removeEventListener('click', backdropHandler);
+        }
+      };
+      overlay.addEventListener('click', backdropHandler);
     },
 
     close() {
@@ -2971,6 +3009,15 @@
     const incInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-inc-' + n));
     const excInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-exc-' + n));
 
+    // ── Pinned location groups ────────────────────────────────────
+    const PIN_KEY = 'shinua_pinned_groups';
+    let _pinnedGroups = new Set();
+    try {
+      const raw = JSON.parse(localStorage.getItem(PIN_KEY) || '[]');
+      if (Array.isArray(raw)) _pinnedGroups = new Set(raw);
+    } catch { /* ignore */ }
+    function _savePins() { localStorage.setItem(PIN_KEY, JSON.stringify([..._pinnedGroups])); }
+
     // ── Suggestion pool ───────────────────────────────────────────
     let _suggestions = [];
     function buildSuggestionPool() {
@@ -3243,21 +3290,61 @@
       carts.forEach(c  => addItem(c,  'cart'));
       fis.forEach(fi   => addItem(fi, 'fi'));
 
-      const sortedGroups = Object.values(groups).sort((a,b) =>
-        a.loc.localeCompare(b.loc) || a.sub.localeCompare(b.sub));
+      const sortedGroups = Object.values(groups).sort((a,b) => {
+        const aKey = a.loc + '\0' + a.sub;
+        const bKey = b.loc + '\0' + b.sub;
+        const aPin = _pinnedGroups.has(aKey) ? 0 : 1;
+        const bPin = _pinnedGroups.has(bKey) ? 0 : 1;
+        if (aPin !== bPin) return aPin - bPin;
+        return a.loc.localeCompare(b.loc) || a.sub.localeCompare(b.sub);
+      });
 
-      results.innerHTML = sortedGroups.map(g => `
+      results.innerHTML = sortedGroups.map(g => {
+        const gKey = g.loc + '\0' + g.sub;
+        const isPinned = _pinnedGroups.has(gKey);
+        return `
         <div class="loc-group">
           <div class="loc-group-header">
             ${highlightText(g.loc + (g.sub ? ' / ' + g.sub : ''), terms)}
+            <button class="sr-pin-btn${isPinned ? ' pinned' : ''}" data-pin-key="${esc(gKey)}" title="${isPinned ? 'בטל הצמדה' : 'הצמד למעלה'}">${isPinned ? '\u2605' : '\u2606'}</button>
           </div>
           ${g.items.map(({ data, type }) => {
             if (type === 'cart') {
-              const ps = propSummary(data.properties);
+              const allSlots = [
+                { properties: data.properties || {}, itemCount: data.itemCount || 0 },
+                ...(data.extraItems || []).filter(ex => ex.itemCount)
+              ];
               const subParts = [];
-              if (data.isEmpty) subParts.push('ריקה');
-              else if (cartTotalCount(data)) subParts.push(cartTotalCount(data) + ' פריטים');
-              if (ps) subParts.push(ps);
+              if (data.isEmpty) {
+                subParts.push('ריקה');
+              } else if (allSlots.length > 1) {
+                // Multi-slot: find common vs differing properties
+                const meta = DB.getMetadata();
+                const propDefs = meta.properties || [];
+                const commonParts = [];
+                const diffParts = [];
+                propDefs.forEach(p => {
+                  const vals = allSlots.map(s => (s.properties || {})[p.name] || '');
+                  const unique = [...new Set(vals.filter(Boolean))];
+                  if (unique.length === 1) {
+                    commonParts.push(unique[0]);
+                  } else if (unique.length > 1) {
+                    // Show each type with its count
+                    unique.forEach(v => {
+                      const cnt = allSlots.filter(s => (s.properties || {})[p.name] === v).reduce((s, sl) => s + (sl.itemCount || 0), 0);
+                      diffParts.push(cnt + ' ' + v);
+                    });
+                  }
+                });
+                const total = cartTotalCount(data);
+                if (total) subParts.push(total + ' פריטים');
+                if (commonParts.length) subParts.push(commonParts.join(' '));
+                if (diffParts.length) subParts.push('(' + diffParts.join(', ') + ')');
+              } else {
+                const ps = propSummary(data.properties);
+                if (cartTotalCount(data)) subParts.push(cartTotalCount(data) + ' פריטים');
+                if (ps) subParts.push(ps);
+              }
               if (data.parentCartId) {
                 const pc = DB.getCart(data.parentCartId);
                 subParts.push('על ' + (pc ? cartLabel(pc) : data.parentCartId));
@@ -3287,7 +3374,8 @@
             }
           }).join('')}
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
     // ── Clear all ─────────────────────────────────────────────────
@@ -3304,7 +3392,17 @@
     });
 
     // ── Item click → modal ────────────────────────────────────────
+    // ── Pin toggle ───────────────────────────────────────────────
     document.getElementById('sr-results').addEventListener('click', e => {
+      const pinBtn = e.target.closest('.sr-pin-btn');
+      if (pinBtn) {
+        const key = pinBtn.dataset.pinKey;
+        if (_pinnedGroups.has(key)) _pinnedGroups.delete(key);
+        else _pinnedGroups.add(key);
+        _savePins();
+        renderResults();
+        return;
+      }
       const item = e.target.closest('.sr-item');
       if (!item) return;
       const type = item.dataset.type;
@@ -3423,6 +3521,14 @@
           </div>
         </button>
 
+        <button class="hero-btn" id="main-map-import">
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--brand-2) 15%, var(--card));color:var(--brand-2);">📋</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">ייבוא מיפוי</div>
+            <div class="hero-btn-sub">הדבק טקסט מיפוי ומזג לנתונים</div>
+          </div>
+        </button>
+
         <button class="hero-btn" id="main-delete-all" style="margin-top:24px">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--danger) 12%, var(--card));color:var(--danger);">🗑️</div>
           <div class="hero-btn-body">
@@ -3490,6 +3596,265 @@
           });
         });
     });
+
+    // map import — parse map text and merge into DB
+    screen.querySelector('#main-map-import').addEventListener('click', () => {
+      Modal.open({
+        title: 'ייבוא מיפוי',
+        html: `
+          <p class="card-meta" style="margin-bottom:10px">הדבק כאן טקסט מיפוי (באותו פורמט של יצירת מיפוי):</p>
+          <textarea id="map-import-area" rows="10"
+            style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
+                   font-size:0.82rem;font-family:monospace;direction:rtl;text-align:right;resize:vertical"></textarea>
+        `,
+        actions: [
+          { id: 'do-map-import', label: 'ייבא מיפוי', cls: 'btn-primary', onClick: () => {
+            const text = document.getElementById('map-import-area').value.trim();
+            if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+            try {
+              const propDefs = DB.getMetadata().properties || [];
+              const blocks = _parseMap(text);
+              if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
+              const imported = _buildMapDB(blocks, propDefs);
+              DB.importJSON(JSON.stringify(imported), 'merge');
+              const cartCount = Object.keys(imported.carts).length;
+              const floorCount = Object.keys(imported.floorItems).length;
+              Modal.close();
+              Toast.show(`יובאו ${cartCount} מכולות ו-${floorCount} פריטי רצפה`, 'success');
+            } catch(err) {
+              Toast.show('שגיאה: ' + err.message, 'error');
+            }
+          }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
+      });
+    });
+
+    // ── Map parser (ported from map2shinua.py) ──
+
+    function _parseMap(text) {
+      const RE_CART_WITH_TYPE = /^(.+\([^)]+\)):\s*(.*)$/;
+      const RE_ID_TYPE = /^(.+)\(([^)]+)\)$/;
+      const RE_COLON_LINE = /^(.+?):\s*(.*)$/;
+
+      const results = [];
+      let location = null, subLocation = '', entries = [], mode = 'normal';
+      let multilineCart = null, blockStarted = false;
+
+      function flushEntries() {
+        if (entries.length && location !== null) {
+          results.push({ location, subLocation, entries: entries.slice() });
+        }
+        entries = [];
+      }
+      function flushMultiline() {
+        if (multilineCart) { entries.push(multilineCart); multilineCart = null; }
+        if (mode === 'multiline') mode = 'normal';
+      }
+
+      for (const raw of text.split('\n')) {
+        const line = raw.trim();
+
+        if (!line) { if (mode === 'multiline') flushMultiline(); continue; }
+        if (/^מיפוי\s+\d{1,2}:\d{2}/.test(line)) continue;
+        if (/^={3,}$/.test(line)) {
+          if (mode === 'multiline') flushMultiline();
+          flushEntries();
+          location = null; subLocation = ''; blockStarted = false; mode = 'normal';
+          continue;
+        }
+
+        // cart with parenthesized type
+        const mCart = RE_CART_WITH_TYPE.exec(line);
+        if (mCart) {
+          if (mode === 'multiline') flushMultiline();
+          if (mode === 'floor') { flushEntries(); mode = 'normal'; }
+          const rawId = mCart[1].trim(), content = mCart[2].trim();
+          const mId = RE_ID_TYPE.exec(rawId);
+          const cartId = mId ? mId[1].trim() : rawId;
+          const cartType = mId ? mId[2].trim() : '';
+          if (!content) {
+            multilineCart = { type: 'cart', cartId, cartType, containerType: 'עגלה', slots: [] };
+            mode = 'multiline';
+          } else if (content === 'empty') {
+            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה',
+              slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
+          } else {
+            const [count, rawProps] = _parseCountProps(content);
+            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה',
+              slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
+          }
+          continue;
+        }
+
+        // indented line (multi-slot)
+        if (mode === 'multiline' && raw.length > 0 && (raw[0] === ' ' || raw[0] === '\t')) {
+          const [count, rawProps] = _parseCountProps(line);
+          multilineCart.slots.push({ itemCount: count, isEmpty: count === 0, rawProps });
+          continue;
+        }
+
+        if (mode === 'multiline') flushMultiline();
+
+        // general "something: ..." line
+        const mGen = RE_COLON_LINE.exec(line);
+        if (mGen) {
+          const before = mGen[1].trim(), after = mGen[2].trim();
+          if (after) {
+            // content after colon → container-type cart
+            const parts = before.split(/\s+/);
+            let containerType, cId;
+            if (parts.length >= 2) {
+              containerType = parts.slice(0, -1).join(' ');
+              cId = parts[parts.length - 1];
+            } else {
+              containerType = 'עגלה'; cId = before;
+            }
+            if (after === 'empty') {
+              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType,
+                slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
+            } else {
+              const [count, rawProps] = _parsePropsDashCount(after);
+              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType,
+                slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
+            }
+          } else {
+            // no content → header
+            if (before.startsWith('רצפה')) {
+              if (mode === 'multiline') flushMultiline();
+              flushEntries(); subLocation = before; mode = 'floor';
+            } else if (!blockStarted) {
+              flushEntries(); location = before; subLocation = ''; blockStarted = true; mode = 'normal';
+            } else {
+              flushEntries(); subLocation = before; mode = 'normal';
+            }
+          }
+          continue;
+        }
+
+        // floor item: props - count
+        if (mode === 'floor') {
+          if (!line.includes(' - ')) continue;
+          const [count, rawProps] = _parsePropsDashCount(line);
+          entries.push({ type: 'floor', itemCount: count, isEmpty: count === 0, rawProps });
+          continue;
+        }
+      }
+
+      if (mode === 'multiline') flushMultiline();
+      flushEntries();
+      return results;
+    }
+
+    function _parseCountProps(text) {
+      const parts = text.split(/\s+/);
+      const count = parts.length && /^\d+$/.test(parts[0]) ? parseInt(parts[0]) : 0;
+      const rawProps = /^\d+$/.test(parts[0]) ? parts.slice(1).join(' ') : text;
+      return [count, rawProps.trim()];
+    }
+
+    function _parsePropsDashCount(text) {
+      const idx = text.lastIndexOf(' - ');
+      if (idx >= 0) {
+        const props = text.slice(0, idx).trim();
+        const countStr = text.slice(idx + 3).trim();
+        const count = /^\d+$/.test(countStr) ? parseInt(countStr) : 0;
+        return [count, props];
+      }
+      return [0, text.trim()];
+    }
+
+    function _matchProps(raw, propDefs) {
+      if (!propDefs || !propDefs.length) return {};
+      const tokens = raw ? raw.split(/\s+/) : [];
+      const hasOptions = propDefs.some(p => p.options && p.options.length);
+      if (!hasOptions) {
+        const result = {};
+        propDefs.forEach((p, i) => { result[p.name] = i < tokens.length ? tokens[i] : ''; });
+        return result;
+      }
+      const result = {}, assigned = new Set();
+      for (const token of tokens) {
+        const tk = token.toLowerCase();
+        for (const prop of propDefs) {
+          if (assigned.has(prop.name)) continue;
+          const match = (prop.options || []).find(o => o.toLowerCase() === tk);
+          if (match) { result[prop.name] = match; assigned.add(prop.name); break; }
+        }
+      }
+      return result;
+    }
+
+    function _buildMapDB(blocks, propDefs) {
+      const nowMs = Date.now();
+      let fiCounter = 0;
+      const carts = {}, floorItems = {};
+      const cartIdList = [], locationSet = {}, containerTypesSet = new Set(['עגלה']);
+
+      for (const block of blocks) {
+        const { location: locName, subLocation: subLoc, entries } = block;
+        if (locName && !locationSet[locName]) {
+          locationSet[locName] = { name: locName, inMap: true, subLocations: [] };
+        }
+        if (locName && subLoc && locationSet[locName]) {
+          const locObj = locationSet[locName];
+          if (!locObj.subLocations) locObj.subLocations = [];
+          if (!locObj.subLocations.includes(subLoc)) locObj.subLocations.push(subLoc);
+        }
+
+        for (const entry of entries) {
+          if (entry.type === 'cart') {
+            const cid = entry.cartId;
+            const ct = entry.containerType || 'עגלה';
+            containerTypesSet.add(ct);
+
+            for (const slot of entry.slots) {
+              const props = _matchProps(slot.rawProps, propDefs);
+              const slotData = {
+                properties: props, itemCount: slot.itemCount,
+                itemIds: [], isEmpty: slot.isEmpty
+              };
+
+              if (!carts[cid]) {
+                carts[cid] = {
+                  cartId: cid, cartType: entry.cartType || '',
+                  containerType: ct, location: locName, subLocation: subLoc,
+                  parentCartId: null, itemCount: slot.itemCount, itemIds: [],
+                  properties: props, isEmpty: slot.isEmpty,
+                  extraItems: [], lastUpdated: nowMs
+                };
+                cartIdList.push(cid);
+              } else {
+                carts[cid].extraItems.push(slotData);
+                const s0Empty = !carts[cid].itemCount;
+                const exEmpty = carts[cid].extraItems.every(s => !s.itemCount);
+                carts[cid].isEmpty = s0Empty && exEmpty;
+              }
+            }
+          } else {
+            const props = _matchProps(entry.rawProps, propDefs);
+            const fiId = 'fi_' + (nowMs + fiCounter);
+            fiCounter++;
+            floorItems[fiId] = {
+              id: fiId, location: locName, subLocation: subLoc,
+              itemCount: entry.itemCount, itemIds: [],
+              properties: props, isEmpty: entry.isEmpty, lastUpdated: nowMs
+            };
+          }
+        }
+      }
+
+      const cartTypes = [...new Set(Object.values(carts).map(c => c.cartType).filter(Boolean))].sort();
+      return {
+        metadata: {
+          carts: cartIdList, cartTypes,
+          containerTypes: [...containerTypesSet].sort(),
+          properties: propDefs,
+          locations: Object.values(locationSet)
+        },
+        carts, floorItems
+      };
+    }
 
     // delete all data
     screen.querySelector('#main-delete-all').addEventListener('click', () => {
