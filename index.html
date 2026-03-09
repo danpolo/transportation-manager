@@ -1292,9 +1292,17 @@
         const locCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId);
         locCarts.forEach(c => {
           out += cartLine(c, '');
-          // show nested children indented
+          // show nested children indented (parseable format)
           (childrenOf[c.cartId] || []).forEach(ch => {
-            out += cartLine(ch, '  └ ');
+            const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
+            function chLine(cnt, props, comment) {
+              const pv = Object.values(props || {}).filter(Boolean).join(' ');
+              let l = `    ${chCt}${ch.cartId}: ${cnt === 0 ? 'empty' : cnt + (pv ? ' ' + pv : '')}`;
+              if (comment) l += ` # ${comment}`;
+              return l + '\n';
+            }
+            out += chLine(ch.itemCount || 0, ch.properties, ch.comment);
+            (ch.extraItems || []).forEach(s => out += chLine(s.itemCount || 0, s.properties, ''));
           });
         });
         // floor items at this location
@@ -3812,7 +3820,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v16</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v17</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -4047,10 +4055,30 @@
           continue;
         }
 
-        // indented line (multi-slot)
+        // indented line (multi-slot or child cart)
         if (mode === 'multiline' && raw.length > 0 && (raw[0] === ' ' || raw[0] === '\t')) {
-          const [count, rawProps] = _parseCountProps(line);
-          multilineCart.slots.push({ itemCount: count, isEmpty: count === 0, rawProps });
+          const mChild = RE_COLON_LINE.exec(line);
+          if (mChild && mChild[2].trim()) {
+            // child cart: "containerType cartId: count props"
+            const cBefore = mChild[1].trim();
+            const [cAfterRaw, cComment] = _stripComment(mChild[2].trim());
+            const cParts = cBefore.split(/\s+/);
+            const childCt = cParts.length >= 2 ? cParts.slice(0, -1).join(' ') : 'עגלה';
+            const childId = cParts[cParts.length - 1];
+            if (!multilineCart.children) multilineCart.children = [];
+            if (cAfterRaw === 'empty') {
+              multilineCart.children.push({ type: 'cart', cartId: childId, containerType: childCt, comment: cComment,
+                slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
+            } else {
+              const [cCount, cRawProps] = _parseCountProps(cAfterRaw);
+              multilineCart.children.push({ type: 'cart', cartId: childId, containerType: childCt, comment: cComment,
+                slots: [{ itemCount: cCount, isEmpty: cCount === 0, rawProps: cRawProps }] });
+            }
+          } else {
+            // additional slot
+            const [count, rawProps] = _parseCountProps(line);
+            multilineCart.slots.push({ itemCount: count, isEmpty: count === 0, rawProps });
+          }
           continue;
         }
 
@@ -4200,6 +4228,31 @@
                   extraItems: [], lastUpdated: nowMs
                 };
                 cartIdList.push(cid);
+                // create child carts (nested/loaded onto this cart)
+                for (const child of (entry.children || [])) {
+                  const chId = child.cartId, chCt = child.containerType || 'עגלה';
+                  containerTypesSet.add(chCt);
+                  for (const chSlot of child.slots) {
+                    const chProps = _matchProps(chSlot.rawProps, propDefs);
+                    const chSlotData = { properties: chProps, itemCount: chSlot.itemCount, itemIds: [], isEmpty: chSlot.isEmpty };
+                    if (!carts[chId]) {
+                      carts[chId] = {
+                        cartId: chId, cartType: '', containerType: chCt,
+                        location: locName, subLocation: subLoc, parentCartId: cid,
+                        itemCount: chSlot.itemCount, itemIds: [],
+                        properties: chProps, isEmpty: chSlot.isEmpty, comment: child.comment || '',
+                        extraItems: [], lastUpdated: nowMs
+                      };
+                      cartIdList.push(chId);
+                    } else {
+                      carts[chId].extraItems.push(chSlotData);
+                      carts[chId].parentCartId = cid;
+                      const ch0E = !carts[chId].itemCount;
+                      const chExE = carts[chId].extraItems.every(s => !s.itemCount);
+                      carts[chId].isEmpty = ch0E && chExE;
+                    }
+                  }
+                }
               } else {
                 carts[cid].extraItems.push(slotData);
                 const s0Empty = !carts[cid].itemCount;
