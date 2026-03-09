@@ -1114,12 +1114,12 @@
         Object.values(inFI).forEach(fi => _ensureSub(fi.location, fi.subLocation));
         // properties by name, options union
         (inMeta.properties || []).forEach(prop => {
-          const existing = db.metadata.properties.find(p => p.name === prop.name);
+          const existing = db.metadata.properties.find(p => p.name.toLowerCase() === prop.name.toLowerCase());
           if (!existing) {
             db.metadata.properties.push(prop);
           } else {
             (prop.options || []).forEach(o => {
-              if (!existing.options.includes(o)) existing.options.push(o);
+              if (!existing.options.some(e => e.toLowerCase() === o.toLowerCase())) existing.options.push(o);
             });
           }
         });
