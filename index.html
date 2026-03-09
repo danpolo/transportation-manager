@@ -3820,7 +3820,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v17</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v18</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -4203,7 +4203,8 @@
             const ct = entry.containerType || 'עגלה';
             containerTypesSet.add(ct);
 
-            for (const slot of entry.slots) {
+            for (let slotIdx = 0; slotIdx < entry.slots.length; slotIdx++) {
+              const slot = entry.slots[slotIdx];
               const props = _matchProps(slot.rawProps, propDefs);
               // unmatched free text → comment + empty (only for single-slot carts)
               let slotComment = entry.comment || '';
@@ -4219,37 +4220,53 @@
                 itemIds: [], isEmpty: slotEmpty
               };
 
-              if (!carts[cid]) {
-                carts[cid] = {
-                  cartId: cid, cartType: entry.cartType || '',
-                  containerType: ct, location: locName, subLocation: subLoc,
-                  parentCartId: null, itemCount: slotCount, itemIds: [],
-                  properties: props, isEmpty: slotEmpty, comment: slotComment,
-                  extraItems: [], lastUpdated: nowMs
-                };
-                cartIdList.push(cid);
+              if (!carts[cid] || (slotIdx === 0 && carts[cid])) {
+                if (carts[cid] && slotIdx === 0) {
+                  // same cartId in a later block — overwrite (last occurrence wins)
+                  carts[cid].containerType = ct;
+                  carts[cid].location = locName;
+                  carts[cid].subLocation = subLoc;
+                  carts[cid].itemCount = slotCount;
+                  carts[cid].properties = props;
+                  carts[cid].isEmpty = slotEmpty;
+                  carts[cid].comment = slotComment;
+                  carts[cid].extraItems = [];
+                  carts[cid].lastUpdated = nowMs;
+                  if (entry.cartType) carts[cid].cartType = entry.cartType;
+                } else {
+                  carts[cid] = {
+                    cartId: cid, cartType: entry.cartType || '',
+                    containerType: ct, location: locName, subLocation: subLoc,
+                    parentCartId: null, itemCount: slotCount, itemIds: [],
+                    properties: props, isEmpty: slotEmpty, comment: slotComment,
+                    extraItems: [], lastUpdated: nowMs
+                  };
+                  cartIdList.push(cid);
+                }
                 // create child carts (nested/loaded onto this cart)
-                for (const child of (entry.children || [])) {
-                  const chId = child.cartId, chCt = child.containerType || 'עגלה';
-                  containerTypesSet.add(chCt);
-                  for (const chSlot of child.slots) {
-                    const chProps = _matchProps(chSlot.rawProps, propDefs);
-                    const chSlotData = { properties: chProps, itemCount: chSlot.itemCount, itemIds: [], isEmpty: chSlot.isEmpty };
-                    if (!carts[chId]) {
-                      carts[chId] = {
-                        cartId: chId, cartType: '', containerType: chCt,
-                        location: locName, subLocation: subLoc, parentCartId: cid,
-                        itemCount: chSlot.itemCount, itemIds: [],
-                        properties: chProps, isEmpty: chSlot.isEmpty, comment: child.comment || '',
-                        extraItems: [], lastUpdated: nowMs
-                      };
-                      cartIdList.push(chId);
-                    } else {
-                      carts[chId].extraItems.push(chSlotData);
-                      carts[chId].parentCartId = cid;
-                      const ch0E = !carts[chId].itemCount;
-                      const chExE = carts[chId].extraItems.every(s => !s.itemCount);
-                      carts[chId].isEmpty = ch0E && chExE;
+                if (slotIdx === 0) {
+                  for (const child of (entry.children || [])) {
+                    const chId = child.cartId, chCt = child.containerType || 'עגלה';
+                    containerTypesSet.add(chCt);
+                    for (const chSlot of child.slots) {
+                      const chProps = _matchProps(chSlot.rawProps, propDefs);
+                      const chSlotData = { properties: chProps, itemCount: chSlot.itemCount, itemIds: [], isEmpty: chSlot.isEmpty };
+                      if (!carts[chId]) {
+                        carts[chId] = {
+                          cartId: chId, cartType: '', containerType: chCt,
+                          location: locName, subLocation: subLoc, parentCartId: cid,
+                          itemCount: chSlot.itemCount, itemIds: [],
+                          properties: chProps, isEmpty: chSlot.isEmpty, comment: child.comment || '',
+                          extraItems: [], lastUpdated: nowMs
+                        };
+                        cartIdList.push(chId);
+                      } else {
+                        carts[chId].extraItems.push(chSlotData);
+                        carts[chId].parentCartId = cid;
+                        const ch0E = !carts[chId].itemCount;
+                        const chExE = carts[chId].extraItems.every(s => !s.itemCount);
+                        carts[chId].isEmpty = ch0E && chExE;
+                      }
                     }
                   }
                 }
