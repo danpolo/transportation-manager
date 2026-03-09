@@ -1310,10 +1310,10 @@
     function copyMessage(cartId, count, props, from, to, containerType, itemIds) {
       const propStr = Object.values(props || {}).filter(Boolean).join(' ');
       const cType = containerType || 'עגלה';
-      const lines = [`${cType} ${cartId}`];
+      const lines = [`${cType} ${cartId}${count === 0 ? ' ריקה' : ''}`];
       if (count) lines.push(`${count}${propStr ? ' ' + propStr : ''}`);
       if (itemIds && itemIds.length) itemIds.forEach(id => lines.push(id));
-      if (from || to) lines.push(`מ${from || '?'} ל${to || '?'}`);
+      if (from || to) lines.push(`מועברת מ${from || '?'} ל${to || '?'}`);
       return lines.join('\n');
     }
 
@@ -2191,6 +2191,15 @@
             <div class="card-title">מאפיינים קיימים</div>
             <div id="ep-list"></div>
           </div>
+
+          <div class="card mt-12">
+            <div class="card-title">ייצוא / ייבוא הגדרות</div>
+            <p class="card-meta" style="margin-bottom:8px">כולל מאפיינים + מיקומים שלא במיפוי</p>
+            <div style="display:flex;gap:8px">
+              <button id="ep-export-defs" class="btn btn-outline" style="flex:1">ייצוא הגדרות</button>
+              <button id="ep-import-defs" class="btn btn-outline" style="flex:1">ייבוא הגדרות</button>
+            </div>
+          </div>
         </div>
       `;
 
@@ -2282,6 +2291,73 @@
           }
         }
       });
+
+      // export definitions (properties + non-map locations)
+      tabContent.querySelector('#ep-export-defs').addEventListener('click', () => {
+        const meta = DB.getMetadata();
+        const defs = {
+          properties: meta.properties || [],
+          locations: (meta.locations || []).filter(l => !l.inMap)
+        };
+        const text = JSON.stringify(defs, null, 2);
+        Utils.copyToClipboard(text)
+          .then(() => Toast.show('הגדרות הועתקו ללוח', 'success'))
+          .catch(() => Toast.show('שגיאה בהעתקה', 'error'));
+      });
+
+      // import definitions
+      tabContent.querySelector('#ep-import-defs').addEventListener('click', () => {
+        Modal.open({
+          title: 'ייבוא הגדרות',
+          html: `
+            <p class="card-meta" style="margin-bottom:10px">הדבק כאן את טקסט ההגדרות שהועתק בייצוא:</p>
+            <textarea id="ep-import-area" rows="6"
+              style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
+                     font-size:0.82rem;font-family:monospace;direction:ltr;text-align:left;resize:vertical"></textarea>
+          `,
+          actions: [
+            { id: 'do-import-defs', label: 'ייבא', cls: 'btn-primary', onClick: () => {
+              const text = document.getElementById('ep-import-area').value.trim();
+              if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+              try {
+                const defs = JSON.parse(text);
+                // merge properties
+                (defs.properties || []).forEach(prop => {
+                  const existing = DB.getMetadata().properties.find(p => p.name.toLowerCase() === prop.name.toLowerCase());
+                  if (!existing) {
+                    DB.upsertProperty({ name: prop.name, options: prop.options || [] });
+                  } else {
+                    (prop.options || []).forEach(o => {
+                      if (!existing.options.some(e => e.toLowerCase() === o.toLowerCase())) {
+                        DB.addPropertyOption(existing.name, o);
+                      }
+                    });
+                  }
+                });
+                // merge non-map locations
+                (defs.locations || []).forEach(loc => {
+                  const existing = DB.getMetadata().locations.find(l => l.name === loc.name);
+                  if (!existing) {
+                    DB.upsertLocation({ name: loc.name, inMap: false, subLocations: loc.subLocations || [] });
+                  } else {
+                    (loc.subLocations || []).forEach(s => {
+                      if (!existing.subLocations) existing.subLocations = [];
+                      if (!existing.subLocations.includes(s)) existing.subLocations.push(s);
+                    });
+                    DB.upsertLocation(existing);
+                  }
+                });
+                Modal.close();
+                Toast.show('הגדרות יובאו בהצלחה', 'success');
+                renderList();
+              } catch(err) {
+                Toast.show('שגיאה: ' + err.message, 'error');
+              }
+            }},
+            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          ]
+        });
+      });
     }
 
     // ── Floor Items Tab ──────────────────────────────────────
@@ -2333,6 +2409,7 @@
         <!-- shared fields (destination + cart item fields) -->
         <div id="tr-shared-fields" hidden>
           <div id="tr-current-info" class="card" style="margin:0 0 14px;"></div>
+          <button id="tr-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון מכולה</button>
 
           <div class="form-group">
             <label class="form-label">מיקום יעד</label>
@@ -2353,7 +2430,10 @@
             <div id="tr-prop-fields" class="mt-12"></div>
           </div>
 
-          <button id="tr-save-btn" class="btn btn-primary btn-full mt-16">שמור ושלח 💬</button>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button id="tr-save-only-btn" class="btn btn-outline" style="flex:1">שמור</button>
+            <button id="tr-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+          </div>
         </div>
       </div>
     `;
@@ -2474,13 +2554,13 @@
       }
     });
 
-    // combined save + copy button
-    screen.querySelector('#tr-save-btn').addEventListener('click', () => {
-      if (!_currentData) { Toast.show('בחר עגלה או מקור רצפה', 'error'); return; }
+    // transfer save logic (returns msg or null on error)
+    function doTransferSave() {
+      if (!_currentData) { Toast.show('בחר עגלה או מקור רצפה', 'error'); return null; }
       const destLoc    = screen.querySelector('#tr-dest-loc').value.trim();
       const destSubLoc = screen.querySelector('#tr-dest-subloc-group').hidden
         ? '' : screen.querySelector('#tr-dest-subloc').value.trim();
-      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
+      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return null; }
 
       let msg;
 
@@ -2497,25 +2577,21 @@
           properties:  props,
           isEmpty:     count === 0
         });
-        // cascade location to nested children
         DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
         msg = Utils.copyMessage(cartLabel(_currentData), count, props, _currentData.location || '', destLoc, _currentData.containerType, itemIds);
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
-        // floor mode: single serial number transfer
         const serial = screen.querySelector('#tr-floor-serial').value.trim();
-        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return; }
+        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return null; }
 
         const srcFI       = DB.findFloorItem(_currentData.location, _currentData.properties);
         const existsInSrc = srcFI && (srcFI.itemIds || []).includes(serial);
         if (existsInSrc) {
-          // deduct from source
           const remaining = Math.max(0, (srcFI.itemCount || 0) - 1);
           const remainIds = (srcFI.itemIds || []).filter(id => id !== serial);
           DB.upsertFloorItem({ location: _currentData.location, properties: _currentData.properties,
                                itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
         }
-        // additive update at destination regardless of whether found at source
         const destFI   = DB.findFloorItem(destLoc, _currentData.properties);
         const newCount = (destFI ? (destFI.itemCount || 0) : 0) + 1;
         const newIds   = [...(destFI ? (destFI.itemIds || []) : []), serial];
@@ -2526,12 +2602,29 @@
         msg = `[רצפה] ${serial} ${propStr}\nמ${_currentData.location || '?'} ל${destLoc}`.trim();
         Toast.show('פריטי רצפה הועברו', 'success');
         screen.querySelector('#tr-floor-serial').value = '';
-        // refresh available count
         updateFloorDisplay();
       }
+      return msg;
+    }
 
-      // share via WhatsApp
-      Utils.shareOrCopy(msg);
+    // save + send
+    screen.querySelector('#tr-save-btn').addEventListener('click', () => {
+      const msg = doTransferSave();
+      if (msg) Utils.shareOrCopy(msg);
+    });
+
+    // save only (no WhatsApp)
+    screen.querySelector('#tr-save-only-btn').addEventListener('click', () => {
+      doTransferSave();
+    });
+
+    // empty cart
+    screen.querySelector('#tr-empty-cart').addEventListener('click', () => {
+      if (!_currentData || _currentType !== 'cart') { Toast.show('בחר עגלה', 'error'); return; }
+      DB.upsertCart({ cartId: _currentData.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
+      Toast.show('מכולה רוקנה', 'success');
+      screen.querySelector('#tr-shared-fields').hidden = true;
+      _currentData = null; _currentType = null;
     });
 
     Router.register('transfer', {
@@ -2614,7 +2707,10 @@
             <label class="form-label">יעד להעמסה</label>
             <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
           </div>
-          <button id="lu-load-save-btn" class="btn btn-primary btn-full mt-16">שמור ושלח 💬</button>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">שמור</button>
+            <button id="lu-load-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+          </div>
         </div>
 
         <!-- ═══ UNLOAD SECTION ═══ -->
@@ -2622,6 +2718,7 @@
           <div id="lu-unload-cart-form-host"></div>
           <div id="lu-unload-fields" hidden>
             <div id="lu-unload-cart-info" class="card" style="margin:0 0 14px;"></div>
+            <button id="lu-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון מכולה</button>
             <div id="lu-unload-slots-container"></div>
             <div class="form-group" style="margin-top:16px;">
               <label class="form-label">מיקום יעד (רצפה)</label>
@@ -2632,7 +2729,10 @@
               <input id="lu-unload-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
           </div>
-          <button id="lu-unload-save-btn" class="btn btn-primary btn-full mt-16">שמור ושלח 💬</button>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button id="lu-unload-save-only" class="btn btn-outline" style="flex:1">שמור</button>
+            <button id="lu-unload-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+          </div>
         </div>
       </div>
     `;
@@ -2817,11 +2917,11 @@
       }
     });
 
-    // ── load save ──
-    screen.querySelector('#lu-load-save-btn').addEventListener('click', () => {
+    // ── load save logic ──
+    function doLoadSave() {
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
       const destCartId = rawDest.replace(/\([^)]+\)\s*$/, '').trim();
-      if (!destCartId) { Toast.show('יש להזין יעד להעמסה', 'error'); return; }
+      if (!destCartId) { Toast.show('יש להזין יעד להעמסה', 'error'); return null; }
 
       let msg;
 
@@ -2849,10 +2949,9 @@
         Toast.show('פריטים הועמסו', 'success');
         initEmptySlots(slotsContainer);
       } else {
-        // load from floor: single serial number
-        if (!_floorSrc) { Toast.show('יש להזין מיקום מקור', 'error'); return; }
+        if (!_floorSrc) { Toast.show('יש להזין מיקום מקור', 'error'); return null; }
         const serial = screen.querySelector('#lu-floor-serial').value.trim();
-        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return; }
+        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return null; }
 
         const srcFI       = DB.findFloorItem(_floorSrc.location, _floorSrc.properties);
         const existsInSrc = srcFI && (srcFI.itemIds || []).includes(serial);
@@ -2862,8 +2961,7 @@
           DB.upsertFloorItem({ location: _floorSrc.location, properties: _floorSrc.properties,
                                itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
         }
-        // additive update to cart
-        props = _floorSrc.properties;
+        const props = _floorSrc.properties;
         const existingCart  = DB.getCart(destCartId);
         const existingIds   = existingCart ? (existingCart.itemIds || []) : [];
         const existingCount = existingCart ? (existingCart.itemCount || 0) : 0;
@@ -2877,33 +2975,37 @@
         const loc2 = destCart ? (destCart.location || '?') : '?';
         msg = [`${ctName2} ${label}`, `מועמסת ב${loc2}`, `1${propStr ? ' ' + propStr : ''}`, serial].join('\n');
         Toast.show('פריט הועמס מרצפה', 'success');
-
         screen.querySelector('#lu-floor-serial').value = '';
-        updateFloorSrc(); // refresh available count
+        updateFloorSrc();
       }
       screen.querySelector('#lu-dest-cart').value = '';
-      copyMsg(msg);
+      return msg;
+    }
+
+    screen.querySelector('#lu-load-save-btn').addEventListener('click', () => {
+      const msg = doLoadSave();
+      if (msg) copyMsg(msg);
+    });
+    screen.querySelector('#lu-load-save-only').addEventListener('click', () => {
+      doLoadSave();
     });
 
-    // ── unload save ──
-    screen.querySelector('#lu-unload-save-btn').addEventListener('click', () => {
-      if (!_srcCart) { Toast.show('יש לבחור מקור לפירוק', 'error'); return; }
+    // ── unload save logic ──
+    function doUnloadSave() {
+      if (!_srcCart) { Toast.show('יש לבחור מקור לפירוק', 'error'); return null; }
       const destLoc = screen.querySelector('#lu-unload-dest-loc').value.trim();
-      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return; }
+      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return null; }
       const destSubLoc = screen.querySelector('#lu-unload-dest-subloc-group').hidden
         ? '' : screen.querySelector('#lu-unload-dest-subloc').value.trim();
 
       const slotsContainer = screen.querySelector('#lu-unload-slots-container');
       const allSlots = readAllSlots(slotsContainer);
 
-      // Determine what remains on the cart after unloading
-      // Slot 0 (primary top-level fields)
       const unload0 = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
       const unload0Set   = new Set(unload0.itemIds);
       const remain0Ids   = (_srcCart.itemIds || []).filter(id => !unload0Set.has(id));
       const remain0Count = Math.max(0, (_srcCart.itemCount || 0) - unload0.itemCount);
 
-      // Extra slots
       const newExtras = (_srcCart.extraItems || []).map((ex, idx) => {
         const unloadSlot = allSlots[idx + 1];
         if (!unloadSlot) return ex;
@@ -2913,7 +3015,6 @@
         return { ...ex, itemCount: newCount, itemIds: newIds };
       });
 
-      // Upsert floor items for each slot being unloaded (additive merge by location+props)
       const msgParts = [];
       for (const slot of allSlots) {
         if (!slot.itemCount) continue;
@@ -2939,7 +3040,24 @@
       screen.querySelector('#lu-unload-fields').hidden = true;
       screen.querySelector('#lu-unload-dest-loc').value = '';
       screen.querySelector('#lu-unload-dest-subloc').value = '';
-      copyMsg(msg);
+      return msg;
+    }
+
+    screen.querySelector('#lu-unload-save-btn').addEventListener('click', () => {
+      const msg = doUnloadSave();
+      if (msg) copyMsg(msg);
+    });
+    screen.querySelector('#lu-unload-save-only').addEventListener('click', () => {
+      doUnloadSave();
+    });
+
+    // empty cart (unload screen)
+    screen.querySelector('#lu-empty-cart').addEventListener('click', () => {
+      if (!_srcCart) { Toast.show('בחר מכולה', 'error'); return; }
+      DB.upsertCart({ cartId: _srcCart.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
+      Toast.show('מכולה רוקנה', 'success');
+      _srcCart = null;
+      screen.querySelector('#lu-unload-fields').hidden = true;
     });
 
     Router.register('loadunload', {
@@ -2994,6 +3112,11 @@
       <div class="sr-filter-actions">
         <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
         <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">נקה סינון</button>
+      </div>
+      <div style="display:flex;gap:6px;padding:0 12px 8px;flex-wrap:wrap">
+        <button id="sr-copy-results" class="btn btn-sm btn-outline">העתק תוצאות</button>
+        <button id="sr-copy-summary" class="btn btn-sm btn-outline">העתק סיכום</button>
+        <button id="sr-laizko" class="btn btn-sm btn-outline">לאיצקו</button>
       </div>
       <div id="sr-summary" hidden></div>
       <div id="sr-results"></div>
@@ -3391,6 +3514,111 @@
       renderResults();
     });
 
+    // ── Copy results (plain text) ─────────────────────────────────
+    document.getElementById('sr-copy-results').addEventListener('click', () => {
+      const carts = DB.getAllCarts().filter(itemPasses);
+      const fis   = DB.getAllFloorItems().filter(itemPasses);
+      if (!carts.length && !fis.length) { Toast.show('אין תוצאות', 'error'); return; }
+
+      const groups = {};
+      const addItem = (item, type) => {
+        const locKey = item.location || 'ללא מיקום';
+        const subKey = item.subLocation || '';
+        const gk = locKey + '\0' + subKey;
+        if (!groups[gk]) groups[gk] = { loc: locKey, sub: subKey, items: [] };
+        groups[gk].items.push({ data: item, type });
+      };
+      carts.forEach(c => addItem(c, 'cart'));
+      fis.forEach(fi => addItem(fi, 'fi'));
+
+      const sorted = Object.values(groups).sort((a,b) => a.loc.localeCompare(b.loc) || a.sub.localeCompare(b.sub));
+      let lineNo = 1;
+      const text = sorted.map(g => {
+        const header = g.loc + (g.sub ? ' / ' + g.sub : '') + ` (${g.items.length} שורות)`;
+        const lines = g.items.map(({ data, type }) => {
+          const num = lineNo++;
+          if (type === 'cart') {
+            const ps = propSummary(data.properties);
+            const count = cartTotalCount(data);
+            return `${num}. ${cartLabel(data)}: ${data.isEmpty ? 'ריקה' : (count ? count + (ps ? ' ' + ps : '') : ps)}`;
+          } else {
+            const ps = propSummary(data.properties);
+            return `${num}. [רצפה] ${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + (ps ? ' ' + ps : '') : ps)}`;
+          }
+        }).join('\n');
+        return header + '\n' + lines;
+      }).join('\n\n');
+
+      Utils.copyToClipboard(text).then(() => Toast.show('תוצאות הועתקו', 'success')).catch(() => Toast.show('שגיאה בהעתקה', 'error'));
+    });
+
+    // ── Copy summary text ──────────────────────────────────────────
+    document.getElementById('sr-copy-summary').addEventListener('click', () => {
+      const carts = DB.getAllCarts().filter(itemPasses);
+      const fis   = DB.getAllFloorItems().filter(itemPasses);
+      const all   = [...carts, ...fis];
+      if (!all.length) { Toast.show('אין תוצאות', 'error'); return; }
+
+      const totalItems = all.reduce((s, x) => s + (x.itemCount || 0), 0);
+      const emptyCount = all.filter(x => x.isEmpty).length;
+      const meta = DB.getMetadata();
+      const propDefs = meta.properties || [];
+      const comboStats = {};
+      all.filter(x => !x.isEmpty && x.itemCount).forEach(item => {
+        const label = propDefs.map(p => (item.properties || {})[p.name]).filter(Boolean).join(' ');
+        const key = label || 'ללא מאפיינים';
+        if (!comboStats[key]) comboStats[key] = 0;
+        comboStats[key] += item.itemCount;
+      });
+      const lines = [`סה"כ: ${totalItems} פריטים, ${all.length} מכולות${emptyCount ? ', ' + emptyCount + ' ריקות' : ''}`];
+      Object.entries(comboStats).sort((a,b) => b[1] - a[1]).forEach(([label, count]) => {
+        lines.push(`${count} ${label}`);
+      });
+      const text = lines.join('\n');
+      Utils.copyToClipboard(text).then(() => Toast.show('סיכום הועתק', 'success')).catch(() => Toast.show('שגיאה בהעתקה', 'error'));
+    });
+
+    // ── לאיצקו (CSV download) ──────────────────────────────────────
+    document.getElementById('sr-laizko').addEventListener('click', () => {
+      const carts = DB.getAllCarts().filter(itemPasses);
+      const fis   = DB.getAllFloorItems().filter(itemPasses);
+      if (!carts.length && !fis.length) { Toast.show('אין תוצאות', 'error'); return; }
+
+      const meta = DB.getMetadata();
+      const propDefs = meta.properties || [];
+      const csvEscape = v => { const s = String(v == null ? '' : v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      const rows = [['מיקום', 'סוג', 'מזהה', ...propDefs.map(p => p.name), 'כמות']];
+
+      const addRow = (item, type) => {
+        const loc = (item.location || '') + (item.subLocation ? ' / ' + item.subLocation : '');
+        const id = type === 'cart' ? cartLabel(item) : 'רצפה';
+        const kind = type === 'cart' ? (item.containerType || 'עגלה') : 'רצפה';
+        const propVals = propDefs.map(p => (item.properties || {})[p.name] || '');
+        const count = item.isEmpty ? 0 : (item.itemCount || 0);
+        rows.push([loc, kind, id, ...propVals, count]);
+        // extra items for multi-slot carts
+        if (type === 'cart' && item.extraItems) {
+          item.extraItems.forEach(ex => {
+            if (!ex.itemCount) return;
+            const exProps = propDefs.map(p => (ex.properties || {})[p.name] || '');
+            rows.push([loc, kind, id, ...exProps, ex.itemCount]);
+          });
+        }
+      };
+      carts.forEach(c => addRow(c, 'cart'));
+      fis.forEach(fi => addRow(fi, 'fi'));
+
+      const csv = '\uFEFF' + rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+      const d = new Date();
+      const ts = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '-' + String(d.getHours()).padStart(2,'0') + String(d.getMinutes()).padStart(2,'0');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `laizko-${ts}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      Toast.show('CSV הורד', 'success');
+    });
+
     // ── Item click → modal ────────────────────────────────────────
     // ── Pin toggle ───────────────────────────────────────────────
     document.getElementById('sr-results').addEventListener('click', e => {
@@ -3430,6 +3658,10 @@
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(cart.lastUpdated)}</p>
           `,
           actions: [
+            { id: 'edit-cart', label: '✏️ עריכת תוכן', cls: 'btn-outline', onClick: () => {
+              Modal.close();
+              openEditCartModal(cart);
+            }},
             { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
               Modal.close();
               Router.navigate('transfer', { cartId: id });
@@ -3473,6 +3705,58 @@
       }
     });
 
+    // ── Edit cart contents in-place ─────────────────────────────
+    function openEditCartModal(cart) {
+      const meta = DB.getMetadata();
+      const propDefs = meta.properties || [];
+      const propFieldsHtml = propDefs.map(p => {
+        const opts = (p.options || []).map(o => `<option value="${esc(o)}"${(cart.properties || {})[p.name] === o ? ' selected' : ''}></option>`).join('');
+        return `<div class="form-group"><label class="form-label">${esc(p.name)}</label><input class="form-input ec-prop" data-prop="${esc(p.name)}" list="ec-dl-${esc(p.name)}" value="${esc((cart.properties || {})[p.name] || '')}" autocomplete="off"><datalist id="ec-dl-${esc(p.name)}">${opts}</datalist></div>`;
+      }).join('');
+      const count = cart.itemCount || 0;
+      const ids = (cart.itemIds || []);
+      const idRows = Array.from({length: Math.max(count, ids.length)}, (_, i) =>
+        `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input ec-id" placeholder="מספר סידורי" value="${esc(ids[i] || '')}"></div>`
+      ).join('');
+      Modal.open({
+        title: `עריכת ${containerName(cart)} ${esc(cartLabel(cart))}`,
+        html: `
+          <div class="form-group"><label class="form-label">מספר פריטים</label><input id="ec-count" class="form-input" type="number" min="0" value="${count}"></div>
+          <div id="ec-id-rows">${idRows}</div>
+          ${propFieldsHtml}
+          <button id="ec-empty-btn" class="btn btn-outline btn-full mt-12" style="color:var(--danger);border-color:var(--danger)">ריקון מכולה</button>
+        `,
+        actions: [
+          { id: 'ec-save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+            const newCount = parseInt(document.getElementById('ec-count').value) || 0;
+            const newIds = [...document.querySelectorAll('.ec-id')].map(i => i.value.trim()).filter(Boolean);
+            const newProps = {};
+            document.querySelectorAll('.ec-prop').forEach(i => { if (i.value.trim()) newProps[i.dataset.prop] = i.value.trim(); });
+            DB.upsertCart({ cartId: cart.cartId, itemCount: newCount, itemIds: newIds, properties: newProps, isEmpty: newCount === 0 });
+            Modal.close();
+            Toast.show('עגלה עודכנה', 'success');
+            renderResults();
+          }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
+      });
+      // dynamic rows on count change
+      document.getElementById('ec-count').addEventListener('input', () => {
+        const n = parseInt(document.getElementById('ec-count').value) || 0;
+        const existing = [...document.querySelectorAll('.ec-id')].map(i => i.value);
+        document.getElementById('ec-id-rows').innerHTML = Array.from({length: n}, (_, i) =>
+          `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input ec-id" placeholder="מספר סידורי" value="${esc(existing[i] || '')}"></div>`
+        ).join('');
+      });
+      // empty cart button
+      document.getElementById('ec-empty-btn').addEventListener('click', () => {
+        DB.upsertCart({ cartId: cart.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
+        Modal.close();
+        Toast.show('מכולה רוקנה', 'success');
+        renderResults();
+      });
+    }
+
     Router.register('search', {
       onShow() {
         buildSuggestionPool();
@@ -3492,8 +3776,8 @@
 
     screen.innerHTML = `
       <div class="screen-header">
-        <span class="header-icon">🛒</span>
-        <h1>שינוע</h1>
+        <span class="header-icon">📍</span>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v2.1</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -3521,6 +3805,14 @@
           </div>
         </button>
 
+        <button class="hero-btn" id="main-map-edit">
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--focus) 12%, var(--card));color:var(--focus);">📝</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">עריכת מיפוי</div>
+            <div class="hero-btn-sub">ערוך את המיפוי כטקסט ושמור</div>
+          </div>
+        </button>
+
         <button class="hero-btn" id="main-map-import">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--brand-2) 15%, var(--card));color:var(--brand-2);">📋</div>
           <div class="hero-btn-body">
@@ -3540,17 +3832,11 @@
       </div>
     `;
 
-    // export — copy to clipboard
+    // export — copy + WhatsApp
     screen.querySelector('#main-export').addEventListener('click', async () => {
       const text = await Utils.generateExportText(DB.getRaw());
-      Utils.copyToClipboard(text)
-        .then(() => Toast.show('גיבוי הועתק ללוח', 'success'))
-        .catch(() => Modal.open({
-          title: 'ייצוא — העתקה ידנית',
-          html: `<p class="card-meta" style="margin-bottom:8px">לחץ על התיבה ובחר הכל:</p>
-                 <textarea rows="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:0.75rem;direction:ltr;text-align:left" readonly onclick="this.select()">${esc(text)}</textarea>`,
-          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
-        }));
+      Utils.shareOrCopy(text);
+      Toast.show('גיבוי הועתק ונשלח', 'success');
     });
 
     // import — paste via modal textarea
@@ -3595,6 +3881,43 @@
             actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
           });
         });
+    });
+
+    // map edit — open map text in editable textarea, save = replace all via map import
+    screen.querySelector('#main-map-edit').addEventListener('click', () => {
+      const raw = DB.load();
+      const mapText = Utils.generateMapText(raw);
+      Modal.open({
+        title: 'עריכת מיפוי',
+        html: `
+          <p class="card-meta" style="margin-bottom:10px">ערוך את המיפוי ולחץ שמור. השינויים ימוזגו לנתונים הקיימים.</p>
+          <textarea id="map-edit-area" rows="16"
+            style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
+                   font-size:0.82rem;font-family:monospace;direction:rtl;text-align:right;resize:vertical;line-height:1.6">${esc(mapText)}</textarea>
+        `,
+        actions: [
+          { id: 'save-map-edit', label: 'שמור', cls: 'btn-primary', onClick: () => {
+            const text = document.getElementById('map-edit-area').value.trim();
+            if (!text) { Toast.show('אין טקסט', 'error'); return; }
+            try {
+              const propDefs = DB.getMetadata().properties || [];
+              const blocks = _parseMap(text);
+              if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
+              const imported = _buildMapDB(blocks, propDefs);
+              DB.importJSON(JSON.stringify(imported), 'merge');
+              Modal.close();
+              Toast.show('מיפוי נשמר בהצלחה', 'success');
+            } catch(err) {
+              Toast.show('שגיאה: ' + err.message, 'error');
+            }
+          }},
+          { id: 'copy-map-edit', label: 'העתק', cls: 'btn-outline', onClick: () => {
+            const text = document.getElementById('map-edit-area').value;
+            Utils.copyToClipboard(text).then(() => Toast.show('הועתק ללוח', 'success'));
+          }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
+      });
     });
 
     // map import — parse map text and merge into DB
