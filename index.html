@@ -3642,7 +3642,7 @@
       let multilineCart = null, blockStarted = false;
 
       function flushEntries() {
-        if (entries.length && location !== null) {
+        if (location !== null) {
           results.push({ location, subLocation, entries: entries.slice() });
         }
         entries = [];
