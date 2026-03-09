@@ -1467,16 +1467,36 @@
   }
 
   // ── Location + conditional sublocation ──
-  // Shows subGroup only when the chosen location has saved sublocations.
+  // For non-map locations: autocomplete also offers "loc / subloc" combined entries.
+  // Selecting a combined entry auto-fills both fields.
   function setupLocationFields(locInput, subGroup, subInput) {
-    makeAutocomplete(locInput, () => DB.getMetadata().locations.map(l => l.name));
+    makeAutocomplete(locInput, () => {
+      const locs = DB.getMetadata().locations;
+      const suggestions = [];
+      for (const l of locs) {
+        suggestions.push(l.name);
+        if (!l.inMap && l.subLocations && l.subLocations.length) {
+          for (const sub of l.subLocations) suggestions.push(`${l.name} / ${sub}`);
+        }
+      }
+      return suggestions;
+    });
     makeAutocomplete(subInput, () => {
       const loc = DB.getMetadata().locations.find(l => l.name === locInput.value.trim());
       return (loc && loc.subLocations) || [];
     });
 
     function updateSub() {
-      const loc  = DB.getMetadata().locations.find(l => l.name === locInput.value.trim());
+      let locName = locInput.value.trim();
+      const sepIdx = locName.indexOf(' / ');
+      if (sepIdx !== -1) {
+        const mainLoc = locName.slice(0, sepIdx);
+        const subVal  = locName.slice(sepIdx + 3);
+        locInput.value = mainLoc;
+        locName = mainLoc;
+        subInput.value = subVal;
+      }
+      const loc  = DB.getMetadata().locations.find(l => l.name === locName);
       const subs = loc && loc.subLocations && loc.subLocations.length;
       subGroup.hidden = !subs;
       if (!subs) subInput.value = '';
