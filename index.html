@@ -4012,7 +4012,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v25</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v26</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -4392,13 +4392,32 @@
         propDefs.forEach((p, i) => { result[p.name] = i < tokens.length ? tokens[i] : ''; });
         return result;
       }
+      // Build candidate list: { lower, canonical, propName } sorted longest-first
+      const candidates = [];
+      for (const prop of propDefs) {
+        for (const opt of (prop.options || [])) {
+          candidates.push({ lower: opt.toLowerCase(), canonical: opt, propName: prop.name });
+          // include aliases
+          if (prop.aliases && prop.aliases[opt]) {
+            for (const alias of prop.aliases[opt]) {
+              if (alias.trim()) candidates.push({ lower: alias.toLowerCase().trim(), canonical: opt, propName: prop.name });
+            }
+          }
+        }
+      }
+      candidates.sort((a, b) => b.lower.length - a.lower.length);
+
       const result = {}, assigned = new Set();
-      for (const token of tokens) {
-        const tk = token.toLowerCase();
-        for (const prop of propDefs) {
-          if (assigned.has(prop.name)) continue;
-          const match = (prop.options || []).find(o => o.toLowerCase() === tk);
-          if (match) { result[prop.name] = match; assigned.add(prop.name); break; }
+      const rawLower = (raw || '').toLowerCase();
+      // Greedy longest-match: scan raw string for each candidate
+      for (const c of candidates) {
+        if (assigned.has(c.propName)) continue;
+        // Check if candidate appears as whole word(s) in the raw string
+        const escaped = c.lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp('(?:^|\\s)' + escaped + '(?:\\s|$)');
+        if (re.test(rawLower)) {
+          result[c.propName] = c.canonical;
+          assigned.add(c.propName);
         }
       }
       return result;
