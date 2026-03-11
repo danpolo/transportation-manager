@@ -1465,6 +1465,7 @@
 
     let _isOpen = false;
     let _interacting = false; // true while user is touching/scrolling the dropdown
+    let _didScroll = false;   // true if touchmove fired (scroll gesture, not tap)
 
     function position() {
       const r = input.getBoundingClientRect();
@@ -1489,7 +1490,7 @@
           hide();
         };
         item.addEventListener('mousedown', e => { e.preventDefault(); pick(); });
-        item.addEventListener('touchend',  e => { e.preventDefault(); pick(); });
+        item.addEventListener('touchend',  e => { if (_didScroll) return; e.preventDefault(); pick(); });
       });
     }
 
@@ -1498,7 +1499,8 @@
     // Prevent dropdown's own scroll from closing it; only close on outside scroll
     dropdown.addEventListener('scroll', e => { e.stopPropagation(); }, { passive: true });
     // Track touch interaction on dropdown to prevent blur from closing it
-    dropdown.addEventListener('touchstart', () => { _interacting = true; }, { passive: true });
+    dropdown.addEventListener('touchstart', () => { _interacting = true; _didScroll = false; }, { passive: true });
+    dropdown.addEventListener('touchmove', () => { _didScroll = true; }, { passive: true });
     dropdown.addEventListener('touchend', () => { setTimeout(() => { _interacting = false; }, 100); }, { passive: true });
     dropdown.addEventListener('mousedown', () => { _interacting = true; });
     dropdown.addEventListener('mouseup', () => { setTimeout(() => { _interacting = false; }, 100); });
@@ -4010,7 +4012,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v20</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v21</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
