@@ -3638,7 +3638,7 @@
       const addItem = (item, type) => {
         const locKey = item.location || 'ללא מיקום';
         const subKey = item.subLocation || '';
-        const gk = locKey + '\0' + subKey;
+        const gk = locKey + '||' + subKey;
         if (!groups[gk]) groups[gk] = { loc: locKey, sub: subKey, items: [] };
         groups[gk].items.push({ data: item, type });
       };
@@ -3646,8 +3646,8 @@
       fis.forEach(fi   => addItem(fi, 'fi'));
 
       const sortedGroups = Object.values(groups).sort((a,b) => {
-        const aKey = a.loc + '\0' + a.sub;
-        const bKey = b.loc + '\0' + b.sub;
+        const aKey = a.loc + '||' + a.sub;
+        const bKey = b.loc + '||' + b.sub;
         const aPin = _pinnedGroups.has(aKey) ? 0 : 1;
         const bPin = _pinnedGroups.has(bKey) ? 0 : 1;
         if (aPin !== bPin) return aPin - bPin;
@@ -3655,7 +3655,7 @@
       });
 
       results.innerHTML = sortedGroups.map(g => {
-        const gKey = g.loc + '\0' + g.sub;
+        const gKey = g.loc + '||' + g.sub;
         const isPinned = _pinnedGroups.has(gKey);
         return `
         <div class="loc-group">
@@ -3757,7 +3757,7 @@
       const addItem = (item, type) => {
         const locKey = item.location || 'ללא מיקום';
         const subKey = item.subLocation || '';
-        const gk = locKey + '\0' + subKey;
+        const gk = locKey + '||' + subKey;
         if (!groups[gk]) groups[gk] = { loc: locKey, sub: subKey, items: [] };
         groups[gk].items.push({ data: item, type });
       };
@@ -4012,7 +4012,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v26</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v27</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
