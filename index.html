@@ -2956,20 +2956,14 @@
             <button id="lu-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
           </div>
 
-          <!-- floor source sub-section: pick by location + properties + serial number -->
+          <!-- floor source sub-section: multi-slot with auto-fill -->
           <div id="lu-floor-src-section" hidden>
             <div class="form-group">
               <label class="form-label">מיקום מקור</label>
               <input id="lu-src-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
-            <div id="lu-floor-src-props" class="mt-12"></div>
-            <div id="lu-floor-avail" class="card" style="margin:14px 0;" hidden>
-              <div id="lu-floor-avail-text"></div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">מספר סידורי</label>
-              <input id="lu-floor-serial" class="form-input" placeholder="הקלד מספר סידורי..." autocomplete="off">
-            </div>
+            <div id="lu-floor-slots-container"></div>
+            <button id="lu-floor-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
           </div>
 
           <!-- optional destination for move -->
@@ -3009,7 +3003,6 @@
 
     let _op            = 'load';  // 'load' | 'unload'
     let _loadType      = 'new';   // 'new'  | 'floor'
-    let _floorSrc      = null;    // { location, properties, availableCount, allIds }
     let _srcCart       = null;    // source cart object (unload mode)
     let _unloadCartRef = null;
 
@@ -3023,26 +3016,185 @@
       screen.querySelector('#lu-unload-dest-subloc')
     );
 
-    buildPropertyFields(screen.querySelector('#lu-floor-src-props'), {});
+    // ── Floor slot helpers ──────────────────────────────────────────
+    function _getFloorLoc() { return screen.querySelector('#lu-src-loc').value.trim(); }
 
-    // ── Floor source (load-from-floor mode) ──
-    function updateFloorSrc() {
-      const loc   = screen.querySelector('#lu-src-loc').value.trim();
-      const props = readPropertyFields(screen.querySelector('#lu-floor-src-props'));
-      const avail = screen.querySelector('#lu-floor-avail');
-      if (!loc) { avail.hidden = true; _floorSrc = null; return; }
-      const fi     = DB.findFloorItem(loc, props);
-      const total  = fi ? (fi.itemCount || 0) : 0;
-      const allIds = fi ? (fi.itemIds || []) : [];
-      _floorSrc = { location: loc, properties: props, availableCount: total, allIds };
-      avail.hidden = false;
-      screen.querySelector('#lu-floor-avail-text').innerHTML =
-        `<div class="card-title">זמין: ${total} פריטים</div><div class="card-meta">${esc(loc)}</div>`;
-      makeAutocomplete(screen.querySelector('#lu-floor-serial'), () => allIds);
+    // Find all floor items at the current location
+    function _floorItemsAtLoc() {
+      const loc = _getFloorLoc();
+      if (!loc) return [];
+      return DB.getAllFloorItems().filter(fi => fi.location === loc && !fi.isEmpty);
     }
 
-    screen.querySelector('#lu-src-loc').addEventListener('change', updateFloorSrc);
-    screen.querySelector('#lu-floor-src-props').addEventListener('change', updateFloorSrc);
+    // Find a serial across ALL floor items
+    function _findSerialAnywhere(serial) {
+      for (const fi of DB.getAllFloorItems()) {
+        if ((fi.itemIds || []).includes(serial)) return fi;
+      }
+      return null;
+    }
+
+    function _getFloorAvail(props) {
+      const loc = _getFloorLoc();
+      if (!loc) return { count: 0, ids: [] };
+      const fi = DB.findFloorItem(loc, props);
+      return { count: fi ? (fi.itemCount || 0) : 0, ids: fi ? (fi.itemIds || []) : [] };
+    }
+
+    function makeFloorSlotEl(idx) {
+      const div = document.createElement('div');
+      div.className = 'item-slot-card floor-slot';
+      div.dataset.slotIdx = String(idx);
+      div.innerHTML = `
+        <div class="item-slot-header">
+          <span class="card-meta" style="font-weight:600"></span>
+          <button class="btn-icon floor-slot-del-btn" title="הסר סוג" style="font-size:1rem;padding:0 4px">✕</button>
+        </div>
+        <div class="floor-slot-props"></div>
+        <div class="floor-slot-avail card" style="margin:8px 0;display:none"></div>
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">כמות</label>
+          <input class="form-input floor-slot-count" type="number" min="0" placeholder="0" value="0">
+        </div>
+        <div class="item-rows floor-slot-rows"></div>
+      `;
+      const propsContainer = div.querySelector('.floor-slot-props');
+      buildPropertyFields(propsContainer, {});
+
+      const availEl = div.querySelector('.floor-slot-avail');
+      const countInput = div.querySelector('.floor-slot-count');
+      const rowsContainer = div.querySelector('.floor-slot-rows');
+
+      // Update availability + serial autocomplete when props change
+      function refreshAvail() {
+        const loc = _getFloorLoc();
+        const props = readPropertyFields(propsContainer);
+        if (!loc) { availEl.style.display = 'none'; return; }
+        const { count, ids } = _getFloorAvail(props);
+        availEl.style.display = '';
+        availEl.innerHTML = `<div class="card-title">זמין: ${count} פריטים</div><div class="card-meta">${esc(loc)}</div>`;
+        // Update autocomplete on existing serial inputs
+        div.querySelectorAll('.item-id-input').forEach(inp => {
+          makeAutocomplete(inp, () => ids);
+        });
+      }
+
+      propsContainer.addEventListener('change', refreshAvail);
+
+      // Render serial rows when count changes
+      countInput.addEventListener('input', () => {
+        const n = parseInt(countInput.value) || 0;
+        const prev = [...div.querySelectorAll('.item-id-input')].map(i => i.value);
+        renderFloorSerialRows(div, n, prev);
+      });
+
+      // Delete slot
+      div.querySelector('.floor-slot-del-btn').addEventListener('click', () => {
+        const parent = div.parentElement;
+        div.remove();
+        renumberFloorSlots(parent);
+      });
+
+      return div;
+    }
+
+    function renderFloorSerialRows(slotEl, n, existing) {
+      const container = slotEl.querySelector('.floor-slot-rows');
+      const propsContainer = slotEl.querySelector('.floor-slot-props');
+      const loc = _getFloorLoc();
+      const props = readPropertyFields(propsContainer);
+      const { ids } = _getFloorAvail(props);
+      const rows = [];
+      for (let i = 0; i < n; i++) {
+        rows.push(`
+          <div class="item-row">
+            <span class="item-row-num">${i+1}</span>
+            <input class="item-id-input floor-serial-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
+          </div>
+        `);
+      }
+      container.innerHTML = rows.join('');
+      // Autocomplete on each serial input + auto-fill props on blur
+      container.querySelectorAll('.floor-serial-input').forEach(inp => {
+        makeAutocomplete(inp, () => ids);
+        inp.addEventListener('change', () => {
+          const serial = inp.value.trim();
+          if (!serial) return;
+          autoFillPropsFromSerial(slotEl, serial);
+        });
+      });
+    }
+
+    // When a serial is entered, find it in DB and auto-select its properties
+    function autoFillPropsFromSerial(slotEl, serial) {
+      const loc = _getFloorLoc();
+      const allFIs = DB.getAllFloorItems();
+      // First try at current location
+      let found = allFIs.find(fi => fi.location === loc && (fi.itemIds || []).includes(serial));
+      if (!found) {
+        // Try anywhere
+        found = allFIs.find(fi => (fi.itemIds || []).includes(serial));
+      }
+      if (found && found.properties) {
+        const propsContainer = slotEl.querySelector('.floor-slot-props');
+        propsContainer.querySelectorAll('select[name]').forEach(sel => {
+          const val = found.properties[sel.name];
+          if (val) {
+            sel.value = val;
+          }
+        });
+        // Trigger change to refresh availability
+        propsContainer.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+
+    function renumberFloorSlots(container) {
+      if (!container) return;
+      const slots = container.querySelectorAll('.floor-slot');
+      slots.forEach((el, idx) => {
+        el.dataset.slotIdx = String(idx);
+        const lbl = el.querySelector('.item-slot-header span');
+        if (lbl) lbl.textContent = idx === 0 ? 'סוג ראשון' : `סוג ${idx + 1}`;
+        const del = el.querySelector('.floor-slot-del-btn');
+        if (del) del.hidden = (slots.length === 1);
+      });
+    }
+
+    function readFloorSlot(slotEl) {
+      const count      = parseInt(slotEl.querySelector('.floor-slot-count').value) || 0;
+      const itemIds    = [...slotEl.querySelectorAll('.floor-serial-input')].map(i => i.value.trim()).filter(Boolean);
+      const properties = readPropertyFields(slotEl.querySelector('.floor-slot-props'));
+      return { properties, itemCount: count, itemIds };
+    }
+
+    function readAllFloorSlots() {
+      return [...screen.querySelectorAll('#lu-floor-slots-container .floor-slot')].map(readFloorSlot);
+    }
+
+    function initFloorSlots() {
+      const container = screen.querySelector('#lu-floor-slots-container');
+      container.innerHTML = '';
+      container.appendChild(makeFloorSlotEl(0));
+      renumberFloorSlots(container);
+    }
+
+    // Init floor slots
+    initFloorSlots();
+
+    screen.querySelector('#lu-floor-add-slot-btn').addEventListener('click', () => {
+      const container = screen.querySelector('#lu-floor-slots-container');
+      const idx = container.querySelectorAll('.floor-slot').length;
+      container.appendChild(makeFloorSlotEl(idx));
+      renumberFloorSlots(container);
+    });
+
+    // Refresh all floor slots when location changes
+    screen.querySelector('#lu-src-loc').addEventListener('change', () => {
+      screen.querySelectorAll('#lu-floor-slots-container .floor-slot').forEach(slot => {
+        const propsContainer = slot.querySelector('.floor-slot-props');
+        propsContainer.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    });
 
     function renderItemRows(container, n, existing) {
       const rows = [];
@@ -3158,8 +3310,6 @@
         b.classList.toggle('active', b.dataset.lt === lt));
       screen.querySelector('#lu-new-item-section').hidden  = (lt !== 'new');
       screen.querySelector('#lu-floor-src-section').hidden = (lt !== 'floor');
-      _floorSrc = null;
-      screen.querySelector('#lu-floor-avail').hidden = true;
     }
 
     screen.querySelector('#lu-op-toggle').addEventListener('click', e => {
@@ -3190,7 +3340,22 @@
     });
 
     // ── load save logic ──
-    function doLoadSave() {
+    function _confirmUnknownSerial(serial, loc, props) {
+      return new Promise(resolve => {
+        const propStr = Object.values(props).filter(Boolean).join(' ');
+        Modal.open({
+          title: 'מספר סידורי לא נמצא',
+          html: `<p class="card-meta">"${esc(serial)}" לא נמצא ב${esc(loc)}${propStr ? ' (' + esc(propStr) + ')' : ''}.</p>
+                 <p class="card-meta" style="margin-top:8px">להמשיך בכל זאת? אם הפריט קיים במיקום אחר הוא יועבר.</p>`,
+          actions: [
+            { id: 'yes', label: 'כן, המשך', cls: 'btn-primary', onClick: () => { Modal.close(); resolve(true); } },
+            { id: 'no', label: 'ביטול', onClick: () => { Modal.close(); resolve(false); } }
+          ]
+        });
+      });
+    }
+
+    async function doLoadSave() {
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
       const destCartId = rawDest.replace(/\([^)]+\)\s*$/, '').trim();
       if (!destCartId) { Toast.show('יש להזין יעד להעמסה', 'error'); return null; }
@@ -3221,34 +3386,90 @@
         Toast.show('פריטים הועמסו', 'success');
         initEmptySlots(slotsContainer);
       } else {
-        if (!_floorSrc) { Toast.show('יש להזין מיקום מקור', 'error'); return null; }
-        const serial = screen.querySelector('#lu-floor-serial').value.trim();
-        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return null; }
+        // Floor mode: multi-slot
+        const loc = _getFloorLoc();
+        if (!loc) { Toast.show('יש להזין מיקום מקור', 'error'); return null; }
+        const floorSlots = readAllFloorSlots();
+        if (!floorSlots.some(s => s.itemCount > 0)) { Toast.show('יש להזין כמות', 'error'); return null; }
 
-        const srcFI       = DB.findFloorItem(_floorSrc.location, _floorSrc.properties);
-        const existsInSrc = srcFI && (srcFI.itemIds || []).includes(serial);
-        if (existsInSrc) {
-          const remaining = Math.max(0, (srcFI.itemCount || 0) - 1);
-          const remainIds = (srcFI.itemIds || []).filter(id => id !== serial);
-          DB.upsertFloorItem({ location: _floorSrc.location, properties: _floorSrc.properties,
-                               itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
+        // Validate serials — check for unknowns
+        for (const slot of floorSlots) {
+          const srcFI = DB.findFloorItem(loc, slot.properties);
+          const knownIds = srcFI ? (srcFI.itemIds || []) : [];
+          const allKnown = knownIds.length >= (srcFI ? (srcFI.itemCount || 0) : 0);
+          for (const serial of slot.itemIds) {
+            if (!knownIds.includes(serial) && allKnown && knownIds.length > 0) {
+              // All serials are tracked and this one isn't among them
+              const ok = await _confirmUnknownSerial(serial, loc, slot.properties);
+              if (!ok) return null;
+              // Check if it exists elsewhere — if so it will be moved automatically below
+            }
+          }
         }
-        const props = _floorSrc.properties;
-        const existingCart  = DB.getCart(destCartId);
-        const existingIds   = existingCart ? (existingCart.itemIds || []) : [];
-        const existingCount = existingCart ? (existingCart.itemCount || 0) : 0;
-        DB.upsertCart({ cartId: destCartId, itemCount: existingCount + 1,
-                        itemIds: [...existingIds, serial], properties: props, isEmpty: false });
+
+        // Process each floor slot
+        const msgLines = [];
+        for (const slot of floorSlots) {
+          if (!slot.itemCount) continue;
+          const props = slot.properties;
+
+          // Remove from source floor
+          const srcFI = DB.findFloorItem(loc, props);
+          if (srcFI) {
+            const remainIds = (srcFI.itemIds || []).filter(id => !slot.itemIds.includes(id));
+            const remaining = Math.max(0, (srcFI.itemCount || 0) - slot.itemCount);
+            DB.upsertFloorItem({ location: loc, properties: props,
+                                 itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
+          }
+
+          // For serials not found at source, check other locations and move them
+          for (const serial of slot.itemIds) {
+            const srcHas = srcFI && (srcFI.itemIds || []).includes(serial);
+            if (!srcHas) {
+              const otherFI = _findSerialAnywhere(serial);
+              if (otherFI) {
+                const oRemainIds = (otherFI.itemIds || []).filter(id => id !== serial);
+                const oRemain = Math.max(0, (otherFI.itemCount || 0) - 1);
+                DB.upsertFloorItem({ location: otherFI.location, properties: otherFI.properties,
+                                     subLocation: otherFI.subLocation,
+                                     itemCount: oRemain, itemIds: oRemainIds, isEmpty: oRemain === 0 });
+              }
+            }
+          }
+
+          // Build message part
+          const ps = Object.values(props).filter(Boolean).join(' ');
+          msgLines.push(`${slot.itemCount}${ps ? ' ' + ps : ''}`);
+          slot.itemIds.forEach(id => msgLines.push(id));
+        }
+
+        // Add all items to destination cart
+        const existingCart = DB.getCart(destCartId);
+        const slot0 = floorSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
+        const extras = floorSlots.slice(1).filter(s => s.itemCount > 0);
+
+        if (floorSlots.length === 1) {
+          // Single slot: merge into cart
+          const existingIds = existingCart ? (existingCart.itemIds || []) : [];
+          const existingCount = existingCart ? (existingCart.itemCount || 0) : 0;
+          DB.upsertCart({ cartId: destCartId,
+                          itemCount: existingCount + slot0.itemCount,
+                          itemIds: [...existingIds, ...slot0.itemIds],
+                          properties: slot0.properties, isEmpty: false });
+        } else {
+          // Multi-slot: set as main slot + extras
+          DB.upsertCart({ cartId: destCartId,
+                          itemCount: slot0.itemCount, itemIds: slot0.itemIds,
+                          properties: slot0.properties, extraItems: extras, isEmpty: false });
+        }
 
         const destCart = DB.getCart(destCartId);
-        const label    = destCart ? cartLabel(destCart) : destCartId;
-        const propStr  = Object.values(props).filter(Boolean).join(' ');
-        const ctName2 = destCart ? containerName(destCart) : 'עגלה';
-        const loc2 = destCart ? (destCart.location || '?') : '?';
-        msg = [`${ctName2} ${label}`, `מועמסת ב${loc2}`, `1${propStr ? ' ' + propStr : ''}`, serial].join('\n');
-        Toast.show('פריט הועמס מרצפה', 'success');
-        screen.querySelector('#lu-floor-serial').value = '';
-        updateFloorSrc();
+        const label = destCart ? cartLabel(destCart) : destCartId;
+        const ctName = destCart ? containerName(destCart) : 'עגלה';
+        const cartLoc = destCart ? (destCart.location || '?') : '?';
+        msg = [`${ctName} ${label}`, `מועמסת ב${cartLoc}`, ...msgLines].join('\n');
+        Toast.show('פריטים הועמסו מרצפה', 'success');
+        initFloorSlots();
       }
       // Optional destination — move cart and append to message
       const moveDest = screen.querySelector('#lu-load-move-dest').value.trim();
@@ -3261,12 +3482,12 @@
       return msg;
     }
 
-    screen.querySelector('#lu-load-save-btn').addEventListener('click', () => {
-      const msg = doLoadSave();
+    screen.querySelector('#lu-load-save-btn').addEventListener('click', async () => {
+      const msg = await doLoadSave();
       if (msg) copyMsg(msg);
     });
-    screen.querySelector('#lu-load-save-only').addEventListener('click', () => {
-      doLoadSave();
+    screen.querySelector('#lu-load-save-only').addEventListener('click', async () => {
+      await doLoadSave();
     });
 
     // ── unload save logic ──
@@ -3352,8 +3573,12 @@
             const fi = DB.getFloorItem(floorItemId);
             if (fi) {
               screen.querySelector('#lu-src-loc').value = fi.location || '';
-              buildPropertyFields(screen.querySelector('#lu-floor-src-props'), fi.properties || {});
-              updateFloorSrc();
+              // Set properties on first floor slot
+              const firstSlot = screen.querySelector('#lu-floor-slots-container .floor-slot');
+              if (firstSlot) {
+                buildPropertyFields(firstSlot.querySelector('.floor-slot-props'), fi.properties || {});
+                firstSlot.querySelector('.floor-slot-props').dispatchEvent(new Event('change', { bubbles: true }));
+              }
             }
           }, 50);
         }
@@ -4123,7 +4348,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v30</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v31</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
