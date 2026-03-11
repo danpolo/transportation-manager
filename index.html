@@ -3522,7 +3522,7 @@
     }
 
     // ── Filter logic ──────────────────────────────────────────────
-    function buildSearchableText(item) {
+    function buildSearchableParts(item) {
       const parts = [item.cartId, item.location, item.subLocation,
         item.cartType, item.containerType, item.comment || '',
         ...Object.values(item.properties || {}).filter(Boolean),
@@ -3534,15 +3534,36 @@
         });
       }
       if (item.itemCount != null) parts.push(String(item.itemCount));
-      return parts.filter(Boolean).join(' ').toLowerCase();
+      return parts.filter(Boolean).map(p => p.toLowerCase());
+    }
+
+    function termMatchesParts(term, parts) {
+      // Match if any part equals the term exactly, or if a multi-word part
+      // contains the term as a whole word (not as substring within a hyphenated/compound word)
+      for (const part of parts) {
+        if (part === term) return true;
+        // Check whole-word match: term must be bounded by start/end or whitespace
+        if (part.length > term.length) {
+          const idx = part.indexOf(term);
+          if (idx === -1) continue;
+          let pos = idx;
+          while (pos !== -1) {
+            const before = pos === 0 || part[pos - 1] === ' ';
+            const after = (pos + term.length) === part.length || part[pos + term.length] === ' ';
+            if (before && after) return true;
+            pos = part.indexOf(term, pos + 1);
+          }
+        }
+      }
+      return false;
     }
 
     function itemPasses(item) {
       if (state.emptyOnly && !item.isEmpty) return false;
       if (!state.includeTerms.length && !state.excludeTerms.length) return true;
-      const text = buildSearchableText(item);
-      for (const t of state.includeTerms) { if (!text.includes(t)) return false; }
-      for (const t of state.excludeTerms) { if (text.includes(t)) return false; }
+      const parts = buildSearchableParts(item);
+      for (const t of state.includeTerms) { if (!termMatchesParts(t, parts)) return false; }
+      for (const t of state.excludeTerms) { if (termMatchesParts(t, parts)) return false; }
       return true;
     }
 
@@ -4068,7 +4089,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v28</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v29</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
