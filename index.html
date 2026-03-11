@@ -1463,6 +1463,9 @@
     dropdown.style.cssText = 'position:fixed;z-index:300;display:none';
     document.body.appendChild(dropdown);
 
+    let _isOpen = false;
+    let _interacting = false; // true while user is touching/scrolling the dropdown
+
     function position() {
       const r = input.getBoundingClientRect();
       dropdown.style.top   = r.bottom + 'px';
@@ -1478,6 +1481,7 @@
       position();
       dropdown.innerHTML = filtered.map(o => `<div class="ac-item">${esc(o)}</div>`).join('');
       dropdown.style.display = '';
+      _isOpen = true;
       dropdown.querySelectorAll('.ac-item').forEach((item, i) => {
         const pick = () => {
           input.value = filtered[i];
@@ -1489,24 +1493,63 @@
       });
     }
 
-    function hide() { dropdown.style.display = 'none'; dropdown.innerHTML = ''; }
+    function hide() { dropdown.style.display = 'none'; dropdown.innerHTML = ''; _isOpen = false; _interacting = false; }
 
-    // Close dropdown on scroll (prevents detachment from input)
-    function onScroll() { if (dropdown.style.display !== 'none') hide(); }
+    // Prevent dropdown's own scroll from closing it; only close on outside scroll
+    dropdown.addEventListener('scroll', e => { e.stopPropagation(); }, { passive: true });
+    // Track touch interaction on dropdown to prevent blur from closing it
+    dropdown.addEventListener('touchstart', () => { _interacting = true; }, { passive: true });
+    dropdown.addEventListener('touchend', () => { setTimeout(() => { _interacting = false; }, 100); }, { passive: true });
+    dropdown.addEventListener('mousedown', () => { _interacting = true; });
+    dropdown.addEventListener('mouseup', () => { setTimeout(() => { _interacting = false; }, 100); });
+
+    // Close dropdown on outside scroll — but not on the dropdown's own scroll
+    function onOutsideScroll(e) {
+      if (!_isOpen) return;
+      if (dropdown.contains(e.target)) return;
+      // Reposition instead of hiding, so scrolling the page keeps the dropdown aligned
+      position();
+    }
     function addScrollListeners() {
       let el = input.parentElement;
-      while (el) { el.addEventListener('scroll', onScroll, { passive: true }); el = el.parentElement; }
-      window.addEventListener('scroll', onScroll, { passive: true });
+      while (el) { el.addEventListener('scroll', onOutsideScroll, { passive: true }); el = el.parentElement; }
+      window.addEventListener('scroll', onOutsideScroll, { passive: true });
     }
     function removeScrollListeners() {
       let el = input.parentElement;
-      while (el) { el.removeEventListener('scroll', onScroll); el = el.parentElement; }
-      window.removeEventListener('scroll', onScroll);
+      while (el) { el.removeEventListener('scroll', onOutsideScroll); el = el.parentElement; }
+      window.removeEventListener('scroll', onOutsideScroll);
     }
 
-    input.addEventListener('input',   render);
-    input.addEventListener('focus',   () => { addScrollListeners(); render(); });
-    input.addEventListener('blur',    () => { setTimeout(hide, 200); removeScrollListeners(); });
+    // Close on tap outside (not on the dropdown or input)
+    function onDocumentTouch(e) {
+      if (!_isOpen) return;
+      if (dropdown.contains(e.target) || input.contains(e.target)) return;
+      hide();
+    }
+    function onDocumentMousedown(e) {
+      if (!_isOpen) return;
+      if (dropdown.contains(e.target) || input.contains(e.target)) return;
+      hide();
+    }
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', () => {
+      addScrollListeners();
+      document.addEventListener('touchstart', onDocumentTouch, { passive: true });
+      document.addEventListener('mousedown', onDocumentMousedown);
+      render();
+    });
+    input.addEventListener('blur', () => {
+      // Only hide if not interacting with the dropdown
+      setTimeout(() => {
+        if (!_interacting) hide();
+        removeScrollListeners();
+        document.removeEventListener('touchstart', onDocumentTouch);
+        document.removeEventListener('mousedown', onDocumentMousedown);
+      }, 200);
+    });
+    input.addEventListener('click', () => { if (!_isOpen) render(); });
     input.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
   }
 
