@@ -2670,7 +2670,7 @@
         rows.push(`
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
-            <input class="floor-serial-input" placeholder="מספר סידורי" value="${esc(existingIds[i] || '')}">
+            <input class="item-id-input floor-serial-input" placeholder="מספר סידורי" value="${esc(existingIds[i] || '')}">
           </div>
         `);
       }
@@ -2827,7 +2827,7 @@
         const propStr = Object.values(_currentData.properties || {}).filter(Boolean).join(' ');
         const floorFrom = _currentData.subLocation || _currentData.location || '?';
         const floorTo   = destSubLoc || destLoc;
-        const serialStr = serials.length ? '\n' + serials.join(', ') : '';
+        const serialStr = serials.length ? '\n' + serials.join('\n') : '';
         msg = `[רצפה] ${moveCount} ${propStr}\nמ${floorFrom} ל${floorTo}${serialStr}`.trim();
         Toast.show(moveCount + ' פריטי רצפה הועברו', 'success');
         screen.querySelector('#tr-floor-count').value = '';
@@ -4012,7 +4012,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v22</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v24</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
