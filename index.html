@@ -2931,6 +2931,7 @@
         <div class="form-group">
           <div class="pill-toggle" id="lu-op-toggle">
             <button class="active" data-op="load">העמסה</button>
+            <button data-op="container">משטח על עגלה</button>
             <button data-op="unload">פירוק</button>
           </div>
         </div>
@@ -2974,6 +2975,29 @@
           <div style="display:flex;gap:8px;margin-top:16px">
             <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">שמור</button>
             <button id="lu-load-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+          </div>
+        </div>
+
+        <!-- ═══ CONTAINER ON CART SECTION ═══ -->
+        <div id="lu-container-section" hidden>
+          <div class="form-group">
+            <label class="form-label">מספר משטח / מכולה</label>
+            <input id="lu-ct-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
+          </div>
+          <div id="lu-ct-info" class="card" style="margin:0 0 14px;display:none"></div>
+          <div id="lu-ct-slots-container"></div>
+          <button id="lu-ct-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label">טעינה על עגלה</label>
+            <input id="lu-ct-parent-cart" class="form-input" placeholder="מספר עגלה" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label">יעד העברה (אופציונלי)</label>
+            <input id="lu-ct-move-dest" class="form-input" placeholder="העברה ל..." autocomplete="off">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button id="lu-ct-save-only" class="btn btn-outline" style="flex:1">שמור</button>
+            <button id="lu-ct-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
           </div>
         </div>
 
@@ -3300,8 +3324,9 @@
       _op = op;
       screen.querySelectorAll('#lu-op-toggle button').forEach(b =>
         b.classList.toggle('active', b.dataset.op === op));
-      screen.querySelector('#lu-load-section').hidden   = (op !== 'load');
-      screen.querySelector('#lu-unload-section').hidden = (op !== 'unload');
+      screen.querySelector('#lu-load-section').hidden      = (op !== 'load');
+      screen.querySelector('#lu-container-section').hidden = (op !== 'container');
+      screen.querySelector('#lu-unload-section').hidden    = (op !== 'unload');
     }
 
     function setLoadType(lt) {
@@ -3320,6 +3345,136 @@
     screen.querySelector('#lu-load-type-toggle').addEventListener('click', e => {
       const btn = e.target.closest('button[data-lt]');
       if (btn) setLoadType(btn.dataset.lt);
+    });
+
+    // ── Container on cart section ──────────────────────────────────
+    let _ctCart = null; // the container cart object once loaded
+    const ctIdInput = screen.querySelector('#lu-ct-id');
+    const ctInfoEl  = screen.querySelector('#lu-ct-info');
+    const ctSlotsContainer = screen.querySelector('#lu-ct-slots-container');
+
+    // Get non-default container types for autocomplete
+    function _containerCarts() {
+      return DB.getAllCarts().filter(c => c.containerType && c.containerType !== DEFAULT_CONTAINER);
+    }
+    makeAutocomplete(ctIdInput, () => _containerCarts().map(c => cartLabel(c)));
+    makeAutocomplete(screen.querySelector('#lu-ct-parent-cart'), () => DB.getAllCarts().filter(c => !c.containerType || c.containerType === DEFAULT_CONTAINER).map(c => cartLabel(c)));
+    makeAutocomplete(screen.querySelector('#lu-ct-move-dest'), () => DB.getMetadata().locations.map(l => l.name));
+
+    function initCtSlots() {
+      ctSlotsContainer.innerHTML = '';
+      ctSlotsContainer.appendChild(makeSlotEl(0, null));
+      renumberSlots(ctSlotsContainer);
+    }
+    initCtSlots();
+
+    screen.querySelector('#lu-ct-add-slot-btn').addEventListener('click', () => {
+      const idx = ctSlotsContainer.querySelectorAll('.item-slot-card').length;
+      ctSlotsContainer.appendChild(makeSlotEl(idx, null));
+      renumberSlots(ctSlotsContainer);
+    });
+
+    // When container ID is entered, look it up and auto-populate
+    function loadContainerCart() {
+      const raw = ctIdInput.value.trim();
+      const cid = raw.replace(/\([^)]+\)\s*$/, '').trim();
+      if (!cid) { ctInfoEl.style.display = 'none'; _ctCart = null; initCtSlots(); return; }
+      const cart = DB.getCart(cid);
+      _ctCart = cart;
+      if (cart) {
+        ctInfoEl.style.display = '';
+        const total = cartTotalCount(cart);
+        ctInfoEl.innerHTML = `
+          <div class="card-title">${esc(containerName(cart))}: ${esc(cartLabel(cart))}</div>
+          <div class="card-meta">מיקום: ${esc(cart.location || 'לא ידוע')} · ${total} פריטים</div>
+          ${cart.parentCartId ? `<div class="card-meta">טעון על: ${esc((() => { const p = DB.getCart(cart.parentCartId); return p ? cartLabel(p) : cart.parentCartId; })())}</div>` : ''}
+        `;
+        // Auto-populate slots with existing items
+        populateSlots(ctSlotsContainer, cart);
+      } else {
+        ctInfoEl.style.display = '';
+        ctInfoEl.innerHTML = `<div class="card-meta">מכולה חדשה: ${esc(cid)}</div>`;
+        initCtSlots();
+      }
+    }
+    ctIdInput.addEventListener('change', loadContainerCart);
+
+    // Container save logic
+    async function doContainerSave() {
+      const rawCtId = ctIdInput.value.trim();
+      const ctId = rawCtId.replace(/\([^)]+\)\s*$/, '').trim();
+      if (!ctId) { Toast.show('יש להזין מספר משטח / מכולה', 'error'); return null; }
+
+      const rawParent = screen.querySelector('#lu-ct-parent-cart').value.trim();
+      const parentCartId = rawParent.replace(/\([^)]+\)\s*$/, '').trim();
+      if (!parentCartId) { Toast.show('יש להזין מספר עגלה', 'error'); return null; }
+
+      // Read all slots
+      const allSlots = readAllSlots(ctSlotsContainer);
+      const slot0 = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
+      const extras = allSlots.slice(1);
+
+      // Determine container type
+      const existingCt = DB.getCart(ctId);
+      const ctType = existingCt ? (existingCt.containerType || 'משטח') : 'משטח';
+      const ctLocation = existingCt ? (existingCt.location || '') : '';
+
+      // Upsert the container cart with items and parent
+      DB.upsertCart({
+        cartId: ctId,
+        containerType: ctType,
+        itemCount: slot0.itemCount, itemIds: slot0.itemIds, properties: slot0.properties,
+        extraItems: extras,
+        parentCartId: parentCartId,
+        isEmpty: !allSlots.some(s => s.itemCount > 0)
+      });
+
+      // Make sure parent cart exists
+      const parentCart = DB.getCart(parentCartId);
+      if (!parentCart) {
+        DB.upsertCart({ cartId: parentCartId, containerType: DEFAULT_CONTAINER, isEmpty: true, itemCount: 0, itemIds: [], properties: {} });
+      }
+
+      // Build message
+      const destCart = DB.getCart(parentCartId);
+      const parentLabel = destCart ? cartLabel(destCart) : parentCartId;
+      const parentCtName = destCart ? containerName(destCart) : 'עגלה';
+      const loc = destCart ? (destCart.location || '?') : (ctLocation || '?');
+      const msgLines = [`${ctType} ${ctId}`, `טעון על ${parentCtName} ${parentLabel}`, `מיקום: ${loc}`];
+      allSlots.filter(sl => sl.itemCount).forEach(sl => {
+        const ps = Object.values(sl.properties).filter(Boolean).join(' ');
+        msgLines.push(`${sl.itemCount}${ps ? ' ' + ps : ''}`);
+        (sl.itemIds || []).forEach(id => msgLines.push(id));
+      });
+
+      // Optional destination — move parent cart
+      const moveDest = screen.querySelector('#lu-ct-move-dest').value.trim();
+      if (moveDest) {
+        DB.upsertCart({ cartId: parentCartId, location: moveDest });
+        // Also update container's location
+        DB.upsertCart({ cartId: ctId, location: moveDest });
+        msgLines.push('מועברת ל' + moveDest);
+      }
+
+      const msg = msgLines.join('\n');
+      Toast.show(ctType + ' הועמס על ' + parentCtName, 'success');
+
+      // Reset
+      ctIdInput.value = '';
+      screen.querySelector('#lu-ct-parent-cart').value = '';
+      screen.querySelector('#lu-ct-move-dest').value = '';
+      ctInfoEl.style.display = 'none';
+      _ctCart = null;
+      initCtSlots();
+      return msg;
+    }
+
+    screen.querySelector('#lu-ct-save-btn').addEventListener('click', async () => {
+      const msg = await doContainerSave();
+      if (msg) copyMsg(msg);
+    });
+    screen.querySelector('#lu-ct-save-only').addEventListener('click', async () => {
+      await doContainerSave();
     });
 
     // unload cart form
@@ -4348,7 +4503,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v31</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v32</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
