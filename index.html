@@ -1463,6 +1463,9 @@
     dropdown.style.cssText = 'position:fixed;z-index:300;display:none';
     document.body.appendChild(dropdown);
 
+    let _isOpen = false;
+    let _interacting = false; // true while user is touching/scrolling the dropdown
+
     function position() {
       const r = input.getBoundingClientRect();
       dropdown.style.top   = r.bottom + 'px';
@@ -1478,6 +1481,7 @@
       position();
       dropdown.innerHTML = filtered.map(o => `<div class="ac-item">${esc(o)}</div>`).join('');
       dropdown.style.display = '';
+      _isOpen = true;
       dropdown.querySelectorAll('.ac-item').forEach((item, i) => {
         const pick = () => {
           input.value = filtered[i];
@@ -1489,24 +1493,63 @@
       });
     }
 
-    function hide() { dropdown.style.display = 'none'; dropdown.innerHTML = ''; }
+    function hide() { dropdown.style.display = 'none'; dropdown.innerHTML = ''; _isOpen = false; _interacting = false; }
 
-    // Close dropdown on scroll (prevents detachment from input)
-    function onScroll() { if (dropdown.style.display !== 'none') hide(); }
+    // Prevent dropdown's own scroll from closing it; only close on outside scroll
+    dropdown.addEventListener('scroll', e => { e.stopPropagation(); }, { passive: true });
+    // Track touch interaction on dropdown to prevent blur from closing it
+    dropdown.addEventListener('touchstart', () => { _interacting = true; }, { passive: true });
+    dropdown.addEventListener('touchend', () => { setTimeout(() => { _interacting = false; }, 100); }, { passive: true });
+    dropdown.addEventListener('mousedown', () => { _interacting = true; });
+    dropdown.addEventListener('mouseup', () => { setTimeout(() => { _interacting = false; }, 100); });
+
+    // Close dropdown on outside scroll — but not on the dropdown's own scroll
+    function onOutsideScroll(e) {
+      if (!_isOpen) return;
+      if (dropdown.contains(e.target)) return;
+      // Reposition instead of hiding, so scrolling the page keeps the dropdown aligned
+      position();
+    }
     function addScrollListeners() {
       let el = input.parentElement;
-      while (el) { el.addEventListener('scroll', onScroll, { passive: true }); el = el.parentElement; }
-      window.addEventListener('scroll', onScroll, { passive: true });
+      while (el) { el.addEventListener('scroll', onOutsideScroll, { passive: true }); el = el.parentElement; }
+      window.addEventListener('scroll', onOutsideScroll, { passive: true });
     }
     function removeScrollListeners() {
       let el = input.parentElement;
-      while (el) { el.removeEventListener('scroll', onScroll); el = el.parentElement; }
-      window.removeEventListener('scroll', onScroll);
+      while (el) { el.removeEventListener('scroll', onOutsideScroll); el = el.parentElement; }
+      window.removeEventListener('scroll', onOutsideScroll);
     }
 
-    input.addEventListener('input',   render);
-    input.addEventListener('focus',   () => { addScrollListeners(); render(); });
-    input.addEventListener('blur',    () => { setTimeout(hide, 200); removeScrollListeners(); });
+    // Close on tap outside (not on the dropdown or input)
+    function onDocumentTouch(e) {
+      if (!_isOpen) return;
+      if (dropdown.contains(e.target) || input.contains(e.target)) return;
+      hide();
+    }
+    function onDocumentMousedown(e) {
+      if (!_isOpen) return;
+      if (dropdown.contains(e.target) || input.contains(e.target)) return;
+      hide();
+    }
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', () => {
+      addScrollListeners();
+      document.addEventListener('touchstart', onDocumentTouch, { passive: true });
+      document.addEventListener('mousedown', onDocumentMousedown);
+      render();
+    });
+    input.addEventListener('blur', () => {
+      // Only hide if not interacting with the dropdown
+      setTimeout(() => {
+        if (!_interacting) hide();
+        removeScrollListeners();
+        document.removeEventListener('touchstart', onDocumentTouch);
+        document.removeEventListener('mousedown', onDocumentMousedown);
+      }, 200);
+    });
+    input.addEventListener('click', () => { if (!_isOpen) render(); });
     input.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
   }
 
@@ -2449,8 +2492,12 @@
           `,
           actions: [
             { id: 'do-import-defs', label: 'ייבא', cls: 'btn-primary', onClick: () => {
-              const text = document.getElementById('ep-import-area').value.trim();
+              let text = document.getElementById('ep-import-area').value.trim();
               if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+              // Sanitize pasted text: remove BOM, zero-width chars, replace smart quotes
+              text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0]/g, '');
+              text = text.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"');
+              text = text.replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
               try {
                 const defs = JSON.parse(text);
                 // merge properties
@@ -2532,7 +2579,7 @@
           <div id="tr-cart-form-host"></div>
         </div>
 
-        <!-- floor mode: pick source by location + properties + serial number -->
+        <!-- floor mode: pick source by location + properties + batch transfer -->
         <div id="tr-floor-section" hidden>
           <div class="form-group">
             <label class="form-label">מיקום מקור</label>
@@ -2541,9 +2588,10 @@
           <div id="tr-floor-src-props" class="mt-12"></div>
           <div id="tr-floor-avail" class="card" style="margin:14px 0;" hidden></div>
           <div class="form-group">
-            <label class="form-label">מספר סידורי</label>
-            <input id="tr-floor-serial" class="form-input" placeholder="הקלד מספר סידורי..." autocomplete="off">
+            <label class="form-label">כמות להעברה</label>
+            <input id="tr-floor-count" class="form-input" type="number" min="0" placeholder="0">
           </div>
+          <div id="tr-floor-item-rows" class="item-rows"></div>
         </div>
 
         <!-- shared fields (destination + cart item fields) -->
@@ -2610,10 +2658,35 @@
       _currentType = 'fi';
       avail.hidden = false;
       avail.innerHTML = `<div class="card-title">נמצאו ${total} פריטים</div><div class="card-meta">${esc(loc)}</div>`;
-      // autocomplete serial number from existing IDs at this location+props
-      makeAutocomplete(screen.querySelector('#tr-floor-serial'), () => allIds);
       showSharedFields(_currentData, 'fi');
     }
+
+    function renderFloorItemRows(n, existingIds) {
+      const container = screen.querySelector('#tr-floor-item-rows');
+      const rows = [];
+      for (let i = 0; i < n; i++) {
+        rows.push(`
+          <div class="item-row">
+            <span class="item-row-num">${i+1}</span>
+            <input class="floor-serial-input" placeholder="מספר סידורי" value="${esc(existingIds[i] || '')}">
+          </div>
+        `);
+      }
+      container.innerHTML = rows.join('');
+      // add autocomplete for each serial input from source IDs
+      if (_currentData && _currentData.itemIds) {
+        const allIds = _currentData.itemIds;
+        container.querySelectorAll('.floor-serial-input').forEach(inp => {
+          makeAutocomplete(inp, () => allIds);
+        });
+      }
+    }
+
+    screen.querySelector('#tr-floor-count').addEventListener('input', () => {
+      const n = parseInt(screen.querySelector('#tr-floor-count').value) || 0;
+      const existing = [...screen.querySelectorAll('.floor-serial-input')].map(i => i.value);
+      renderFloorItemRows(n, existing);
+    });
 
     screen.querySelector('#tr-floor-src-loc').addEventListener('change', updateFloorDisplay);
     screen.querySelector('#tr-floor-src-props').addEventListener('change', updateFloorDisplay);
@@ -2724,29 +2797,39 @@
         msg = Utils.copyMessage(cartLabel(_currentData), count, props, fromLabel, toLabel, _currentData.containerType, itemIds);
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
-        const serial = screen.querySelector('#tr-floor-serial').value.trim();
-        if (!serial) { Toast.show('יש להזין מספר סידורי', 'error'); return null; }
+        const moveCount = parseInt(screen.querySelector('#tr-floor-count').value) || 0;
+        if (moveCount <= 0) { Toast.show('יש להזין כמות להעברה', 'error'); return null; }
+        const serials = [...screen.querySelectorAll('.floor-serial-input')].map(i => i.value.trim()).filter(Boolean);
 
-        const srcFI       = DB.findFloorItem(_currentData.location, _currentData.properties);
-        const existsInSrc = srcFI && (srcFI.itemIds || []).includes(serial);
-        if (existsInSrc) {
-          const remaining = Math.max(0, (srcFI.itemCount || 0) - 1);
-          const remainIds = (srcFI.itemIds || []).filter(id => id !== serial);
+        // Remove items from source
+        const srcFI = DB.findFloorItem(_currentData.location, _currentData.properties);
+        if (srcFI) {
+          let remainIds = [...(srcFI.itemIds || [])];
+          serials.forEach(s => {
+            const idx = remainIds.indexOf(s);
+            if (idx >= 0) remainIds.splice(idx, 1);
+          });
+          const remaining = Math.max(0, (srcFI.itemCount || 0) - moveCount);
           DB.upsertFloorItem({ location: _currentData.location, properties: _currentData.properties,
                                itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
         }
+
+        // Add items to destination
         const destFI   = DB.findFloorItem(destLoc, _currentData.properties);
-        const newCount = (destFI ? (destFI.itemCount || 0) : 0) + 1;
-        const newIds   = [...(destFI ? (destFI.itemIds || []) : []), serial];
+        const newCount = (destFI ? (destFI.itemCount || 0) : 0) + moveCount;
+        const newIds   = [...(destFI ? (destFI.itemIds || []) : []), ...serials];
         DB.upsertFloorItem({ location: destLoc, subLocation: destSubLoc,
                              itemCount: newCount, itemIds: newIds,
                              properties: _currentData.properties, isEmpty: false });
+
         const propStr = Object.values(_currentData.properties || {}).filter(Boolean).join(' ');
         const floorFrom = _currentData.subLocation || _currentData.location || '?';
         const floorTo   = destSubLoc || destLoc;
-        msg = `[רצפה] ${serial} ${propStr}\nמ${floorFrom} ל${floorTo}`.trim();
-        Toast.show('פריטי רצפה הועברו', 'success');
-        screen.querySelector('#tr-floor-serial').value = '';
+        const serialStr = serials.length ? '\n' + serials.join(', ') : '';
+        msg = `[רצפה] ${moveCount} ${propStr}\nמ${floorFrom} ל${floorTo}${serialStr}`.trim();
+        Toast.show(moveCount + ' פריטי רצפה הועברו', 'success');
+        screen.querySelector('#tr-floor-count').value = '';
+        screen.querySelector('#tr-floor-item-rows').innerHTML = '';
         updateFloorDisplay();
       }
       return msg;
