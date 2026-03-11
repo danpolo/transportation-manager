@@ -783,18 +783,31 @@
       justify-content: space-between;
     }
     .sr-pin-btn {
-      all: unset;
+      background: none;
+      border: none;
       cursor: pointer;
       font-size: 1.1rem;
-      padding: 2px 6px;
+      padding: 6px 10px;
       color: var(--muted);
       -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
     .sr-pin-btn.pinned {
       color: #f3cf63;
     }
     body[data-theme="dark"] .sr-pin-btn.pinned {
       color: #d4b55f;
+    }
+
+    .sr-check {
+      width: 20px; height: 20px;
+      min-width: 20px;
+      accent-color: var(--brand);
+      cursor: pointer;
+      margin: 0;
+    }
+    .sr-item.sr-checked {
+      background: color-mix(in srgb, var(--brand) 10%, transparent);
     }
 
     /* ─── Search highlight ─── */
@@ -1079,6 +1092,8 @@
 
     function importJSON(json, mode) {
       // mode = 'merge'
+      // Sanitize directional marks and zero-width chars that iOS may inject
+      json = json.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
       let incoming;
       try { incoming = JSON.parse(json); } catch(e) { throw new Error('JSON לא תקין'); }
       const db = load();
@@ -1316,14 +1331,10 @@
         return line + '\n';
       }
 
-      let out = `מיפוי\n${now}\n`;
-      for (const loc of locs) {
-        out += `${loc.name}:\n`;
-        // carts at this location (skip nested — they appear under their parent)
-        const locCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId);
-        locCarts.forEach(c => {
-          out += cartLine(c, '');
-          // show nested children indented (parseable format)
+      function emitCarts(cartList) {
+        let s = '';
+        cartList.forEach(c => {
+          s += cartLine(c, '');
           (childrenOf[c.cartId] || []).forEach(ch => {
             const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
             function chLine(cnt, props, comment) {
@@ -1332,20 +1343,43 @@
               if (comment) l += ` # ${comment}`;
               return l + '\n';
             }
-            out += chLine(ch.itemCount || 0, ch.properties, ch.comment);
-            (ch.extraItems || []).forEach(s => out += chLine(s.itemCount || 0, s.properties, ''));
+            s += chLine(ch.itemCount || 0, ch.properties, ch.comment);
+            (ch.extraItems || []).forEach(sl => s += chLine(sl.itemCount || 0, sl.properties, ''));
           });
         });
-        // floor items at this location
-        const locFIs = Object.values(fis).filter(fi => fi.location === loc.name);
-        locFIs.forEach(fi => {
+        return s;
+      }
+      function emitFloorItems(fiList) {
+        let s = '';
+        fiList.forEach(fi => {
           if (fi.isEmpty || !fi.itemCount) {
-            out += `[רצפה] empty\n`;
+            s += `[רצפה] empty\n`;
           } else {
             const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
-            out += `[רצפה] ${fi.itemCount} ${propVals}\n`.trim() + '\n';
+            s += `[רצפה] ${fi.itemCount} ${propVals}\n`.trim() + '\n';
           }
         });
+        return s;
+      }
+
+      let out = `מיפוי\n${now}\n`;
+      for (const loc of locs) {
+        out += `${loc.name}:\n`;
+        const subs = loc.subLocations || [];
+        // Items with no sub-location
+        const noSubCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && !c.subLocation);
+        const noSubFIs = Object.values(fis).filter(fi => fi.location === loc.name && !fi.subLocation);
+        out += emitCarts(noSubCarts);
+        out += emitFloorItems(noSubFIs);
+        // Items grouped by sub-location
+        for (const sub of subs) {
+          const subCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && c.subLocation === sub);
+          const subFIs = Object.values(fis).filter(fi => fi.location === loc.name && fi.subLocation === sub);
+          if (!subCarts.length && !subFIs.length) continue;
+          out += `${sub}:\n`;
+          out += emitCarts(subCarts);
+          out += emitFloorItems(subFIs);
+        }
         out += '----------------------------------\n';
       }
       return out.trim();
@@ -2496,8 +2530,8 @@
             { id: 'do-import-defs', label: 'ייבא', cls: 'btn-primary', onClick: () => {
               let text = document.getElementById('ep-import-area').value.trim();
               if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
-              // Sanitize pasted text: remove BOM, zero-width chars, replace smart quotes
-              text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0]/g, '');
+              // Sanitize pasted text: remove BOM, zero-width chars, directional marks, replace smart quotes
+              text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
               text = text.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"');
               text = text.replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
               try {
@@ -3361,6 +3395,8 @@
       emptyOnly: false
     };
 
+    const _selectedItems = new Set(); // 'cart:ID' or 'fi:ID'
+
     const incInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-inc-' + n));
     const excInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-exc-' + n));
 
@@ -3709,7 +3745,8 @@
               const ctBadge = (data.containerType && data.containerType !== DEFAULT_CONTAINER)
                 ? `<span style="background:var(--area-bg);color:var(--brand);padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-left:6px;">${esc(data.containerType)}</span>` : '';
               return `
-                <div class="list-item sr-item" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
+                <div class="list-item sr-item${_selectedItems.has('cart:'+data.cartId) ? ' sr-checked' : ''}" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
+                  <input type="checkbox" class="sr-check" data-sel-type="cart" data-sel-id="${esc(data.cartId)}"${_selectedItems.has('cart:'+data.cartId) ? ' checked' : ''}>
                   <div class="list-item-body">
                     <div class="list-item-title">${ctBadge}${highlightText(cartLabel(data), terms)}</div>
                     <div class="list-item-sub">${highlightText(subParts.join(' · '), terms)}</div>
@@ -3720,7 +3757,8 @@
             } else {
               const ps = propSummary(data.properties);
               return `
-                <div class="list-item sr-item" data-type="fi" data-id="${esc(data.id)}" style="cursor:pointer">
+                <div class="list-item sr-item${_selectedItems.has('fi:'+data.id) ? ' sr-checked' : ''}" data-type="fi" data-id="${esc(data.id)}" style="cursor:pointer">
+                  <input type="checkbox" class="sr-check" data-sel-type="fi" data-sel-id="${esc(data.id)}"${_selectedItems.has('fi:'+data.id) ? ' checked' : ''}>
                   <div class="list-item-body">
                     <div class="list-item-title"><span class="badge badge-floor">רצפה</span> ${highlightText(ps || data.id, terms)}</div>
                     <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}</div>
@@ -3732,6 +3770,29 @@
         </div>
       `;
       }).join('');
+
+      // Wire pin buttons directly
+      results.querySelectorAll('.sr-pin-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const key = btn.dataset.pinKey;
+          if (_pinnedGroups.has(key)) _pinnedGroups.delete(key);
+          else _pinnedGroups.add(key);
+          _savePins();
+          renderResults();
+        });
+      });
+
+      // Wire checkboxes
+      results.querySelectorAll('.sr-check').forEach(cb => {
+        cb.addEventListener('click', e => {
+          e.stopPropagation();
+          const key = cb.dataset.selType + ':' + cb.dataset.selId;
+          if (cb.checked) _selectedItems.add(key);
+          else _selectedItems.delete(key);
+          cb.closest('.sr-item').classList.toggle('sr-checked', cb.checked);
+        });
+      });
     }
 
     // ── Clear all ─────────────────────────────────────────────────
@@ -3749,8 +3810,13 @@
 
     // ── Copy results (plain text) ─────────────────────────────────
     document.getElementById('sr-copy-results').addEventListener('click', () => {
-      const carts = DB.getAllCarts().filter(itemPasses);
-      const fis   = DB.getAllFloorItems().filter(itemPasses);
+      let carts = DB.getAllCarts().filter(itemPasses);
+      let fis   = DB.getAllFloorItems().filter(itemPasses);
+      // If checkboxes are ticked, copy only selected items
+      if (_selectedItems.size) {
+        carts = carts.filter(c => _selectedItems.has('cart:' + c.cartId));
+        fis = fis.filter(fi => _selectedItems.has('fi:' + fi.id));
+      }
       if (!carts.length && !fis.length) { Toast.show('אין תוצאות', 'error'); return; }
 
       const groups = {};
@@ -3853,17 +3919,7 @@
     });
 
     // ── Item click → modal ────────────────────────────────────────
-    // ── Pin toggle ───────────────────────────────────────────────
     document.getElementById('sr-results').addEventListener('click', e => {
-      const pinBtn = e.target.closest('.sr-pin-btn');
-      if (pinBtn) {
-        const key = pinBtn.dataset.pinKey;
-        if (_pinnedGroups.has(key)) _pinnedGroups.delete(key);
-        else _pinnedGroups.add(key);
-        _savePins();
-        renderResults();
-        return;
-      }
       const item = e.target.closest('.sr-item');
       if (!item) return;
       const type = item.dataset.type;
@@ -4012,7 +4068,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v27</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v28</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -4086,8 +4142,10 @@
         `,
         actions: [
           { id: 'do-import', label: 'ייבא', cls: 'btn-primary', onClick: async () => {
-            const text = document.getElementById('import-paste-area').value.trim();
+            let text = document.getElementById('import-paste-area').value.trim();
             if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+            // Sanitize: remove directional marks, BOM, zero-width chars (iOS paste issue)
+            text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
             try {
               const jsonStr = await Utils.parseImportText(text);
               DB.importJSON(jsonStr, 'merge');
