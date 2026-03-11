@@ -513,12 +513,11 @@
     /* ─── Location Group ─── */
     .loc-group { margin-bottom: 4px; }
     .loc-group-header {
-      padding: 8px 16px;
-      font-size: 0.78rem;
+      padding: 10px 16px;
+      font-size: 1.05rem;
       font-weight: 700;
       color: var(--brand);
       background: var(--area-bg);
-      text-transform: uppercase;
       letter-spacing: 0.03em;
     }
 
@@ -1037,8 +1036,31 @@
       const prop = db.metadata.properties.find(p => p.name === propName);
       if (prop) {
         prop.options = prop.options.filter(o => o !== option);
+        // also remove aliases for this option
+        if (prop.aliases) delete prop.aliases[option];
         save();
       }
+    }
+
+    function setOptionAliases(propName, option, aliases) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      if (!prop) return;
+      if (!prop.aliases) prop.aliases = {};
+      const filtered = aliases.filter(a => a.trim());
+      if (filtered.length) {
+        prop.aliases[option] = filtered;
+      } else {
+        delete prop.aliases[option];
+      }
+      save();
+    }
+
+    function getOptionAliases(propName, option) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      if (!prop || !prop.aliases) return [];
+      return prop.aliases[option] || [];
     }
 
     function addMetaCart(cartId) {
@@ -1113,7 +1135,7 @@
         };
         Object.values(inCarts).forEach(c => _ensureSub(c.location, c.subLocation));
         Object.values(inFI).forEach(fi => _ensureSub(fi.location, fi.subLocation));
-        // properties by name, options union
+        // properties by name, options union + aliases merge
         (inMeta.properties || []).forEach(prop => {
           const existing = db.metadata.properties.find(p => p.name.toLowerCase() === prop.name.toLowerCase());
           if (!existing) {
@@ -1122,6 +1144,14 @@
             (prop.options || []).forEach(o => {
               if (!existing.options.some(e => e.toLowerCase() === o.toLowerCase())) existing.options.push(o);
             });
+            // merge aliases
+            if (prop.aliases) {
+              if (!existing.aliases) existing.aliases = {};
+              Object.entries(prop.aliases).forEach(([opt, aliasList]) => {
+                const current = existing.aliases[opt] || [];
+                existing.aliases[opt] = [...new Set([...current, ...aliasList])];
+              });
+            }
           }
         });
       } else {
@@ -1148,7 +1178,8 @@
       getFloorItem, getAllFloorItems, findFloorItem, upsertFloorItem, deleteFloorItem,
       addCartType, deleteCartType, addContainerType, deleteContainerType,
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
-      addPropertyOption, removePropertyOption, addMetaCart, removeMetaCart,
+      addPropertyOption, removePropertyOption, setOptionAliases, getOptionAliases,
+      addMetaCart, removeMetaCart,
       importJSON, getRaw, clear
     };
   })();
@@ -2240,7 +2271,9 @@
         const list  = tabContent.querySelector('#ep-list');
         const props = DB.getMetadata().properties;
         if (!props.length) { list.innerHTML = '<p class="card-meta">אין מאפיינים</p>'; return; }
-        list.innerHTML = props.map(p => `
+        list.innerHTML = props.map(p => {
+          const aliases = p.aliases || {};
+          return `
           <div class="prop-group" data-prop="${esc(p.name)}">
             <div class="prop-group-header">
               <div class="prop-group-header-left">
@@ -2250,19 +2283,27 @@
               <button class="btn-icon ep-del-prop" data-prop="${esc(p.name)}" title="מחק מאפיין">✕</button>
             </div>
             <div class="prop-options">
-              ${p.options.map(o => `
-                <div class="prop-option-row">
-                  <span>• ${esc(o)}</span>
-                  <button class="btn-icon ep-del-opt" data-prop="${esc(p.name)}" data-opt="${esc(o)}">✕</button>
-                </div>
-              `).join('')}
+              ${p.options.map(o => {
+                const optAliases = aliases[o] || [];
+                return `
+                <div class="prop-option-row" style="flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+                    <span>• ${esc(o)}</span>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <button class="btn btn-outline btn-sm ep-aliases-btn" data-prop="${esc(p.name)}" data-opt="${esc(o)}" style="font-size:0.7rem;padding:2px 8px">שמות חלופיים</button>
+                      <button class="btn-icon ep-del-opt" data-prop="${esc(p.name)}" data-opt="${esc(o)}">✕</button>
+                    </div>
+                  </div>
+                  ${optAliases.length ? `<div style="width:100%;padding:2px 16px 0;font-size:0.75rem;color:var(--muted)">חלופיים: ${optAliases.map(a => esc(a)).join(', ')}</div>` : ''}
+                </div>`;
+              }).join('')}
               <div class="prop-add-row">
                 <input class="form-input btn-sm ep-opt-input" data-prop="${esc(p.name)}" placeholder="אפשרות חדשה">
                 <button class="btn btn-outline btn-sm ep-add-opt" data-prop="${esc(p.name)}">הוסף</button>
               </div>
             </div>
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
       }
       renderList();
 
@@ -2295,6 +2336,64 @@
         if (delOpt) {
           DB.removePropertyOption(delOpt.dataset.prop, delOpt.dataset.opt);
           renderList();
+          return;
+        }
+        // aliases button
+        const aliasBtn = e.target.closest('.ep-aliases-btn');
+        if (aliasBtn) {
+          const propName = aliasBtn.dataset.prop;
+          const optName = aliasBtn.dataset.opt;
+          const currentAliases = DB.getOptionAliases(propName, optName);
+          Modal.open({
+            title: 'שמות חלופיים: ' + optName,
+            html: `
+              <p class="card-meta" style="margin-bottom:10px">הוסף שמות חלופיים לאפשרות <strong>${esc(optName)}</strong>.<br>בייבוא מיפוי, כל השמות החלופיים יומרו אוטומטית לשם הרגיל.</p>
+              <div id="alias-list-container">
+                ${currentAliases.map((a, i) => `
+                  <div class="form-group" style="display:flex;gap:8px;margin-bottom:6px" data-alias-row>
+                    <input class="form-input alias-input" value="${esc(a)}" placeholder="שם חלופי" style="flex:1">
+                    <button class="btn btn-outline btn-sm alias-remove-btn" type="button">✕</button>
+                  </div>
+                `).join('')}
+              </div>
+              <button id="alias-add-row-btn" class="btn btn-outline btn-sm" style="margin-top:6px">+ הוסף שם חלופי</button>
+            `,
+            actions: [
+              { id: 'save-aliases', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                const inputs = document.querySelectorAll('#alias-list-container .alias-input');
+                const aliases = Array.from(inputs).map(inp => inp.value.trim()).filter(Boolean);
+                DB.setOptionAliases(propName, optName, aliases);
+                Modal.close();
+                renderList();
+                // re-expand the group
+                const group = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
+                if (group) group.classList.add('expanded');
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+          // wire up add/remove buttons inside the modal
+          setTimeout(() => {
+            const container = document.getElementById('alias-list-container');
+            const addRowBtn = document.getElementById('alias-add-row-btn');
+            if (addRowBtn) {
+              addRowBtn.addEventListener('click', () => {
+                const row = document.createElement('div');
+                row.className = 'form-group';
+                row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
+                row.setAttribute('data-alias-row', '');
+                row.innerHTML = '<input class="form-input alias-input" placeholder="שם חלופי" style="flex:1"><button class="btn btn-outline btn-sm alias-remove-btn" type="button">✕</button>';
+                container.appendChild(row);
+                row.querySelector('.alias-input').focus();
+              });
+            }
+            if (container) {
+              container.addEventListener('click', ev => {
+                const removeBtn = ev.target.closest('.alias-remove-btn');
+                if (removeBtn) removeBtn.closest('[data-alias-row]').remove();
+              });
+            }
+          }, 50);
           return;
         }
         // add option
@@ -2358,13 +2457,21 @@
                 (defs.properties || []).forEach(prop => {
                   const existing = DB.getMetadata().properties.find(p => p.name.toLowerCase() === prop.name.toLowerCase());
                   if (!existing) {
-                    DB.upsertProperty({ name: prop.name, options: prop.options || [] });
+                    DB.upsertProperty({ name: prop.name, options: prop.options || [], aliases: prop.aliases || {} });
                   } else {
                     (prop.options || []).forEach(o => {
                       if (!existing.options.some(e => e.toLowerCase() === o.toLowerCase())) {
                         DB.addPropertyOption(existing.name, o);
                       }
                     });
+                    // merge aliases
+                    if (prop.aliases) {
+                      Object.entries(prop.aliases).forEach(([opt, aliasList]) => {
+                        const currentAliases = DB.getOptionAliases(existing.name, opt);
+                        const merged = [...new Set([...currentAliases, ...aliasList])];
+                        DB.setOptionAliases(existing.name, opt, merged);
+                      });
+                    }
                   }
                 });
                 // merge non-map locations
@@ -3820,7 +3927,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v18</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v19</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -3944,7 +4051,8 @@
             if (!text) { Toast.show('אין טקסט', 'error'); return; }
             try {
               const propDefs = DB.getMetadata().properties || [];
-              const blocks = _parseMap(text);
+              const normalizedText = _normalizeAliases(text, propDefs);
+              const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
               const imported = _buildMapDB(blocks, propDefs);
               DB.importJSON(JSON.stringify(imported), 'merge');
@@ -3979,7 +4087,8 @@
             if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
             try {
               const propDefs = DB.getMetadata().properties || [];
-              const blocks = _parseMap(text);
+              const normalizedText = _normalizeAliases(text, propDefs);
+              const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
               const imported = _buildMapDB(blocks, propDefs);
               DB.importJSON(JSON.stringify(imported), 'merge');
@@ -3997,6 +4106,36 @@
     });
 
     // ── Map parser (ported from map2shinua.py) ──
+
+    function _normalizeAliases(text, propDefs) {
+      // Build a map from alias (lowercase) → canonical option name
+      const aliasMap = {};
+      for (const prop of propDefs) {
+        if (!prop.aliases) continue;
+        for (const [canonical, aliasList] of Object.entries(prop.aliases)) {
+          for (const alias of aliasList) {
+            if (alias.trim()) aliasMap[alias.toLowerCase()] = canonical;
+          }
+        }
+      }
+      if (!Object.keys(aliasMap).length) return text;
+      // Sort aliases by length descending so longer aliases are replaced first
+      const sortedAliases = Object.keys(aliasMap).sort((a, b) => b.length - a.length);
+      // Replace line by line, matching aliases as standalone tokens
+      return text.split('\n').map(line => {
+        for (const alias of sortedAliases) {
+          const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp('(^|[\\s,;:])(' + escaped + ')($|[\\s,;:])', 'gi');
+          // Use a loop to handle overlapping boundary characters
+          let prev;
+          do {
+            prev = line;
+            line = line.replace(regex, (m, before, match, after) => before + aliasMap[match.toLowerCase()] + after);
+          } while (line !== prev);
+        }
+        return line;
+      }).join('\n');
+    }
 
     function _parseMap(text) {
       const RE_CART_WITH_TYPE = /^(.+\([^)]+\)):\s*(.*)$/;
