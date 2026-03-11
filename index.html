@@ -2937,6 +2937,12 @@
 
         <!-- ═══ LOAD SECTION ═══ -->
         <div id="lu-load-section">
+          <!-- destination cart at top -->
+          <div class="form-group">
+            <label class="form-label">יעד להעמסה</label>
+            <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
+          </div>
+
           <div class="form-group">
             <div class="pill-toggle" id="lu-load-type-toggle">
               <button class="active" data-lt="new">פריט חדש</button>
@@ -2966,10 +2972,10 @@
             </div>
           </div>
 
-          <!-- destination cart (always visible in load section) -->
+          <!-- optional destination for move -->
           <div class="form-group" style="margin-top:16px;">
-            <label class="form-label">יעד להעמסה</label>
-            <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
+            <label class="form-label">יעד העברה (אופציונלי)</label>
+            <input id="lu-load-move-dest" class="form-input" placeholder="העברה ל..." autocomplete="off">
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
             <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">שמור</button>
@@ -3010,6 +3016,7 @@
     // autocomplete + location setups
     makeAutocomplete(screen.querySelector('#lu-src-loc'), () => DB.getMetadata().locations.map(l => l.name));
     makeAutocomplete(screen.querySelector('#lu-dest-cart'), () => DB.getAllCarts().map(c => cartLabel(c)));
+    makeAutocomplete(screen.querySelector('#lu-load-move-dest'), () => DB.getMetadata().locations.map(l => l.name));
     setupLocationFields(
       screen.querySelector('#lu-unload-dest-loc'),
       screen.querySelector('#lu-unload-dest-subloc-group'),
@@ -3243,7 +3250,14 @@
         screen.querySelector('#lu-floor-serial').value = '';
         updateFloorSrc();
       }
+      // Optional destination — move cart and append to message
+      const moveDest = screen.querySelector('#lu-load-move-dest').value.trim();
+      if (moveDest) {
+        DB.upsertCart({ cartId: destCartId, location: moveDest });
+        msg += '\nמועברת ל' + moveDest;
+      }
       screen.querySelector('#lu-dest-cart').value = '';
+      screen.querySelector('#lu-load-move-dest').value = '';
       return msg;
     }
 
@@ -3533,6 +3547,20 @@
           parts.push(...(ex.itemIds || []));
         });
       }
+      // Include child carts' data so parent shows up in searches for child content
+      if (item.cartId) {
+        DB.getChildCarts(item.cartId).forEach(ch => {
+          parts.push(ch.cartId);
+          parts.push(...Object.values(ch.properties || {}).filter(Boolean));
+          parts.push(...(ch.itemIds || []));
+          if (ch.extraItems) {
+            ch.extraItems.forEach(ex => {
+              parts.push(...Object.values(ex.properties || {}).filter(Boolean));
+              parts.push(...(ex.itemIds || []));
+            });
+          }
+        });
+      }
       if (item.itemCount != null) parts.push(String(item.itemCount));
       return parts.filter(Boolean).map(p => p.toLowerCase());
     }
@@ -3722,12 +3750,21 @@
           </div>
           ${g.items.map(({ data, type }) => {
             if (type === 'cart') {
+              const children = DB.getChildCarts(data.cartId);
               const allSlots = [
                 { properties: data.properties || {}, itemCount: data.itemCount || 0 },
                 ...(data.extraItems || []).filter(ex => ex.itemCount)
               ];
+              // Include child cart slots for display
+              children.forEach(ch => {
+                allSlots.push({ properties: ch.properties || {}, itemCount: ch.itemCount || 0 });
+                (ch.extraItems || []).filter(ex => ex.itemCount).forEach(ex => allSlots.push(ex));
+              });
+              const ownTotal = cartTotalCount(data);
+              const childTotal = children.reduce((s, ch) => s + cartTotalCount(ch), 0);
+              const grandTotal = ownTotal + childTotal;
               const subParts = [];
-              if (data.isEmpty) {
+              if (data.isEmpty && !childTotal) {
                 subParts.push('ריקה');
               } else if (allSlots.length > 1) {
                 // Multi-slot: find common vs differing properties
@@ -3741,28 +3778,25 @@
                   if (unique.length === 1) {
                     commonParts.push(unique[0]);
                   } else if (unique.length > 1) {
-                    // Show each type with its count
                     unique.forEach(v => {
                       const cnt = allSlots.filter(s => (s.properties || {})[p.name] === v).reduce((s, sl) => s + (sl.itemCount || 0), 0);
                       diffParts.push(cnt + ' ' + v);
                     });
                   }
                 });
-                const total = cartTotalCount(data);
-                if (total) subParts.push(total + ' פריטים');
+                if (grandTotal) subParts.push(grandTotal + ' פריטים');
                 if (commonParts.length) subParts.push(commonParts.join(' '));
                 if (diffParts.length) subParts.push('(' + diffParts.join(', ') + ')');
               } else {
                 const ps = propSummary(data.properties);
-                if (cartTotalCount(data)) subParts.push(cartTotalCount(data) + ' פריטים');
+                if (grandTotal) subParts.push(grandTotal + ' פריטים');
                 if (ps) subParts.push(ps);
               }
               if (data.parentCartId) {
                 const pc = DB.getCart(data.parentCartId);
                 subParts.push('על ' + (pc ? cartLabel(pc) : data.parentCartId));
               }
-              const childCt = DB.getChildCarts(data.cartId).length;
-              if (childCt) subParts.push(childCt + ' טעונות');
+              if (children.length) subParts.push(children.length + ' טעונות');
               const ctBadge = (data.containerType && data.containerType !== DEFAULT_CONTAINER)
                 ? `<span style="background:var(--area-bg);color:var(--brand);padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-left:6px;">${esc(data.containerType)}</span>` : '';
               return `
@@ -4089,7 +4123,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v29</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v30</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
