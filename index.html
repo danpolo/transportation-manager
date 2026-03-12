@@ -1787,8 +1787,15 @@
 
   // ── buildPropertyFields ──
   // Renders property dropdowns from metadata into a container element
-  // Supports conditional visibility: if p.condition = {prop, value}, the field is hidden
-  // until the dependent property has the required value selected.
+  // Supports conditional visibility: if p.condition is an array of {prop, value},
+  // the field is shown when ANY condition matches (OR logic).
+  // Legacy single {prop, value} objects are normalized to an array.
+  function normalizeConditions(cond) {
+    if (!cond) return null;
+    if (Array.isArray(cond)) return cond.length ? cond : null;
+    if (cond.prop && cond.value) return [cond];
+    return null;
+  }
   function buildPropertyFields(container, currentValues) {
     const props = DB.getMetadata().properties;
     if (!props.length) {
@@ -1796,10 +1803,10 @@
       return;
     }
     container.innerHTML = props.map(p => {
-      const cond = p.condition;
-      const condAttr = cond ? `data-cond-prop="${esc(cond.prop)}" data-cond-val="${esc(cond.value)}"` : '';
-      // Initially hidden if conditional and condition not met
-      const isVisible = !cond || (currentValues && currentValues[cond.prop] === cond.value);
+      const conds = normalizeConditions(p.condition);
+      const condAttr = conds ? `data-cond-json="${esc(JSON.stringify(conds))}"` : '';
+      // Initially hidden if conditional and no condition met
+      const isVisible = !conds || (currentValues && conds.some(c => currentValues[c.prop] === c.value));
       return `
       <div class="form-group prop-field-group" data-field-name="${esc(p.name)}" ${condAttr} ${isVisible ? '' : 'hidden'}>
         <label class="form-label">${esc(p.name)}</label>
@@ -1812,11 +1819,12 @@
 
     // Wire up conditional visibility: when a select changes, show/hide dependent fields
     function updateConditions() {
-      container.querySelectorAll('.prop-field-group[data-cond-prop]').forEach(group => {
-        const depProp = group.dataset.condProp;
-        const depVal  = group.dataset.condVal;
-        const depSel  = container.querySelector(`select[name="${CSS.escape(depProp)}"]`);
-        const show = depSel && depSel.value === depVal;
+      container.querySelectorAll('.prop-field-group[data-cond-json]').forEach(group => {
+        const conds = JSON.parse(group.dataset.condJson);
+        const show = conds.some(c => {
+          const depSel = container.querySelector(`select[name="${CSS.escape(c.prop)}"]`);
+          return depSel && depSel.value === c.value;
+        });
         group.hidden = !show;
         // Clear selection when hidden so it doesn't pollute saved data
         if (!show) {
@@ -2380,8 +2388,9 @@
         if (!props.length) { list.innerHTML = '<p class="card-meta">אין מאפיינים</p>'; return; }
         list.innerHTML = props.map(p => {
           const aliases = p.aliases || {};
-          const condLabel = p.condition
-            ? `תנאי: ${esc(p.condition.prop)} = ${esc(p.condition.value)}`
+          const conds = normalizeConditions(p.condition);
+          const condLabel = conds
+            ? 'תנאי: ' + conds.map(c => `${esc(c.prop)} = ${esc(c.value)}`).join(' או ')
             : '';
           return `
           <div class="prop-group" data-prop="${esc(p.name)}">
@@ -2395,8 +2404,8 @@
             </div>
             <div class="prop-options">
               <div style="margin-bottom:8px">
-                <button class="btn btn-outline btn-sm ep-condition-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px">${p.condition ? 'ערוך תנאי' : 'הוסף תנאי'}</button>
-                ${p.condition ? `<button class="btn btn-outline btn-sm ep-condition-clear" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px;color:var(--danger);border-color:var(--danger);margin-inline-start:4px">הסר תנאי</button>` : ''}
+                <button class="btn btn-outline btn-sm ep-condition-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px">${conds ? 'ערוך תנאי' : 'הוסף תנאי'}</button>
+                ${conds ? `<button class="btn btn-outline btn-sm ep-condition-clear" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px;color:var(--danger);border-color:var(--danger);margin-inline-start:4px">הסר תנאי</button>` : ''}
               </div>
               ${p.options.map(o => {
                 const optAliases = aliases[o] || [];
@@ -2533,33 +2542,26 @@
           const thisProp = allProps.find(p => p.name === propName);
           const otherProps = allProps.filter(p => p.name !== propName);
           if (!otherProps.length) { Toast.show('אין מאפיינים אחרים להגדרת תנאי', 'error'); return; }
-          const currentCond = thisProp.condition || null;
+          const currentConds = normalizeConditions(thisProp.condition) || [{ prop: '', value: '' }];
           Modal.open({
             title: 'תנאי להצגת: ' + propName,
             html: `
-              <p class="card-meta" style="margin-bottom:10px">מאפיין זה יוצג רק כאשר נבחר ערך מסוים במאפיין אחר.</p>
-              <div class="form-group">
-                <label class="form-label">מאפיין תנאי</label>
-                <select id="cond-prop-select" class="form-select">
-                  <option value="">— בחר מאפיין —</option>
-                  ${otherProps.map(op => `<option value="${esc(op.name)}" ${currentCond && currentCond.prop === op.name ? 'selected' : ''}>${esc(op.name)}</option>`).join('')}
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">ערך נדרש</label>
-                <select id="cond-val-select" class="form-select">
-                  <option value="">— בחר ערך —</option>
-                </select>
-              </div>
+              <p class="card-meta" style="margin-bottom:10px">מאפיין זה יוצג כאשר לפחות אחד מהתנאים מתקיים (או).</p>
+              <div id="cond-rows-container"></div>
+              <button id="cond-add-row" class="btn btn-outline btn-sm" style="margin-top:8px;font-size:0.78rem">+ הוסף תנאי נוסף (או)</button>
             `,
             actions: [
               { id: 'save-cond', label: 'שמור', cls: 'btn-primary', onClick: () => {
-                const cp = document.getElementById('cond-prop-select').value;
-                const cv = document.getElementById('cond-val-select').value;
-                if (cp && cv) {
-                  DB.upsertProperty({ name: propName, condition: { prop: cp, value: cv } });
+                const rows = document.querySelectorAll('.cond-row');
+                const conditions = [];
+                rows.forEach(row => {
+                  const cp = row.querySelector('.cond-prop-sel').value;
+                  const cv = row.querySelector('.cond-val-sel').value;
+                  if (cp && cv) conditions.push({ prop: cp, value: cv });
+                });
+                if (conditions.length) {
+                  DB.upsertProperty({ name: propName, condition: conditions });
                 } else {
-                  // Clear condition if incomplete
                   const db2 = DB.getMetadata();
                   const p2 = db2.properties.find(pp => pp.name === propName);
                   if (p2) { delete p2.condition; DB.upsertProperty(p2); }
@@ -2572,25 +2574,55 @@
               { id: 'cancel', label: 'ביטול', onClick: Modal.close }
             ]
           });
-          // Wire up dynamic value select based on chosen prop
           setTimeout(() => {
-            const propSel = document.getElementById('cond-prop-select');
-            const valSel = document.getElementById('cond-val-select');
-            function updateValOptions() {
-              const selPropName = propSel.value;
-              const selProp = allProps.find(p => p.name === selPropName);
-              valSel.innerHTML = '<option value="">— בחר ערך —</option>';
-              if (selProp) {
-                selProp.options.forEach(o => {
-                  const opt = document.createElement('option');
-                  opt.value = o; opt.textContent = o;
-                  if (currentCond && currentCond.prop === selPropName && currentCond.value === o) opt.selected = true;
-                  valSel.appendChild(opt);
-                });
+            const container = document.getElementById('cond-rows-container');
+            function makeCondRow(c) {
+              const row = document.createElement('div');
+              row.className = 'cond-row';
+              row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:8px';
+              row.innerHTML = `
+                <select class="form-select cond-prop-sel" style="flex:1">
+                  <option value="">— מאפיין —</option>
+                  ${otherProps.map(op => `<option value="${esc(op.name)}" ${c.prop === op.name ? 'selected' : ''}>${esc(op.name)}</option>`).join('')}
+                </select>
+                <select class="form-select cond-val-sel" style="flex:1">
+                  <option value="">— ערך —</option>
+                </select>
+                <button class="btn-icon cond-remove-row" title="הסר" style="flex-shrink:0">✕</button>
+              `;
+              const propSel = row.querySelector('.cond-prop-sel');
+              const valSel = row.querySelector('.cond-val-sel');
+              function updateValOpts() {
+                const selProp = allProps.find(p => p.name === propSel.value);
+                valSel.innerHTML = '<option value="">— ערך —</option>';
+                if (selProp) {
+                  selProp.options.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o; opt.textContent = o;
+                    if (propSel.value === c.prop && c.value === o) opt.selected = true;
+                    valSel.appendChild(opt);
+                  });
+                }
               }
+              updateValOpts();
+              propSel.addEventListener('change', () => { c = { prop: '', value: '' }; updateValOpts(); });
+              row.querySelector('.cond-remove-row').addEventListener('click', () => {
+                row.remove();
+                updateRemoveButtons();
+              });
+              container.appendChild(row);
+              updateRemoveButtons();
             }
-            updateValOptions();
-            propSel.addEventListener('change', updateValOptions);
+            function updateRemoveButtons() {
+              const rows = container.querySelectorAll('.cond-row');
+              rows.forEach(r => {
+                r.querySelector('.cond-remove-row').style.visibility = rows.length <= 1 ? 'hidden' : 'visible';
+              });
+            }
+            currentConds.forEach(c => makeCondRow(c));
+            document.getElementById('cond-add-row').addEventListener('click', () => {
+              makeCondRow({ prop: '', value: '' });
+            });
           }, 50);
           return;
         }
@@ -4629,7 +4661,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v35</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v36</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
