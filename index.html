@@ -1319,7 +1319,7 @@
       });
 
       function cartLine(c, prefix) {
-        const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `[${c.containerType}] ` : '';
+        const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
         let line;
         if (c.isEmpty || !c.itemCount) {
           line = `${prefix}${ctLabel}${c.cartId}: empty`;
@@ -1352,12 +1352,9 @@
       function emitFloorItems(fiList) {
         let s = '';
         fiList.forEach(fi => {
-          if (fi.isEmpty || !fi.itemCount) {
-            s += `[רצפה] empty\n`;
-          } else {
-            const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
-            s += `[רצפה] ${fi.itemCount} ${propVals}\n`.trim() + '\n';
-          }
+          if (fi.isEmpty || !fi.itemCount) return; // skip empty floor items
+          const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
+          s += `${fi.itemCount} ${propVals}\n`.trim() + '\n';
         });
         return s;
       }
@@ -4662,7 +4659,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v37</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v38</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
