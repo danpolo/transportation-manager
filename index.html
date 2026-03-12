@@ -1332,33 +1332,44 @@
         return line + '\n';
       }
 
-      function emitCarts(cartList) {
-        let s = '';
-        cartList.forEach(c => {
-          s += cartLine(c, '');
-          (childrenOf[c.cartId] || []).forEach(ch => {
-            const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
-            const chIdLabel = ch.cartId + (ch.cartType ? '(' + ch.cartType + ')' : '');
-            function chLine(cnt, props, comment) {
-              const pv = Object.values(props || {}).filter(Boolean).join(' ');
-              let l = `    ${chCt}${chIdLabel}: ${cnt === 0 ? 'empty' : cnt + (pv ? ' ' + pv : '')}`;
-              if (comment) l += ` # ${comment}`;
-              return l + '\n';
-            }
-            s += chLine(ch.itemCount || 0, ch.properties, ch.comment);
-            (ch.extraItems || []).forEach(sl => s += chLine(sl.itemCount || 0, sl.properties, ''));
-          });
+      function emitCartWithChildren(c) {
+        let s = cartLine(c, '');
+        (childrenOf[c.cartId] || []).forEach(ch => {
+          const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
+          const chIdLabel = ch.cartId + (ch.cartType ? '(' + ch.cartType + ')' : '');
+          function chLine(cnt, props, comment) {
+            const pv = Object.values(props || {}).filter(Boolean).join(' ');
+            let l = `    ${chCt}${chIdLabel}: ${cnt === 0 ? 'empty' : cnt + (pv ? ' ' + pv : '')}`;
+            if (comment) l += ` # ${comment}`;
+            return l + '\n';
+          }
+          s += chLine(ch.itemCount || 0, ch.properties, ch.comment);
+          (ch.extraItems || []).forEach(sl => s += chLine(sl.itemCount || 0, sl.properties, ''));
         });
         return s;
       }
-      function emitFloorItems(fiList) {
-        let s = '';
-        fiList.forEach(fi => {
-          if (fi.isEmpty || !fi.itemCount) return; // skip empty floor items
-          const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
-          s += `${fi.itemCount} ${propVals}\n`.trim() + '\n';
+
+      // Emit all items for a location/sub-location, grouped by type with blank lines between groups
+      function emitGrouped(cartList, fiList) {
+        const groups = {};
+        // Group carts by container type
+        cartList.forEach(c => {
+          const type = c.containerType || 'עגלה';
+          if (!groups[type]) groups[type] = [];
+          groups[type].push(emitCartWithChildren(c));
         });
-        return s;
+        // Floor items as their own group
+        const floorLines = fiList
+          .filter(fi => !fi.isEmpty && fi.itemCount)
+          .map(fi => {
+            const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
+            return `${fi.itemCount} ${propVals}`.trim() + '\n';
+          });
+        if (floorLines.length) groups['__floor__'] = floorLines;
+
+        // Emit groups separated by blank lines
+        const sections = Object.values(groups).map(lines => lines.join(''));
+        return sections.join('\n');
       }
 
       let out = `מיפוי\n${now}\n`;
@@ -1368,16 +1379,14 @@
         // Items with no sub-location
         const noSubCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && !c.subLocation);
         const noSubFIs = Object.values(fis).filter(fi => fi.location === loc.name && !fi.subLocation);
-        out += emitCarts(noSubCarts);
-        out += emitFloorItems(noSubFIs);
+        out += emitGrouped(noSubCarts, noSubFIs);
         // Items grouped by sub-location
         for (const sub of subs) {
           const subCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && c.subLocation === sub);
           const subFIs = Object.values(fis).filter(fi => fi.location === loc.name && fi.subLocation === sub);
           if (!subCarts.length && !subFIs.length) continue;
           out += `${sub}:\n`;
-          out += emitCarts(subCarts);
-          out += emitFloorItems(subFIs);
+          out += emitGrouped(subCarts, subFIs);
         }
         out += '----------------------------------\n';
       }
@@ -4661,7 +4670,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v39</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v40</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
