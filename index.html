@@ -1758,7 +1758,8 @@
 
     function lookup() {
       const raw = input.value.trim();
-      const id  = raw.replace(/\([^)]+\)\s*$/, '').trim(); // strip "(TYPE)" suffix
+      // strip trailing "[containerType]" and/or "(cartType)" suffixes added by cartLabel()
+      const id  = raw.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!id) { if (onCartLoaded) onCartLoaded(null); return; }
       // fall back to raw value if stripped ID not found (handles cart IDs that contain parentheses)
       const cart = DB.getCart(id) || DB.getCart(raw);
@@ -1769,7 +1770,7 @@
     input.addEventListener('input', () => {
       // only auto-lookup if the value (after stripping type) exactly matches a known cart
       const raw = input.value.trim();
-      const id  = raw.replace(/\([^)]+\)\s*$/, '').trim();
+      const id  = raw.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (DB.getCart(id) || DB.getCart(raw)) lookup();
     });
 
@@ -3491,7 +3492,7 @@
     // When container ID is entered, look it up and auto-populate
     function loadContainerCart() {
       const raw = ctIdInput.value.trim();
-      const cid = raw.replace(/\([^)]+\)\s*$/, '').trim();
+      const cid = raw.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!cid) { ctInfoEl.style.display = 'none'; _ctCart = null; initCtSlots(); return; }
       const cart = DB.getCart(cid);
       _ctCart = cart;
@@ -3516,11 +3517,11 @@
     // Container save logic
     async function doContainerSave() {
       const rawCtId = ctIdInput.value.trim();
-      const ctId = rawCtId.replace(/\([^)]+\)\s*$/, '').trim();
+      const ctId = rawCtId.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!ctId) { Toast.show('יש להזין מספר משטח / מכולה', 'error'); return null; }
 
       const rawParent = screen.querySelector('#lu-ct-parent-cart').value.trim();
-      const parentCartId = rawParent.replace(/\([^)]+\)\s*$/, '').trim();
+      const parentCartId = rawParent.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!parentCartId) { Toast.show('יש להזין מספר עגלה', 'error'); return null; }
 
       // Read all slots
@@ -3626,7 +3627,7 @@
 
     async function doLoadSave() {
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
-      const destCartId = rawDest.replace(/\([^)]+\)\s*$/, '').trim();
+      const destCartId = rawDest.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!destCartId) { Toast.show('יש להזין יעד להעמסה', 'error'); return null; }
 
       let msg;
@@ -4617,7 +4618,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v33</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v34</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
