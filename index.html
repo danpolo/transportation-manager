@@ -1320,12 +1320,13 @@
 
       function cartLine(c, prefix) {
         const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
+        const idLabel = c.cartId + (c.cartType ? '(' + c.cartType + ')' : '');
         let line;
         if (c.isEmpty || !c.itemCount) {
-          line = `${prefix}${ctLabel}${c.cartId}: empty`;
+          line = `${prefix}${ctLabel}${idLabel}: empty`;
         } else {
           const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
-          line = (`${prefix}${ctLabel}${c.cartId}: ${c.itemCount} ${propVals}`).trim();
+          line = (`${prefix}${ctLabel}${idLabel}: ${c.itemCount} ${propVals}`).trim();
         }
         if (c.comment) line += ` # ${c.comment}`;
         return line + '\n';
@@ -1337,9 +1338,10 @@
           s += cartLine(c, '');
           (childrenOf[c.cartId] || []).forEach(ch => {
             const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
+            const chIdLabel = ch.cartId + (ch.cartType ? '(' + ch.cartType + ')' : '');
             function chLine(cnt, props, comment) {
               const pv = Object.values(props || {}).filter(Boolean).join(' ');
-              let l = `    ${chCt}${ch.cartId}: ${cnt === 0 ? 'empty' : cnt + (pv ? ' ' + pv : '')}`;
+              let l = `    ${chCt}${chIdLabel}: ${cnt === 0 ? 'empty' : cnt + (pv ? ' ' + pv : '')}`;
               if (comment) l += ` # ${comment}`;
               return l + '\n';
             }
@@ -4659,7 +4661,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v38</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v39</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
