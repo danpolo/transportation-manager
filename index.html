@@ -1793,7 +1793,7 @@
   function normalizeConditions(cond) {
     if (!cond) return null;
     if (Array.isArray(cond)) return cond.length ? cond : null;
-    if (cond.prop && cond.value) return [cond];
+    if (cond.prop) return [cond];
     return null;
   }
   function buildPropertyFields(container, currentValues) {
@@ -1806,7 +1806,7 @@
       const conds = normalizeConditions(p.condition);
       const condAttr = conds ? `data-cond-json="${esc(JSON.stringify(conds))}"` : '';
       // Initially hidden if conditional and no condition met
-      const isVisible = !conds || (currentValues && conds.some(c => currentValues[c.prop] === c.value));
+      const isVisible = !conds || (currentValues && conds.some(c => c.value ? currentValues[c.prop] === c.value : !currentValues[c.prop]));
       return `
       <div class="form-group prop-field-group" data-field-name="${esc(p.name)}" ${condAttr} ${isVisible ? '' : 'hidden'}>
         <label class="form-label">${esc(p.name)}</label>
@@ -1823,7 +1823,8 @@
         const conds = JSON.parse(group.dataset.condJson);
         const show = conds.some(c => {
           const depSel = container.querySelector(`select[name="${CSS.escape(c.prop)}"]`);
-          return depSel && depSel.value === c.value;
+          if (!depSel) return false;
+          return c.value ? depSel.value === c.value : !depSel.value;
         });
         group.hidden = !show;
         // Clear selection when hidden so it doesn't pollute saved data
@@ -2390,7 +2391,7 @@
           const aliases = p.aliases || {};
           const conds = normalizeConditions(p.condition);
           const condLabel = conds
-            ? 'תנאי: ' + conds.map(c => `${esc(c.prop)} = ${esc(c.value)}`).join(' או ')
+            ? 'תנאי: ' + conds.map(c => `${esc(c.prop)} = ${c.value ? esc(c.value) : 'לא נבחר'}`).join(' או ')
             : '';
           return `
           <div class="prop-group" data-prop="${esc(p.name)}">
@@ -2557,7 +2558,7 @@
                 rows.forEach(row => {
                   const cp = row.querySelector('.cond-prop-sel').value;
                   const cv = row.querySelector('.cond-val-sel').value;
-                  if (cp && cv) conditions.push({ prop: cp, value: cv });
+                  if (cp) conditions.push({ prop: cp, value: cv });
                 });
                 if (conditions.length) {
                   DB.upsertProperty({ name: propName, condition: conditions });
@@ -4661,7 +4662,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v36</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v37</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
