@@ -1780,6 +1780,7 @@
         input.value = val; // val may be "8" or "8(110)" — lookup strips suffix
         input.dispatchEvent(new Event('change', { bubbles: true }));
       },
+      clear() { input.value = ''; },
       focus() { input.focus(); }
     };
   }
@@ -2983,6 +2984,14 @@
         screen.querySelector('#tr-floor-item-rows').innerHTML = '';
         updateFloorDisplay();
       }
+
+      // Reset screen to initial state
+      _currentData = null;
+      _currentType = null;
+      screen.querySelector('#tr-shared-fields').hidden = true;
+      screen.querySelector('#tr-dest-loc').value = '';
+      screen.querySelector('#tr-dest-subloc').value = '';
+      if (_cartRef) _cartRef.clear();
       return msg;
     }
 
@@ -3749,6 +3758,7 @@
       }
       screen.querySelector('#lu-dest-cart').value = '';
       screen.querySelector('#lu-load-move-dest').value = '';
+      screen.querySelector('#lu-src-loc').value = '';
       return msg;
     }
 
@@ -3811,6 +3821,7 @@
       screen.querySelector('#lu-unload-fields').hidden = true;
       screen.querySelector('#lu-unload-dest-loc').value = '';
       screen.querySelector('#lu-unload-dest-subloc').value = '';
+      if (_unloadCartRef) _unloadCartRef.clear();
       return msg;
     }
 
@@ -4618,7 +4629,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v34</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v35</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
