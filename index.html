@@ -1349,26 +1349,42 @@
         return s;
       }
 
-      // Emit all items for a location/sub-location, grouped by type with blank lines between groups
+      // Emit all items for a location/sub-location:
+      // 1) Empty carts grouped by cartType, blank line between groups
+      // 2) Non-empty carts grouped by matching properties, blank line between groups
+      // 3) Floor items
       function emitGrouped(cartList, fiList) {
-        const groups = {};
-        // Group carts by container type
-        cartList.forEach(c => {
-          const type = c.containerType || 'עגלה';
-          if (!groups[type]) groups[type] = [];
-          groups[type].push(emitCartWithChildren(c));
+        const sections = [];
+        const emptyCarts = cartList.filter(c => c.isEmpty || !c.itemCount);
+        const fullCarts  = cartList.filter(c => !c.isEmpty && c.itemCount);
+
+        // 1) Empty carts grouped by cartType
+        const emptyByType = {};
+        emptyCarts.forEach(c => {
+          const key = c.cartType || '';
+          if (!emptyByType[key]) emptyByType[key] = [];
+          emptyByType[key].push(emitCartWithChildren(c));
         });
-        // Floor items as their own group
+        Object.values(emptyByType).forEach(lines => sections.push(lines.join('')));
+
+        // 2) Non-empty carts grouped by property values
+        const fullByProps = {};
+        fullCarts.forEach(c => {
+          const key = Object.values(c.properties || {}).filter(Boolean).join(' ');
+          if (!fullByProps[key]) fullByProps[key] = [];
+          fullByProps[key].push(emitCartWithChildren(c));
+        });
+        Object.values(fullByProps).forEach(lines => sections.push(lines.join('')));
+
+        // 3) Floor items
         const floorLines = fiList
           .filter(fi => !fi.isEmpty && fi.itemCount)
           .map(fi => {
             const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
             return `${fi.itemCount} ${propVals}`.trim() + '\n';
           });
-        if (floorLines.length) groups['__floor__'] = floorLines;
+        if (floorLines.length) sections.push(floorLines.join(''));
 
-        // Emit groups separated by blank lines
-        const sections = Object.values(groups).map(lines => lines.join(''));
         return sections.join('\n');
       }
 
@@ -4670,7 +4686,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v40</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v41</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
