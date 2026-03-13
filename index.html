@@ -6040,6 +6040,8 @@
               const normalizedText = _normalizeAliases(text, propDefs);
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
+              const locErrors = _validateImportLocations(blocks);
+              if (locErrors.length) { _showLocationLockError(locErrors); return; }
               const imported = _buildMapDB(blocks, propDefs);
               DB.importJSON(JSON.stringify(imported), 'merge');
               _applyMapOrdering(blocks, propDefs);
@@ -6077,6 +6079,8 @@
               const normalizedText = _normalizeAliases(text, propDefs);
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
+              const locErrors = _validateImportLocations(blocks);
+              if (locErrors.length) { _showLocationLockError(locErrors); return; }
               const imported = _buildMapDB(blocks, propDefs);
               DB.importJSON(JSON.stringify(imported), 'merge');
               _applyMapOrdering(blocks, propDefs);
@@ -6092,6 +6096,59 @@
         ]
       });
     });
+
+    // ── Location lock validation ──
+    // Returns an array of human-readable error strings (empty = valid).
+    // Only checks when locationOrderLocked is true.
+    function _validateImportLocations(blocks) {
+      if (!DB.getMetadata().locationOrderLocked) return [];
+
+      const knownLocs = DB.getMetadata().locations || [];
+      const knownLocMap = {};
+      knownLocs.forEach(l => { knownLocMap[l.name] = l.subLocations || []; });
+
+      const errors = [];
+      const seenLocs = new Set();
+      const seenSubLocs = {}; // locName -> Set of subLoc names
+
+      for (const block of blocks) {
+        if (!block.location) continue;
+        seenLocs.add(block.location);
+        if (block.subLocation) {
+          if (!seenSubLocs[block.location]) seenSubLocs[block.location] = new Set();
+          seenSubLocs[block.location].add(block.subLocation);
+        }
+      }
+
+      for (const locName of seenLocs) {
+        if (!(locName in knownLocMap)) {
+          errors.push(`מיקום "${locName}" לא קיים בהגדרות`);
+        } else if (seenSubLocs[locName]) {
+          const knownSubs = knownLocMap[locName];
+          for (const subLoc of seenSubLocs[locName]) {
+            if (!knownSubs.includes(subLoc)) {
+              errors.push(`תת-מיקום "${subLoc}" תחת "${locName}" לא קיים בהגדרות`);
+            }
+          }
+        }
+      }
+
+      return errors;
+    }
+
+    function _showLocationLockError(errors) {
+      Modal.open({
+        title: 'שגיאת ייבוא — מיקומים',
+        html: `
+          <p style="margin-bottom:10px;font-weight:600;color:var(--danger)">הייבוא נחסם — סדר המיקומים נעול 🔒</p>
+          <ul style="margin:0;padding-right:18px;line-height:1.9;font-size:0.92rem">
+            ${errors.map(e => `<li>${esc(e)}</li>`).join('')}
+          </ul>
+          <p style="margin-top:12px;color:var(--muted);font-size:0.83rem">יש לתקן את המיפוי כך שיכיל רק מיקומים ותת-מיקומים המוגדרים בהגדרות.</p>
+        `,
+        actions: [{ id: 'ok', label: 'סגור', onClick: Modal.close }]
+      });
+    }
 
     // ── Map parser (ported from map2shinua.py) ──
 
