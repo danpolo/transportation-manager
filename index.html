@@ -4786,7 +4786,12 @@
         return aSubIdx - bSubIdx || a.sub.localeCompare(b.sub);
       });
 
-      results.innerHTML = sortedGroups.map(g => {
+      const clearSelBar = _selectedItems.size
+        ? `<div style="padding:8px 12px;display:flex;justify-content:flex-start">
+             <button id="sr-clear-sel" class="btn btn-sm btn-outline">נקה בחירות (${_selectedItems.size})</button>
+           </div>`
+        : '';
+      results.innerHTML = clearSelBar + sortedGroups.map(g => {
         const gKey = g.loc + '||' + g.sub;
         const isPinned = _pinnedGroups.has(gKey);
         return `
@@ -4893,8 +4898,30 @@
           if (cb.checked) _selectedItems.add(key);
           else _selectedItems.delete(key);
           cb.closest('.sr-item').classList.toggle('sr-checked', cb.checked);
+          updateClearSelBtn();
         });
       });
+
+      // Wire clear-selections button
+      const clearSelBtn = results.querySelector('#sr-clear-sel');
+      if (clearSelBtn) {
+        clearSelBtn.addEventListener('click', () => {
+          _selectedItems.clear();
+          results.querySelectorAll('.sr-check').forEach(cb => {
+            cb.checked = false;
+            cb.closest('.sr-item').classList.remove('sr-checked');
+          });
+          updateClearSelBtn();
+        });
+      }
+    }
+
+    function updateClearSelBtn() {
+      const btn = document.getElementById('sr-clear-sel');
+      if (!btn && !_selectedItems.size) return;
+      if (!btn && _selectedItems.size) { renderResults(); return; }
+      if (btn && !_selectedItems.size) { btn.parentElement.remove(); return; }
+      btn.textContent = `נקה בחירות (${_selectedItems.size})`;
     }
 
     // ── Clear all ─────────────────────────────────────────────────
