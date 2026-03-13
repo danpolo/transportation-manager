@@ -1472,6 +1472,17 @@
     }
 
     async function parseImportText(text) {
+      // iPhone WhatsApp bug: first line (SH2S) sometimes gets replaced with
+      // random Hebrew text, but the actual data and SH2E remain intact.
+      // Fix: if SH2E exists but SH2S is missing, replace everything before
+      // the first newline with SH2S.
+      const e2raw = text.indexOf('SH2E');
+      if (e2raw >= 0 && text.indexOf('SH2S') < 0) {
+        const firstNl = text.indexOf('\n');
+        if (firstNl >= 0 && firstNl < e2raw) {
+          text = 'SH2S' + text.slice(firstNl);
+        }
+      }
       // V2 compressed format
       const s2 = text.indexOf('SH2S');
       const e2 = text.indexOf('SH2E');
@@ -5023,6 +5034,7 @@
 
     // ── Item click → modal ────────────────────────────────────────
     document.getElementById('sr-results').addEventListener('click', e => {
+      if (e.target.closest('.modern-check')) return;
       const item = e.target.closest('.sr-item');
       if (!item) return;
       const type = item.dataset.type;
@@ -5171,7 +5183,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v43</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v44</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
