@@ -454,10 +454,6 @@
       font-size: 0.95rem; font-weight: 600; cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
-    .sr-empty-label input[type=checkbox] {
-      width: 18px; height: 18px; cursor: pointer;
-      accent-color: var(--primary); flex-shrink: 0;
-    }
     .sr-filter-actions {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--border);
@@ -809,6 +805,159 @@
     .sr-item.sr-checked {
       background: color-mix(in srgb, var(--brand) 10%, transparent);
     }
+
+    /* ─── Modern Toggle Switch ─── */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--border);
+      border-radius: 24px;
+      transition: background 0.25s, box-shadow 0.25s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      bottom: 3px;
+      right: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.25s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--brand);
+    }
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(-20px);
+    }
+    .toggle-switch input:focus-visible + .toggle-slider {
+      box-shadow: 0 0 0 2px var(--focus);
+    }
+
+    /* ─── Modern Checkbox ─── */
+    .modern-check {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .modern-check input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .modern-check-box {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: var(--input-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, border-color 0.2s;
+      cursor: pointer;
+    }
+    .modern-check-box::after {
+      content: '';
+      width: 6px;
+      height: 11px;
+      border: solid #fff;
+      border-width: 0 2.5px 2.5px 0;
+      transform: rotate(45deg) scale(0);
+      transition: transform 0.15s;
+      margin-top: -2px;
+    }
+    .modern-check input:checked ~ .modern-check-box {
+      background: var(--brand);
+      border-color: var(--brand);
+    }
+    .modern-check input:checked ~ .modern-check-box::after {
+      transform: rotate(45deg) scale(1);
+    }
+    .modern-check input:focus-visible ~ .modern-check-box {
+      box-shadow: 0 0 0 2px var(--focus);
+    }
+
+    /* ─── Drag Handle for reorder ─── */
+    .reorder-handle {
+      touch-action: none;
+      cursor: grab;
+      color: var(--muted);
+      padding: 8px 10px;
+      user-select: none;
+      opacity: 0.45;
+      line-height: 1;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .reorder-handle:active { cursor: grabbing; }
+    .reorder-handle svg { pointer-events: none; }
+    .reorder-item { transition: transform 0.15s; }
+    .reorder-item.dragging {
+      opacity: 0.9;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      z-index: 50;
+      position: relative;
+      border-radius: 8px;
+    }
+    .reorder-placeholder {
+      background: color-mix(in srgb, var(--brand) 12%, transparent);
+      border: 2px dashed var(--brand);
+      border-radius: 8px;
+      min-height: 44px;
+      transition: height 0.1s;
+    }
+
+    /* ─── Collapsible summary sections ─── */
+    .sr-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      padding: 10px 4px 6px;
+      user-select: none;
+    }
+    .sr-section-header .sr-section-title { padding: 0; flex: 1; }
+    .sr-section-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.1rem;
+      color: var(--muted);
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: transform 0.2s, background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      line-height: 1;
+    }
+    .sr-section-toggle:active { background: var(--border); }
+    .sr-section-header.collapsed .sr-section-toggle { transform: rotate(-90deg); }
+    .sr-section-body { overflow: hidden; transition: max-height 0.25s ease; }
+    .sr-section-header.collapsed + .sr-section-body { max-height: 0 !important; overflow: hidden; }
 
     /* ─── Search highlight ─── */
     mark {
@@ -1557,6 +1706,139 @@
        SCRIPT 4 — Components
   ════════════════════════════════════════════════════ -->
   <script>
+  // ── Drag-and-drop reorder ──
+  function _initReorder(container, opts) {
+    const { handleSelector, itemSelector, onReorder } = opts;
+    let _dragEl = null, _placeholder = null, _startY = 0, _longPressTimer = null;
+    let _dragging = false, _items = [], _fromIdx = -1;
+
+    function getItems() { return [...container.querySelectorAll(itemSelector)]; }
+
+    function haptic() {
+      if (navigator.vibrate) navigator.vibrate(15);
+    }
+
+    function startDrag(el, clientY) {
+      _dragging = true;
+      _dragEl = el;
+      _items = getItems();
+      _fromIdx = _items.indexOf(el);
+      _startY = clientY;
+      haptic();
+
+      // Create placeholder
+      _placeholder = document.createElement('div');
+      _placeholder.className = 'reorder-placeholder';
+      _placeholder.style.height = el.offsetHeight + 'px';
+      el.parentNode.insertBefore(_placeholder, el);
+
+      // Style dragged element
+      el.classList.add('dragging');
+      el.style.position = 'fixed';
+      el.style.left = '0';
+      el.style.right = '0';
+      el.style.width = container.offsetWidth + 'px';
+      const rect = _placeholder.getBoundingClientRect();
+      el.style.top = rect.top + 'px';
+      el.style.zIndex = '100';
+      document.body.appendChild(el);
+    }
+
+    function moveDrag(clientY) {
+      if (!_dragging || !_dragEl) return;
+      const dy = clientY - _startY;
+      const placeholderRect = _placeholder.getBoundingClientRect();
+      _dragEl.style.top = (placeholderRect.top + dy) + 'px';
+
+      // Find drop target
+      const items = getItems();
+      for (const item of items) {
+        if (item === _dragEl) continue;
+        const r = item.getBoundingClientRect();
+        const midY = r.top + r.height / 2;
+        if (clientY < midY) {
+          item.parentNode.insertBefore(_placeholder, item);
+          _startY = clientY;
+          return;
+        }
+      }
+      // Past last item
+      if (items.length) {
+        const last = items[items.length - 1];
+        if (last !== _dragEl) {
+          last.parentNode.insertAfter ? last.parentNode.insertAfter(_placeholder, last) :
+            last.parentNode.insertBefore(_placeholder, last.nextSibling);
+          _startY = clientY;
+        }
+      }
+    }
+
+    function endDrag() {
+      if (!_dragging || !_dragEl) return;
+      _dragging = false;
+
+      // Insert element back at placeholder position
+      _placeholder.parentNode.insertBefore(_dragEl, _placeholder);
+      _placeholder.remove();
+      _placeholder = null;
+
+      // Reset styles
+      _dragEl.classList.remove('dragging');
+      _dragEl.style.position = '';
+      _dragEl.style.left = '';
+      _dragEl.style.right = '';
+      _dragEl.style.width = '';
+      _dragEl.style.top = '';
+      _dragEl.style.zIndex = '';
+
+      // Compute new index
+      const newItems = getItems();
+      const toIdx = newItems.indexOf(_dragEl);
+      if (toIdx !== -1 && toIdx !== _fromIdx) {
+        onReorder(_fromIdx, toIdx);
+      }
+      _dragEl = null;
+    }
+
+    function cancelLongPress() {
+      if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+    }
+
+    container.addEventListener('pointerdown', e => {
+      const handle = e.target.closest(handleSelector);
+      if (!handle) return;
+      const item = handle.closest(itemSelector);
+      if (!item) return;
+      e.preventDefault();
+
+      const startY = e.clientY;
+      _longPressTimer = setTimeout(() => {
+        _longPressTimer = null;
+        startDrag(item, startY);
+      }, 200); // slightly longer than normal press
+
+      const onMove = ev => {
+        if (!_dragging) {
+          // If moved too much before long press fires, cancel
+          if (Math.abs(ev.clientY - startY) > 5) cancelLongPress();
+          return;
+        }
+        ev.preventDefault();
+        moveDrag(ev.clientY);
+      };
+      const onUp = () => {
+        cancelLongPress();
+        if (_dragging) endDrag();
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+      };
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
+    });
+  }
+
   // ── Autocomplete ──
   // makeAutocomplete(inputEl, getOptions)
   // getOptions: () => string[]  — called lazily on each keystroke
@@ -2275,8 +2557,8 @@
               <label class="form-label">שם מיקום</label>
               <input id="el-name" class="form-input" placeholder="משני">
             </div>
-            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer">
-              <input type="checkbox" id="el-inmap"> הצג במיפוי
+            <label style="display:flex;align-items:center;gap:10px;margin-bottom:14px;cursor:pointer">
+              <label class="modern-check"><input type="checkbox" id="el-inmap"><span class="modern-check-box"></span></label> הצג במיפוי
             </label>
             <button id="el-save" class="btn btn-primary btn-full">שמור מיקום</button>
           </div>
@@ -2284,10 +2566,10 @@
           <div class="card mt-12">
             <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
               <span>מיקומים קיימים</span>
-              <div style="display:flex;align-items:center;gap:6px">
-                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.78rem;font-weight:normal">
+              <div style="display:flex;align-items:center;gap:8px">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.78rem;font-weight:normal">
                   <span id="el-lock-emoji">🔓</span> נעילת סדר
-                  <input type="checkbox" id="el-order-lock">
+                  <span class="toggle-switch"><input type="checkbox" id="el-order-lock"><span class="toggle-slider"></span></span>
                 </label>
                 <button class="btn-icon" id="el-order-lock-info" title="מידע" style="font-size:0.85rem;padding:2px 5px;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center">i</button>
               </div>
@@ -2320,11 +2602,7 @@
           const subs = (l.subLocations || []);
           const subStr = subs.length ? subs.join(', ') : '';
           return `
-            <div class="list-item" data-loc-idx="${idx}">
-              <div style="display:flex;flex-direction:column;gap:2px;margin-inline-end:6px">
-                <button class="btn-icon el-move-up" data-idx="${idx}" title="הזז למעלה" style="font-size:0.65rem;padding:0;line-height:1"${idx === 0 ? ' disabled' : ''}>▲</button>
-                <button class="btn-icon el-move-down" data-idx="${idx}" title="הזז למטה" style="font-size:0.65rem;padding:0;line-height:1"${idx === locs.length - 1 ? ' disabled' : ''}>▼</button>
-              </div>
+            <div class="list-item reorder-item" data-loc-idx="${idx}">
               <div class="list-item-body" style="flex:1">
                 <div class="list-item-title">${l.name}</div>
                 <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}</div>
@@ -2333,6 +2611,7 @@
                 <button class="btn-icon el-toggle-btn" data-name="${esc(l.name)}" title="${l.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי'}">${l.inMap ? '🗺️' : '📍'}</button>
                 <button class="btn-icon el-del-btn" data-name="${esc(l.name)}" title="מחק">🗑️</button>
               </div>
+              <div class="reorder-handle" data-idx="${idx}"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
             </div>
           `;
         }).join('');
@@ -2397,23 +2676,22 @@
         tabContent.querySelector('#el-inmap').checked = false;
       });
 
-      tabContent.querySelector('#el-list').addEventListener('click', e => {
-        // reorder buttons
-        const moveUp = e.target.closest('.el-move-up');
-        const moveDown = e.target.closest('.el-move-down');
-        if (moveUp || moveDown) {
-          const idx = parseInt((moveUp || moveDown).dataset.idx);
+      // Drag-and-drop reorder for locations
+      _initReorder(tabContent.querySelector('#el-list'), {
+        handleSelector: '.reorder-handle',
+        itemSelector: '.reorder-item',
+        onReorder: (fromIdx, toIdx) => {
           const locs = DB.getMetadata().locations;
           const names = locs.map(l => l.name);
-          const swapIdx = moveUp ? idx - 1 : idx + 1;
-          if (swapIdx >= 0 && swapIdx < names.length) {
-            [names[idx], names[swapIdx]] = [names[swapIdx], names[idx]];
-            DB.setLocationOrder(names);
-            renderList();
-            refreshSubLocSelect();
-          }
-          return;
+          const [moved] = names.splice(fromIdx, 1);
+          names.splice(toIdx, 0, moved);
+          DB.setLocationOrder(names);
+          renderList();
+          refreshSubLocSelect();
         }
+      });
+
+      tabContent.querySelector('#el-list').addEventListener('click', e => {
         const toggleBtn = e.target.closest('.el-toggle-btn');
         const delBtn    = e.target.closest('.el-del-btn');
         if (toggleBtn) {
@@ -2491,9 +2769,9 @@
             <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
               <span>מאפיינים קיימים</span>
               <div style="display:flex;align-items:center;gap:6px">
-                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.78rem;font-weight:normal">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.78rem;font-weight:normal">
                   <span id="ep-lock-emoji">🔓</span> נעילת סדר
-                  <input type="checkbox" id="ep-order-lock">
+                  <span class="toggle-switch"><input type="checkbox" id="ep-order-lock"><span class="toggle-slider"></span></span>
                 </label>
                 <button class="btn-icon" id="ep-order-lock-info" title="מידע" style="font-size:0.85rem;padding:2px 5px;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center">i</button>
               </div>
@@ -2523,18 +2801,15 @@
             ? 'תנאי: ' + conds.map(c => `${esc(c.prop)} = ${c.value ? esc(c.value) : 'לא נבחר'}`).join(' או ')
             : '';
           return `
-          <div class="prop-group" data-prop="${esc(p.name)}" data-prop-idx="${idx}">
+          <div class="prop-group reorder-item" data-prop="${esc(p.name)}" data-prop-idx="${idx}">
             <div class="prop-group-header">
-              <div style="display:flex;flex-direction:column;gap:2px;margin-inline-end:6px">
-                <button class="btn-icon ep-move-up" data-idx="${idx}" title="הזז למעלה" style="font-size:0.65rem;padding:0;line-height:1"${idx === 0 ? ' disabled' : ''}>▲</button>
-                <button class="btn-icon ep-move-down" data-idx="${idx}" title="הזז למטה" style="font-size:0.65rem;padding:0;line-height:1"${idx === props.length - 1 ? ' disabled' : ''}>▼</button>
-              </div>
               <div class="prop-group-header-left" style="flex:1">
                 <i class="prop-chevron">▶</i>
                 <strong>${esc(p.name)}</strong>
                 ${condLabel ? `<span class="card-meta" style="margin-inline-start:8px;font-size:0.72rem">(${condLabel})</span>` : ''}
               </div>
               <button class="btn-icon ep-del-prop" data-prop="${esc(p.name)}" title="מחק מאפיין">✕</button>
+              <div class="reorder-handle" data-idx="${idx}"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
             </div>
             <div class="prop-options">
               <div style="margin-bottom:8px">
@@ -2591,25 +2866,24 @@
         tabContent.querySelector('#ep-name').value = '';
       });
 
-      tabContent.querySelector('#ep-list').addEventListener('click', e => {
-        // reorder property categories
-        const moveUp = e.target.closest('.ep-move-up');
-        const moveDown = e.target.closest('.ep-move-down');
-        if (moveUp || moveDown) {
-          const idx = parseInt((moveUp || moveDown).dataset.idx);
+      // Drag-and-drop reorder for properties
+      _initReorder(tabContent.querySelector('#ep-list'), {
+        handleSelector: '.reorder-handle',
+        itemSelector: '.reorder-item',
+        onReorder: (fromIdx, toIdx) => {
           const props = DB.getMetadata().properties;
           const names = props.map(p => p.name);
-          const swapIdx = moveUp ? idx - 1 : idx + 1;
-          if (swapIdx >= 0 && swapIdx < names.length) {
-            [names[idx], names[swapIdx]] = [names[swapIdx], names[idx]];
-            DB.setPropertyOrder(names);
-            renderList();
-          }
-          return;
+          const [moved] = names.splice(fromIdx, 1);
+          names.splice(toIdx, 0, moved);
+          DB.setPropertyOrder(names);
+          renderList();
         }
+      });
+
+      tabContent.querySelector('#ep-list').addEventListener('click', e => {
         // expand/collapse
         const header = e.target.closest('.prop-group-header');
-        if (header && !e.target.closest('button')) {
+        if (header && !e.target.closest('button') && !e.target.closest('.reorder-handle')) {
           header.closest('.prop-group').classList.toggle('expanded');
           return;
         }
@@ -4091,8 +4365,8 @@
         <div class="sr-suggest-wrap"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 3 (לא לכלול)"></div>
         <div class="sr-suggest-wrap"><input id="sr-exc-4" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 4 (לא לכלול)"></div>
         <div class="sr-suggest-wrap"><input id="sr-exc-5" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 5 (לא לכלול)"></div>
-        <label class="sr-empty-label" style="padding:4px 0;">
-          <input type="checkbox" id="sr-empty-check"> הצג ריקות בלבד
+        <label class="sr-empty-label" style="padding:6px 0;">
+          <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> הצג ריקות בלבד
         </label>
       </div>
       <div class="sr-filter-actions">
@@ -4116,6 +4390,7 @@
     };
 
     const _selectedItems = new Set(); // 'cart:ID' or 'fi:ID'
+    const _summaryCollapsed = { loc: false, combo: false };
 
     const incInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-inc-' + n));
     const excInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-exc-' + n));
@@ -4387,20 +4662,52 @@
         html += `<div class="sr-empty-card"><div class="sr-empty-card-num">${emptyCount}</div><div class="sr-empty-card-lbl">ריקות</div></div>`;
       }
       if (locEntries.length > 1) {
-        html += '<div class="sr-section-title">לפי מיקום</div>';
+        const locCollapsed = _summaryCollapsed.loc ? ' collapsed' : '';
+        html += `<div class="sr-section-header${locCollapsed}" data-section="loc"><span class="sr-section-title">לפי מיקום</span><button class="sr-section-toggle">▼</button></div>`;
+        html += '<div class="sr-section-body">';
         html += locEntries.map(([loc, s]) => {
           const pct = Math.round((s.items / maxLocItems) * 100);
           const countLabel = s.items > 0 ? s.items + (s.empty ? ` (+${s.empty} ריקות)` : '') : s.empty + ' ריקות';
           return `<div class="sr-loc-row"><span class="sr-loc-name">${esc(loc)}</span><div class="sr-loc-bar-wrap"><div class="sr-loc-bar-fill" style="width:${pct}%"></div></div><span class="sr-loc-count">${countLabel}</span></div>`;
         }).join('');
+        html += '</div>';
       }
       if (comboEntries.length > 1 && propDefs.length) {
-        html += '<div class="sr-section-title">לפי שילוב מאפיינים</div>';
+        const comboCollapsed = _summaryCollapsed.combo ? ' collapsed' : '';
+        html += `<div class="sr-section-header${comboCollapsed}" data-section="combo"><span class="sr-section-title">לפי שילוב מאפיינים</span><button class="sr-section-toggle">▼</button></div>`;
+        html += '<div class="sr-section-body">';
         html += comboEntries.map(c => `<div class="sr-combo-row"><span class="sr-combo-label">${esc(c.label)}</span><span class="sr-combo-count">${c.total} פריטים</span></div>`).join('');
+        html += '</div>';
       }
       html += '</div>';
       el.innerHTML = html;
       el.hidden = false;
+
+      // Wire collapsible section headers
+      el.querySelectorAll('.sr-section-header').forEach(header => {
+        header.addEventListener('click', () => {
+          const section = header.dataset.section;
+          header.classList.toggle('collapsed');
+          _summaryCollapsed[section] = header.classList.contains('collapsed');
+          const body = header.nextElementSibling;
+          if (body && body.classList.contains('sr-section-body')) {
+            if (header.classList.contains('collapsed')) {
+              body.style.maxHeight = '0';
+            } else {
+              body.style.maxHeight = body.scrollHeight + 'px';
+            }
+          }
+        });
+        // Set initial max-height for open sections
+        const body = header.nextElementSibling;
+        if (body && body.classList.contains('sr-section-body')) {
+          if (header.classList.contains('collapsed')) {
+            body.style.maxHeight = '0';
+          } else {
+            body.style.maxHeight = body.scrollHeight + 'px';
+          }
+        }
+      });
     }
 
     // ── Render results ────────────────────────────────────────────
@@ -4530,7 +4837,7 @@
                 ? `<span style="background:var(--area-bg);color:var(--brand);padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-left:6px;">${esc(data.containerType)}</span>` : '';
               return `
                 <div class="list-item sr-item${_selectedItems.has('cart:'+data.cartId) ? ' sr-checked' : ''}" data-type="cart" data-id="${esc(data.cartId)}" style="cursor:pointer">
-                  <input type="checkbox" class="sr-check" data-sel-type="cart" data-sel-id="${esc(data.cartId)}"${_selectedItems.has('cart:'+data.cartId) ? ' checked' : ''}>
+                  <label class="modern-check" style="margin-inline-end:8px"><input type="checkbox" class="sr-check" data-sel-type="cart" data-sel-id="${esc(data.cartId)}"${_selectedItems.has('cart:'+data.cartId) ? ' checked' : ''}><span class="modern-check-box"></span></label>
                   <div class="list-item-body">
                     <div class="list-item-title">${ctBadge}${highlightText(cartLabel(data), terms)}</div>
                     <div class="list-item-sub">${highlightText(subParts.join(' · '), terms)}</div>
@@ -4542,7 +4849,7 @@
               const ps = propSummary(data.properties);
               return `
                 <div class="list-item sr-item${_selectedItems.has('fi:'+data.id) ? ' sr-checked' : ''}" data-type="fi" data-id="${esc(data.id)}" style="cursor:pointer">
-                  <input type="checkbox" class="sr-check" data-sel-type="fi" data-sel-id="${esc(data.id)}"${_selectedItems.has('fi:'+data.id) ? ' checked' : ''}>
+                  <label class="modern-check" style="margin-inline-end:8px"><input type="checkbox" class="sr-check" data-sel-type="fi" data-sel-id="${esc(data.id)}"${_selectedItems.has('fi:'+data.id) ? ' checked' : ''}><span class="modern-check-box"></span></label>
                   <div class="list-item-body">
                     <div class="list-item-title"><span class="badge badge-floor">רצפה</span> ${highlightText(ps || data.id, terms)}</div>
                     <div class="list-item-sub">${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + ' פריטים' : '')}</div>
@@ -4864,7 +5171,7 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v42</span></h1>
+        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v43</span></h1>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
