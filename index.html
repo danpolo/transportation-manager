@@ -108,8 +108,15 @@
       position: relative;
     }
 
-    .screen { min-height: 100%; display: flex; flex-direction: column; }
+    .screen {
+      min-height: 100%; display: flex; flex-direction: column;
+      opacity: 0; transform: translateY(6px);
+      animation: screenIn 0.2s ease forwards;
+    }
     .screen[hidden] { display: none !important; }
+    @keyframes screenIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
 
     /* ─── Screen Header ─── */
     .screen-header {
@@ -1019,30 +1026,6 @@
       color: #fff3ca;
     }
 
-    /* ─── Offline indicator ─── */
-    .offline-indicator {
-      display: none;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      background: var(--danger);
-      color: #fff;
-      font-size: var(--text-xs);
-      font-weight: 600;
-      text-align: center;
-      justify-content: center;
-    }
-    .offline-indicator.show { display: flex; }
-    .offline-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #fff; opacity: 0.7;
-      animation: offlinePulse 1.5s infinite;
-    }
-    @keyframes offlinePulse {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 1; }
-    }
-
     /* ─── Progress bar ─── */
     .progress-overlay {
       position: fixed; inset: 0; z-index: 250;
@@ -1091,6 +1074,90 @@
       -webkit-tap-highlight-color: transparent;
     }
     .btn-icon-edit:active { background: var(--border); }
+
+    /* ─── Pull-to-refresh ─── */
+    .ptr-indicator {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: center;
+      height: 0; overflow: hidden;
+      transition: height 0.2s ease;
+      z-index: 5;
+      color: var(--brand);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      gap: 8px;
+    }
+    .ptr-indicator.pulling { transition: none; }
+    .ptr-indicator .ptr-arrow {
+      font-size: 1.2rem; transition: transform 0.2s;
+    }
+    .ptr-indicator.threshold .ptr-arrow { transform: rotate(180deg); }
+    .ptr-indicator.refreshing .ptr-arrow {
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* ─── Enhanced empty states ─── */
+    .empty-state-rich {
+      text-align: center;
+      padding: 48px 24px 32px;
+      color: var(--muted);
+    }
+    .empty-state-rich .es-illustration {
+      font-size: 3.5rem;
+      margin-bottom: 12px;
+      line-height: 1;
+    }
+    .empty-state-rich .es-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .empty-state-rich .es-desc {
+      font-size: var(--text-sm);
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+    .empty-state-rich .es-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* ─── Recent filters ─── */
+    .recent-filters {
+      display: flex;
+      gap: 6px;
+      padding: 6px 12px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .recent-filters:empty { display: none; }
+    .recent-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: var(--text-xs);
+      font-family: inherit;
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+    .recent-filter-chip:active { background: var(--border); }
+    .recent-filter-chip .rfc-icon { color: var(--brand); }
+    .recent-filter-chip .rfc-remove {
+      color: var(--muted); font-size: 0.65rem; margin-inline-start: 2px;
+      padding: 2px;
+    }
   </style>
 </head>
 <body>
@@ -1104,7 +1171,6 @@
     </main>
     <nav id="bottom-nav"></nav>
   </div>
-  <div id="offline-bar" class="offline-indicator"><span class="offline-dot"></span>אין חיבור לאינטרנט</div>
   <div id="modal-overlay" hidden></div>
   <div id="progress-overlay" hidden></div>
   <div id="toast-container" aria-live="polite"></div>
@@ -2612,7 +2678,7 @@
         const list = tabContent.querySelector('#ec-list');
         const carts = DB.getAllCarts();
         if (!carts.length) {
-          list.innerHTML = '<p class="card-meta">אין פריטים</p>';
+          list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🛒</div><div class="es-desc">עדיין אין עגלות. הוסף עגלה ראשונה למעלה או ייבא מיפוי.</div></div>';
           return;
         }
         list.innerHTML = carts.sort((a,b) => a.cartId.localeCompare(b.cartId)).map(c => {
@@ -2894,7 +2960,7 @@
       function renderList() {
         const list = tabContent.querySelector('#el-list');
         const locs = DB.getMetadata().locations;
-        if (!locs.length) { list.innerHTML = '<p class="card-meta">אין מיקומים</p>'; return; }
+        if (!locs.length) { list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">📍</div><div class="es-desc">הוסף מיקום ראשון למעלה כדי להתחיל.</div></div>'; return; }
         list.innerHTML = locs.map((l, idx) => {
           const subs = (l.subLocations || []);
           const subStr = subs.length ? subs.join(', ') : '';
@@ -3135,7 +3201,7 @@
       function renderList() {
         const list  = tabContent.querySelector('#ep-list');
         const props = DB.getMetadata().properties;
-        if (!props.length) { list.innerHTML = '<p class="card-meta">אין מאפיינים</p>'; return; }
+        if (!props.length) { list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🏷️</div><div class="es-desc">הוסף מאפיין ראשון למעלה כדי לסווג פריטים.</div></div>'; return; }
         list.innerHTML = props.map((p, idx) => {
           const aliases = p.aliases || {};
           const conds = normalizeConditions(p.condition);
@@ -4764,6 +4830,7 @@
           <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> הצג ריקות בלבד
         </label>
       </div>
+      <div id="sr-recent-filters" class="recent-filters"></div>
       <div class="sr-filter-actions">
         <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
         <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">נקה סינון</button>
@@ -4847,6 +4914,90 @@
     } catch { /* ignore */ }
     function _savePins() { localStorage.setItem(PIN_KEY, JSON.stringify([..._pinnedGroups])); }
 
+    // ── Recent filter combos ──────────────────────────────────────
+    const RECENT_KEY = 'shinua_recent_filters';
+    const MAX_RECENT = 5;
+    function _loadRecent() {
+      try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function _saveRecentFilter() {
+      if (!state.includeTerms.length && !state.excludeTerms.length && !state.emptyOnly) return;
+      const entry = {
+        inc: state.includeTerms.slice(),
+        exc: state.excludeTerms.slice(),
+        empty: state.emptyOnly,
+        ts: Date.now()
+      };
+      const label = _recentLabel(entry);
+      if (!label) return;
+      let recents = _loadRecent();
+      // deduplicate by label
+      recents = recents.filter(r => _recentLabel(r) !== label);
+      recents.unshift(entry);
+      if (recents.length > MAX_RECENT) recents = recents.slice(0, MAX_RECENT);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+    }
+    function _recentLabel(r) {
+      const parts = [];
+      if (r.inc && r.inc.length) parts.push(r.inc.join(', '));
+      if (r.exc && r.exc.length) parts.push('!' + r.exc.join(', '));
+      if (r.empty) parts.push('ריקות');
+      return parts.join(' | ');
+    }
+    function _applyRecent(r) {
+      // Reset all fields first
+      incInputs.forEach(i => { i.value = ''; });
+      excInputs.forEach(i => { i.value = ''; });
+      (r.inc || []).forEach((t, i) => { if (incInputs[i]) incInputs[i].value = t; });
+      (r.exc || []).forEach((t, i) => { if (excInputs[i]) excInputs[i].value = t; });
+      state.includeTerms = (r.inc || []).slice();
+      state.excludeTerms = (r.exc || []).slice();
+      state.emptyOnly = !!r.empty;
+      screen.querySelector('#sr-empty-check').checked = state.emptyOnly;
+      // Show enough fields
+      allWraps.forEach((w, i) => {
+        const isInc = i < 5;
+        const idx = isInc ? i : i - 5;
+        const terms = isInc ? r.inc : r.exc;
+        if (terms && idx < terms.length) w.classList.remove('sr-hidden');
+      });
+      _filtersCollapsed = false;
+      inputsContainer.classList.remove('collapsed');
+      closeSuggestions();
+      updateActionsBar();
+      renderResults();
+    }
+    function _removeRecent(label) {
+      let recents = _loadRecent();
+      recents = recents.filter(r => _recentLabel(r) !== label);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+      renderRecentFilters();
+    }
+    function renderRecentFilters() {
+      const container = screen.querySelector('#sr-recent-filters');
+      const recents = _loadRecent();
+      // Only show when no active filter
+      if (countActive() || !recents.length) { container.innerHTML = ''; return; }
+      container.innerHTML = recents.map(r => {
+        const label = _recentLabel(r);
+        return `<button class="recent-filter-chip" data-recent='${esc(JSON.stringify(r))}'>
+          <span class="rfc-icon">⏱</span>${esc(label)}<span class="rfc-remove" data-remove-label="${esc(label)}">✕</span>
+        </button>`;
+      }).join('');
+      container.querySelectorAll('.recent-filter-chip').forEach(chip => {
+        chip.addEventListener('click', e => {
+          if (e.target.closest('.rfc-remove')) {
+            e.stopPropagation();
+            _removeRecent(e.target.dataset.removeLabel);
+            return;
+          }
+          const r = JSON.parse(chip.dataset.recent);
+          _applyRecent(r);
+        });
+      });
+    }
+
     // ── Suggestion pool ───────────────────────────────────────────
     let _suggestions = [];
     function buildSuggestionPool() {
@@ -4920,6 +5071,8 @@
         state.excludeTerms = excInputs.map(i => i.value.trim().toLowerCase()).filter(Boolean);
         updateActionsBar();
         renderResults();
+        _saveRecentFilter();
+        renderRecentFilters();
       }, 150);
     }
 
@@ -4942,9 +5095,12 @@
 
     // Empty-only checkbox
     screen.querySelector('#sr-empty-check').addEventListener('change', e => {
+      if (navigator.vibrate) navigator.vibrate(10);
       state.emptyOnly = e.target.checked;
       updateActionsBar();
       renderResults();
+      _saveRecentFilter();
+      renderRecentFilters();
     });
 
     // ── Actions bar ───────────────────────────────────────────────
@@ -5181,11 +5337,34 @@
       renderSummary(carts, fis);
 
       if (!carts.length && !fis.length) {
-        results.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">🔍</div>
-            <div class="empty-state-text">${countActive() ? 'לא נמצאו תוצאות לסינון הנוכחי' : 'אין פריטים במערכת'}</div>
-          </div>`;
+        if (countActive()) {
+          results.innerHTML = `
+            <div class="empty-state-rich">
+              <div class="es-illustration">🔍</div>
+              <div class="es-title">לא נמצאו תוצאות</div>
+              <div class="es-desc">נסה לשנות את מילות הסינון או להסיר סינונים</div>
+              <div class="es-actions">
+                <button class="btn btn-sm btn-outline" id="sr-empty-clear">נקה סינון</button>
+              </div>
+            </div>`;
+          const ecBtn = results.querySelector('#sr-empty-clear');
+          if (ecBtn) ecBtn.addEventListener('click', () => document.getElementById('sr-clear-btn').click());
+        } else {
+          results.innerHTML = `
+            <div class="empty-state-rich">
+              <div class="es-illustration">📦</div>
+              <div class="es-title">אין פריטים במערכת</div>
+              <div class="es-desc">התחל בייבוא נתונים או הוספת עגלות ומיקומים</div>
+              <div class="es-actions">
+                <button class="btn btn-sm btn-primary" id="sr-empty-import">📥 ייבוא נתונים</button>
+                <button class="btn btn-sm btn-outline" id="sr-empty-edit">✏️ הוספת עגלה</button>
+              </div>
+            </div>`;
+          const impBtn = results.querySelector('#sr-empty-import');
+          const edBtn = results.querySelector('#sr-empty-edit');
+          if (impBtn) impBtn.addEventListener('click', () => { Router.navigate('main'); history.replaceState(null, '', '#main'); });
+          if (edBtn) edBtn.addEventListener('click', () => { Router.navigate('edit'); history.replaceState(null, '', '#edit'); });
+        }
         return;
       }
 
@@ -5336,6 +5515,7 @@
       results.querySelectorAll('.sr-check').forEach(cb => {
         cb.addEventListener('click', e => {
           e.stopPropagation();
+          if (navigator.vibrate) navigator.vibrate(10);
           const key = cb.dataset.selType + ':' + cb.dataset.selId;
           if (cb.checked) _selectedItems.add(key);
           else _selectedItems.delete(key);
@@ -5385,6 +5565,7 @@
       closeSuggestions();
       updateActionsBar();
       renderResults();
+      renderRecentFilters();
     });
 
     // ── Copy results (plain text) ─────────────────────────────────
@@ -5645,6 +5826,7 @@
         buildSuggestionPool();
         updateActionsBar();
         renderResults();
+        renderRecentFilters();
       }
     });
   }
@@ -5661,7 +5843,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v45</span>
+        <span class="version-badge">v46</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -5769,25 +5951,18 @@
 
     // map
     screen.querySelector('#main-map').addEventListener('click', () => {
-      Progress.show('מייצר מיפוי...');
-      Progress.update(20);
-      // Use requestAnimationFrame to allow the progress UI to render
-      requestAnimationFrame(() => {
-        const raw = DB.load();
-        Progress.update(60);
-        const mapText = Utils.generateMapText(raw);
-        Progress.update(90);
-        Utils.copyToClipboard(mapText)
-          .then(() => { Progress.update(100); setTimeout(() => { Progress.hide(); Toast.show('מיפוי הועתק ללוח', 'success'); }, 200); })
-          .catch(() => {
-            Progress.hide();
-            Modal.open({
-              title: 'מיפוי',
-              html: `<pre style="font-size:0.82rem;white-space:pre-wrap;word-break:break-word;direction:rtl;text-align:right">${mapText}</pre>`,
-              actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
-            });
+      const raw = DB.load();
+      const mapText = Utils.generateMapText(raw);
+      Utils.copyToClipboard(mapText)
+        .then(() => Toast.show('מיפוי הועתק ללוח', 'success'))
+        .catch(() => {
+          // fallback: show in modal
+          Modal.open({
+            title: 'מיפוי',
+            html: `<pre style="font-size:0.82rem;white-space:pre-wrap;word-break:break-word;direction:rtl;text-align:right">${mapText}</pre>`,
+            actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
           });
-      });
+        });
     });
 
     // map edit — open map text in editable textarea, save = replace all via map import
@@ -6420,6 +6595,60 @@
       });
     });
 
+    // ── Pull-to-refresh ─────────────────────────────────────────
+    const ptrIndicator = document.createElement('div');
+    ptrIndicator.className = 'ptr-indicator';
+    ptrIndicator.innerHTML = '<span class="ptr-arrow">↓</span><span class="ptr-text">משוך לרענון</span>';
+    screen.insertBefore(ptrIndicator, screen.firstChild.nextSibling); // after header
+
+    const PTR_THRESHOLD = 70;
+    let _ptrStartY = 0, _ptrDist = 0, _ptrActive = false, _ptrRefreshing = false;
+    const scrContainer = document.getElementById('screen-container');
+
+    scrContainer.addEventListener('touchstart', e => {
+      if (Router.getCurrent() !== 'main' || _ptrRefreshing) return;
+      if (scrContainer.scrollTop > 5) return;
+      _ptrStartY = e.touches[0].clientY;
+      _ptrActive = true;
+      _ptrDist = 0;
+      ptrIndicator.classList.add('pulling');
+      ptrIndicator.classList.remove('threshold', 'refreshing');
+    }, { passive: true });
+
+    scrContainer.addEventListener('touchmove', e => {
+      if (!_ptrActive || _ptrRefreshing) return;
+      const dy = e.touches[0].clientY - _ptrStartY;
+      if (dy < 0 || scrContainer.scrollTop > 5) { _ptrActive = false; ptrIndicator.style.height = '0'; return; }
+      _ptrDist = Math.min(dy * 0.5, 100);
+      ptrIndicator.style.height = _ptrDist + 'px';
+      ptrIndicator.classList.toggle('threshold', _ptrDist >= PTR_THRESHOLD);
+      ptrIndicator.querySelector('.ptr-text').textContent = _ptrDist >= PTR_THRESHOLD ? 'שחרר לרענון' : 'משוך לרענון';
+    }, { passive: true });
+
+    scrContainer.addEventListener('touchend', () => {
+      if (!_ptrActive) return;
+      ptrIndicator.classList.remove('pulling');
+      if (_ptrDist >= PTR_THRESHOLD && !_ptrRefreshing) {
+        _ptrRefreshing = true;
+        ptrIndicator.classList.add('refreshing');
+        ptrIndicator.querySelector('.ptr-text').textContent = 'מרענן...';
+        ptrIndicator.style.height = '44px';
+        if (navigator.vibrate) navigator.vibrate(15);
+        // Reload data from localStorage (in case another tab wrote) and re-render
+        setTimeout(() => {
+          DB.load();
+          ptrIndicator.classList.remove('refreshing', 'threshold');
+          ptrIndicator.style.height = '0';
+          _ptrRefreshing = false;
+          Toast.show('נתונים רועננו', 'success');
+        }, 600);
+      } else {
+        ptrIndicator.style.height = '0';
+      }
+      _ptrActive = false;
+      _ptrDist = 0;
+    }, { passive: true });
+
     Router.register('main', {
       onShow() {}
     });
@@ -6446,14 +6675,6 @@
       if (this._el) { this._el.hidden = true; this._el.innerHTML = ''; }
     }
   };
-
-  // ── Offline indicator ─────────────────────────────
-  function _updateOnlineStatus() {
-    const bar = document.getElementById('offline-bar');
-    if (bar) bar.classList.toggle('show', !navigator.onLine);
-  }
-  window.addEventListener('online', _updateOnlineStatus);
-  window.addEventListener('offline', _updateOnlineStatus);
 
   // ── Theme management ─────────────────────────────
   const THEME_KEY = 'shinua_theme';
@@ -6488,8 +6709,6 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(console.warn);
     }
-    // Initial offline check
-    _updateOnlineStatus();
 
     // Build nav
     BottomNav.render();
@@ -6504,6 +6723,13 @@
     // Wire up theme toggle
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
+    // Global haptic feedback on checkbox/toggle taps
+    document.addEventListener('change', e => {
+      if (e.target.matches('.modern-check input, .toggle-switch input, .fp-check-label input')) {
+        if (navigator.vibrate) navigator.vibrate(10);
+      }
+    });
 
     // Navigate to initial screen
     const initial = location.hash.replace('#', '') || 'main';
