@@ -5034,6 +5034,7 @@
 
     // ── Item click → modal ────────────────────────────────────────
     document.getElementById('sr-results').addEventListener('click', e => {
+      if (e.target.closest('.modern-check')) return;
       const item = e.target.closest('.sr-item');
       if (!item) return;
       const type = item.dataset.type;
