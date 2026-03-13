@@ -32,6 +32,19 @@
       --theme-btn-bg: #ffffff;
       --nav-h: 64px;
       --hdr-h: 56px;
+      /* spacing scale */
+      --sp-2: 2px; --sp-4: 4px; --sp-6: 6px; --sp-8: 8px;
+      --sp-10: 10px; --sp-12: 12px; --sp-14: 14px; --sp-16: 16px;
+      --sp-20: 20px; --sp-24: 24px;
+      /* font-size scale */
+      --text-xs: 0.72rem; --text-sm: 0.82rem; --text-base: 0.95rem;
+      --text-lg: 1.05rem; --text-xl: 1.125rem; --text-2xl: 1.6rem;
+      /* radius scale */
+      --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 18px;
+      /* shadow scale */
+      --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
+      --shadow-lg: 0 8px 28px rgba(0,0,0,0.12);
       /* aliases for backward compat */
       --primary: var(--brand);
       --accent: var(--focus);
@@ -95,8 +108,15 @@
       position: relative;
     }
 
-    .screen { min-height: 100%; display: flex; flex-direction: column; }
+    .screen {
+      min-height: 100%; display: flex; flex-direction: column;
+      opacity: 0; transform: translateY(6px);
+      animation: screenIn 0.2s ease forwards;
+    }
     .screen[hidden] { display: none !important; }
+    @keyframes screenIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
 
     /* ─── Screen Header ─── */
     .screen-header {
@@ -722,6 +742,41 @@
       gap: 8px;
       padding: 12px;
     }
+    .sr-search-inputs.collapsed { display: none; }
+    .sr-collapse-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.92em;
+      color: var(--ink);
+      direction: rtl;
+    }
+    .sr-collapse-bar:active { opacity: 0.7; }
+    .sr-collapse-summary {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--secondary);
+    }
+    .sr-collapse-toggle {
+      font-size: 0.85em;
+      color: var(--primary);
+      white-space: nowrap;
+    }
+    .sr-add-filter {
+      padding: 0 12px 4px;
+      direction: rtl;
+    }
+    .sr-add-filter a {
+      font-size: 0.88em;
+      color: var(--primary);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .sr-suggest-wrap.sr-hidden { display: none; }
     .sr-search-field {
       width: 100%;
       border: 1px solid var(--line);
@@ -970,6 +1025,139 @@
       background: #6f5a24;
       color: #fff3ca;
     }
+
+    /* ─── Progress bar ─── */
+    .progress-overlay {
+      position: fixed; inset: 0; z-index: 250;
+      background: rgba(0,0,0,0.35);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .progress-overlay[hidden] { display: none !important; }
+    .progress-box {
+      background: var(--card); border-radius: var(--radius-xl);
+      padding: 28px 32px; min-width: 240px; text-align: center;
+      box-shadow: var(--shadow-lg);
+    }
+    .progress-label { font-size: var(--text-base); font-weight: 600; margin-bottom: 14px; color: var(--text); }
+    .progress-track {
+      width: 100%; height: 6px; background: var(--border);
+      border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: var(--brand); border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .progress-spinner {
+      width: 28px; height: 28px; border: 3px solid var(--border);
+      border-top-color: var(--brand); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Version badge ─── */
+    .version-badge {
+      font-size: var(--text-xs);
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    /* ─── Inline edit button ─── */
+    .btn-icon-edit {
+      background: none; border: none; cursor: pointer;
+      padding: 4px 6px; border-radius: var(--radius-sm);
+      color: var(--brand); font-size: 0.85rem; line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-icon-edit:active { background: var(--border); }
+
+    /* ─── Pull-to-refresh ─── */
+    .ptr-indicator {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: center;
+      height: 0; overflow: hidden;
+      transition: height 0.2s ease;
+      z-index: 5;
+      color: var(--brand);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      gap: 8px;
+    }
+    .ptr-indicator.pulling { transition: none; }
+    .ptr-indicator .ptr-arrow {
+      font-size: 1.2rem; transition: transform 0.2s;
+    }
+    .ptr-indicator.threshold .ptr-arrow { transform: rotate(180deg); }
+    .ptr-indicator.refreshing .ptr-arrow {
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* ─── Enhanced empty states ─── */
+    .empty-state-rich {
+      text-align: center;
+      padding: 48px 24px 32px;
+      color: var(--muted);
+    }
+    .empty-state-rich .es-illustration {
+      font-size: 3.5rem;
+      margin-bottom: 12px;
+      line-height: 1;
+    }
+    .empty-state-rich .es-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .empty-state-rich .es-desc {
+      font-size: var(--text-sm);
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+    .empty-state-rich .es-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* ─── Recent filters ─── */
+    .recent-filters {
+      display: flex;
+      gap: 6px;
+      padding: 6px 12px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .recent-filters:empty { display: none; }
+    .recent-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: var(--text-xs);
+      font-family: inherit;
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+    .recent-filter-chip:active { background: var(--border); }
+    .recent-filter-chip .rfc-icon { color: var(--brand); }
+    .recent-filter-chip .rfc-remove {
+      color: var(--muted); font-size: 0.65rem; margin-inline-start: 2px;
+      padding: 2px;
+    }
   </style>
 </head>
 <body>
@@ -984,6 +1172,7 @@
     <nav id="bottom-nav"></nav>
   </div>
   <div id="modal-overlay" hidden></div>
+  <div id="progress-overlay" hidden></div>
   <div id="toast-container" aria-live="polite"></div>
 
   <!-- ═══════════════════════════════════════════════════
@@ -1227,6 +1416,125 @@
       return prop.aliases[option] || [];
     }
 
+    function renameCartType(oldName, newName) {
+      const db = load();
+      const idx = db.metadata.cartTypes.indexOf(oldName);
+      if (idx >= 0) db.metadata.cartTypes[idx] = newName;
+      // update all carts that use this type
+      Object.values(db.carts).forEach(c => {
+        if (c.cartType === oldName) c.cartType = newName;
+      });
+      save();
+    }
+
+    function renameContainerType(oldName, newName) {
+      if (oldName === 'עגלה') return; // cannot rename default
+      const db = load();
+      const idx = db.metadata.containerTypes.indexOf(oldName);
+      if (idx >= 0) db.metadata.containerTypes[idx] = newName;
+      Object.values(db.carts).forEach(c => {
+        if (c.containerType === oldName) c.containerType = newName;
+      });
+      save();
+    }
+
+    function renameLocation(oldName, newName) {
+      const db = load();
+      const loc = db.metadata.locations.find(l => l.name === oldName);
+      if (loc) loc.name = newName;
+      // update all carts and floor items referencing this location
+      Object.values(db.carts).forEach(c => {
+        if (c.location === oldName) c.location = newName;
+      });
+      Object.values(db.floorItems).forEach(fi => {
+        if (fi.location === oldName) fi.location = newName;
+      });
+      save();
+    }
+
+    function renameSubLocation(locName, oldSub, newSub) {
+      const db = load();
+      const loc = db.metadata.locations.find(l => l.name === locName);
+      if (loc && loc.subLocations) {
+        const idx = loc.subLocations.indexOf(oldSub);
+        if (idx >= 0) loc.subLocations[idx] = newSub;
+      }
+      // update all carts and floor items
+      Object.values(db.carts).forEach(c => {
+        if (c.location === locName && c.subLocation === oldSub) c.subLocation = newSub;
+      });
+      Object.values(db.floorItems).forEach(fi => {
+        if (fi.location === locName && fi.subLocation === oldSub) fi.subLocation = newSub;
+      });
+      save();
+    }
+
+    function renameProperty(oldName, newName) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === oldName);
+      if (prop) prop.name = newName;
+      // update property references in conditions
+      db.metadata.properties.forEach(p => {
+        if (p.condition) {
+          const conds = Array.isArray(p.condition) ? p.condition : [p.condition];
+          conds.forEach(c => { if (c.prop === oldName) c.prop = newName; });
+        }
+      });
+      // update all carts and floor items property keys
+      Object.values(db.carts).forEach(c => {
+        if (c.properties && c.properties[oldName] !== undefined) {
+          c.properties[newName] = c.properties[oldName];
+          delete c.properties[oldName];
+        }
+        (c.extraItems || []).forEach(ex => {
+          if (ex.properties && ex.properties[oldName] !== undefined) {
+            ex.properties[newName] = ex.properties[oldName];
+            delete ex.properties[oldName];
+          }
+        });
+      });
+      Object.values(db.floorItems).forEach(fi => {
+        if (fi.properties && fi.properties[oldName] !== undefined) {
+          fi.properties[newName] = fi.properties[oldName];
+          delete fi.properties[oldName];
+        }
+      });
+      save();
+    }
+
+    function renamePropertyOption(propName, oldOpt, newOpt) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      if (!prop) return;
+      const idx = prop.options.indexOf(oldOpt);
+      if (idx >= 0) prop.options[idx] = newOpt;
+      // move aliases
+      if (prop.aliases && prop.aliases[oldOpt]) {
+        prop.aliases[newOpt] = prop.aliases[oldOpt];
+        delete prop.aliases[oldOpt];
+      }
+      // update condition values
+      db.metadata.properties.forEach(p => {
+        if (p.condition) {
+          const conds = Array.isArray(p.condition) ? p.condition : [p.condition];
+          conds.forEach(c => {
+            if (c.prop === propName && c.value === oldOpt) c.value = newOpt;
+          });
+        }
+      });
+      // update carts and floor items
+      Object.values(db.carts).forEach(c => {
+        if (c.properties && c.properties[propName] === oldOpt) c.properties[propName] = newOpt;
+        (c.extraItems || []).forEach(ex => {
+          if (ex.properties && ex.properties[propName] === oldOpt) ex.properties[propName] = newOpt;
+        });
+      });
+      Object.values(db.floorItems).forEach(fi => {
+        if (fi.properties && fi.properties[propName] === oldOpt) fi.properties[propName] = newOpt;
+      });
+      save();
+    }
+
     function addMetaCart(cartId) {
       const db = load();
       if (!db.metadata.carts.includes(cartId)) {
@@ -1346,6 +1654,8 @@
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
       addPropertyOption, removePropertyOption, setOptionAliases, getOptionAliases,
       addMetaCart, removeMetaCart,
+      renameCartType, renameContainerType, renameLocation, renameSubLocation,
+      renameProperty, renamePropertyOption,
       importJSON, getRaw, clear,
       setLocationOrder, setPropertyOrder,
       setLocationOrderLocked, setPropertyOrderLocked
@@ -2329,6 +2639,7 @@
           <div class="list-item">
             <div class="list-item-body"><div class="list-item-title">${esc(t)}</div></div>
             <div class="list-item-actions">
+              <button class="btn-icon-edit ec-renametype-btn" data-type="${esc(t)}" title="שנה שם">✏️</button>
               <button class="btn-icon ec-deltype-btn" data-type="${esc(t)}" title="מחק">🗑️</button>
             </div>
           </div>
@@ -2349,6 +2660,7 @@
           <div class="list-item">
             <div class="list-item-body"><div class="list-item-title">${esc(t)}</div></div>
             <div class="list-item-actions">
+              <button class="btn-icon-edit ec-renamecontainertype-btn" data-type="${esc(t)}" title="שנה שם">✏️</button>
               <button class="btn-icon ec-delcontainertype-btn" data-type="${esc(t)}" title="מחק">🗑️</button>
             </div>
           </div>
@@ -2366,7 +2678,7 @@
         const list = tabContent.querySelector('#ec-list');
         const carts = DB.getAllCarts();
         if (!carts.length) {
-          list.innerHTML = '<p class="card-meta">אין פריטים</p>';
+          list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🛒</div><div class="es-desc">עדיין אין עגלות. הוסף עגלה ראשונה למעלה או ייבא מיפוי.</div></div>';
           return;
         }
         list.innerHTML = carts.sort((a,b) => a.cartId.localeCompare(b.cartId)).map(c => {
@@ -2508,6 +2820,26 @@
       });
 
       tabContent.querySelector('#ec-type-list').addEventListener('click', e => {
+        const renameBtn = e.target.closest('.ec-renametype-btn');
+        if (renameBtn) {
+          const oldName = renameBtn.dataset.type;
+          Modal.open({
+            title: 'שינוי שם סוג',
+            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-type-input" class="form-input" value="${esc(oldName)}"></div>`,
+            actions: [
+              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                const newName = document.getElementById('rename-type-input').value.trim();
+                if (!newName || newName === oldName) { Modal.close(); return; }
+                DB.renameCartType(oldName, newName);
+                Modal.close();
+                renderCartTypeOptions(); renderTypeList(); renderList();
+                Toast.show('סוג שונה', 'success');
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+          return;
+        }
         const delBtn = e.target.closest('.ec-deltype-btn');
         if (!delBtn) return;
         Modal.open({
@@ -2538,6 +2870,26 @@
       });
 
       tabContent.querySelector('#ec-containertype-list').addEventListener('click', e => {
+        const renameBtn = e.target.closest('.ec-renamecontainertype-btn');
+        if (renameBtn) {
+          const oldName = renameBtn.dataset.type;
+          Modal.open({
+            title: 'שינוי שם קטגוריה',
+            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-ct-input" class="form-input" value="${esc(oldName)}"></div>`,
+            actions: [
+              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                const newName = document.getElementById('rename-ct-input').value.trim();
+                if (!newName || newName === oldName) { Modal.close(); return; }
+                DB.renameContainerType(oldName, newName);
+                Modal.close();
+                renderContainerTypeOptions(); renderContainerTypeList(); renderList();
+                Toast.show('קטגוריה שונתה', 'success');
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+          return;
+        }
         const delBtn = e.target.closest('.ec-delcontainertype-btn');
         if (!delBtn) return;
         Modal.open({
@@ -2608,7 +2960,7 @@
       function renderList() {
         const list = tabContent.querySelector('#el-list');
         const locs = DB.getMetadata().locations;
-        if (!locs.length) { list.innerHTML = '<p class="card-meta">אין מיקומים</p>'; return; }
+        if (!locs.length) { list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">📍</div><div class="es-desc">הוסף מיקום ראשון למעלה כדי להתחיל.</div></div>'; return; }
         list.innerHTML = locs.map((l, idx) => {
           const subs = (l.subLocations || []);
           const subStr = subs.length ? subs.join(', ') : '';
@@ -2619,6 +2971,7 @@
                 <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}</div>
               </div>
               <div class="list-item-actions">
+                <button class="btn-icon-edit el-rename-btn" data-name="${esc(l.name)}" title="שנה שם">✏️</button>
                 <button class="btn-icon el-toggle-btn" data-name="${esc(l.name)}" title="${l.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי'}">${l.inMap ? '🗺️' : '📍'}</button>
                 <button class="btn-icon el-del-btn" data-name="${esc(l.name)}" title="מחק">🗑️</button>
               </div>
@@ -2650,7 +3003,10 @@
         subList.innerHTML = subs.map(s => `
           <div class="prop-option-row">
             <span>• ${s}</span>
-            <button class="btn-icon el-sub-del" data-loc="${esc(locName)}" data-sub="${esc(s)}">✕</button>
+            <div style="display:flex;gap:4px">
+              <button class="btn-icon-edit el-sub-rename" data-loc="${esc(locName)}" data-sub="${esc(s)}" title="שנה שם">✏️</button>
+              <button class="btn-icon el-sub-del" data-loc="${esc(locName)}" data-sub="${esc(s)}">✕</button>
+            </div>
           </div>
         `).join('');
       }
@@ -2703,8 +3059,28 @@
       });
 
       tabContent.querySelector('#el-list').addEventListener('click', e => {
+        const renameBtn = e.target.closest('.el-rename-btn');
         const toggleBtn = e.target.closest('.el-toggle-btn');
         const delBtn    = e.target.closest('.el-del-btn');
+        if (renameBtn) {
+          const oldName = renameBtn.dataset.name;
+          Modal.open({
+            title: 'שינוי שם מיקום',
+            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-loc-input" class="form-input" value="${esc(oldName)}"></div>`,
+            actions: [
+              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                const newName = document.getElementById('rename-loc-input').value.trim();
+                if (!newName || newName === oldName) { Modal.close(); return; }
+                DB.renameLocation(oldName, newName);
+                Modal.close();
+                renderList(); refreshSubLocSelect();
+                Toast.show('מיקום שונה', 'success');
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+          return;
+        }
         if (toggleBtn) {
           const name = toggleBtn.dataset.name;
           const loc  = DB.getMetadata().locations.find(l => l.name === name);
@@ -2748,8 +3124,29 @@
         if (e.key === 'Enter') tabContent.querySelector('#el-sub-add').click();
       });
 
-      // delete sublocation (event delegation on the sub-list)
+      // rename / delete sublocation (event delegation on the sub-list)
       tabContent.querySelector('#el-sub-list').addEventListener('click', e => {
+        const renameBtn = e.target.closest('.el-sub-rename');
+        if (renameBtn) {
+          const locName = renameBtn.dataset.loc;
+          const oldSub = renameBtn.dataset.sub;
+          Modal.open({
+            title: 'שינוי שם תת-מיקום',
+            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-sub-input" class="form-input" value="${esc(oldSub)}"></div>`,
+            actions: [
+              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                const newSub = document.getElementById('rename-sub-input').value.trim();
+                if (!newSub || newSub === oldSub) { Modal.close(); return; }
+                DB.renameSubLocation(locName, oldSub, newSub);
+                Modal.close();
+                renderSubList(locName); renderList();
+                Toast.show('תת-מיקום שונה', 'success');
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+          return;
+        }
         const delBtn = e.target.closest('.el-sub-del');
         if (!delBtn) return;
         const locName = delBtn.dataset.loc;
@@ -2804,7 +3201,7 @@
       function renderList() {
         const list  = tabContent.querySelector('#ep-list');
         const props = DB.getMetadata().properties;
-        if (!props.length) { list.innerHTML = '<p class="card-meta">אין מאפיינים</p>'; return; }
+        if (!props.length) { list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🏷️</div><div class="es-desc">הוסף מאפיין ראשון למעלה כדי לסווג פריטים.</div></div>'; return; }
         list.innerHTML = props.map((p, idx) => {
           const aliases = p.aliases || {};
           const conds = normalizeConditions(p.condition);
@@ -2819,6 +3216,7 @@
                 <strong>${esc(p.name)}</strong>
                 ${condLabel ? `<span class="card-meta" style="margin-inline-start:8px;font-size:0.72rem">(${condLabel})</span>` : ''}
               </div>
+              <button class="btn-icon-edit ep-rename-prop" data-prop="${esc(p.name)}" title="שנה שם">✏️</button>
               <button class="btn-icon ep-del-prop" data-prop="${esc(p.name)}" title="מחק מאפיין">✕</button>
               <div class="reorder-handle" data-idx="${idx}"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
             </div>
@@ -2834,6 +3232,7 @@
                   <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
                     <span>• ${esc(o)}</span>
                     <div style="display:flex;align-items:center;gap:4px">
+                      <button class="btn-icon-edit ep-rename-opt" data-prop="${esc(p.name)}" data-opt="${esc(o)}" title="שנה שם">✏️</button>
                       <button class="btn btn-outline btn-sm ep-aliases-btn" data-prop="${esc(p.name)}" data-opt="${esc(o)}" style="font-size:0.7rem;padding:2px 8px">שמות חלופיים</button>
                       <button class="btn-icon ep-del-opt" data-prop="${esc(p.name)}" data-opt="${esc(o)}">✕</button>
                     </div>
@@ -2898,12 +3297,58 @@
           header.closest('.prop-group').classList.toggle('expanded');
           return;
         }
+        // rename property
+        const renameProp = e.target.closest('.ep-rename-prop');
+        if (renameProp) {
+          const oldName = renameProp.dataset.prop;
+          Modal.open({
+            title: 'שינוי שם מאפיין',
+            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-prop-input" class="form-input" value="${esc(oldName)}"></div>`,
+            actions: [
+              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                const newName = document.getElementById('rename-prop-input').value.trim();
+                if (!newName || newName === oldName) { Modal.close(); return; }
+                DB.renameProperty(oldName, newName);
+                Modal.close();
+                renderList();
+                Toast.show('מאפיין שונה', 'success');
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
+          return;
+        }
         // delete property
         const delProp = e.target.closest('.ep-del-prop');
         if (delProp) {
           DB.deleteProperty(delProp.dataset.prop);
           Toast.show('מאפיין נמחק', 'info');
           renderList();
+          return;
+        }
+        // rename option
+        const renameOpt = e.target.closest('.ep-rename-opt');
+        if (renameOpt) {
+          const propName = renameOpt.dataset.prop;
+          const oldOpt = renameOpt.dataset.opt;
+          Modal.open({
+            title: 'שינוי שם אפשרות',
+            html: `<div class="form-group"><label class="form-label">שם חדש ל-"${esc(oldOpt)}"</label><input id="rename-opt-input" class="form-input" value="${esc(oldOpt)}"></div>`,
+            actions: [
+              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                const newOpt = document.getElementById('rename-opt-input').value.trim();
+                if (!newOpt || newOpt === oldOpt) { Modal.close(); return; }
+                DB.renamePropertyOption(propName, oldOpt, newOpt);
+                Modal.close();
+                renderList();
+                // re-expand the group
+                const group = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
+                if (group) group.classList.add('expanded');
+                Toast.show('אפשרות שונתה', 'success');
+              }},
+              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            ]
+          });
           return;
         }
         // delete option
@@ -4365,21 +4810,27 @@
         <span class="header-icon">🔍</span>
         <h1>חיפוש</h1>
       </div>
+      <div id="sr-collapse-bar" class="sr-collapse-bar" style="display:none">
+        <span class="sr-collapse-summary" id="sr-collapse-summary"></span>
+        <span class="sr-collapse-toggle" id="sr-collapse-toggle">הצג סינונים ▼</span>
+      </div>
       <div class="sr-search-inputs" id="sr-search-inputs">
         <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 1"></div>
         <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 2"></div>
         <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 3"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 4"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 5"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 4"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 5"></div>
         <div class="sr-suggest-wrap"><input id="sr-exc-1" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 1 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 2 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 3 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap"><input id="sr-exc-4" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 4 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap"><input id="sr-exc-5" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 5 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 2 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 3 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-4" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 4 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-5" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 5 (לא לכלול)"></div>
+        <div class="sr-add-filter" id="sr-add-filter"><a>+ הוסף שדה סינון</a></div>
         <label class="sr-empty-label" style="padding:6px 0;">
           <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> הצג ריקות בלבד
         </label>
       </div>
+      <div id="sr-recent-filters" class="recent-filters"></div>
       <div class="sr-filter-actions">
         <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
         <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">נקה סינון</button>
@@ -4405,6 +4856,54 @@
 
     const incInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-inc-' + n));
     const excInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-exc-' + n));
+    const allWraps = [...incInputs, ...excInputs].map(i => i.closest('.sr-suggest-wrap'));
+
+    // ── Collapse / expand filters ─────────────────────────────────
+    let _filtersCollapsed = false;
+    const collapseBar = screen.querySelector('#sr-collapse-bar');
+    const collapseSummary = screen.querySelector('#sr-collapse-summary');
+    const collapseToggle = screen.querySelector('#sr-collapse-toggle');
+    const inputsContainer = screen.querySelector('#sr-search-inputs');
+
+    function updateCollapseBar() {
+      const active = countActive();
+      if (!active) {
+        collapseBar.style.display = 'none';
+        inputsContainer.classList.remove('collapsed');
+        _filtersCollapsed = false;
+        return;
+      }
+      collapseBar.style.display = '';
+      // Build summary text
+      const incParts = state.includeTerms.map(t => t);
+      const excParts = state.excludeTerms.map(t => t);
+      let summary = incParts.join(', ');
+      if (excParts.length) {
+        summary += (summary ? ' | ' : '') + 'לא כולל: ' + excParts.join(', ');
+      }
+      if (state.emptyOnly) {
+        summary += (summary ? ' | ' : '') + 'ריקות בלבד';
+      }
+      collapseSummary.textContent = summary;
+      collapseToggle.textContent = _filtersCollapsed ? 'הצג סינונים ▼' : 'הסתר סינונים ▲';
+    }
+
+    collapseBar.addEventListener('click', () => {
+      _filtersCollapsed = !_filtersCollapsed;
+      inputsContainer.classList.toggle('collapsed', _filtersCollapsed);
+      updateCollapseBar();
+    });
+
+    // ── Add filter fields on demand ────────────────────────────────
+    function revealNextHidden() {
+      const hidden = allWraps.filter(w => w.classList.contains('sr-hidden'));
+      if (hidden.length) hidden[0].classList.remove('sr-hidden');
+      // Hide the button if all fields are visible
+      if (allWraps.every(w => !w.classList.contains('sr-hidden'))) {
+        screen.querySelector('#sr-add-filter').style.display = 'none';
+      }
+    }
+    screen.querySelector('#sr-add-filter').addEventListener('click', revealNextHidden);
 
     // ── Pinned location groups ────────────────────────────────────
     const PIN_KEY = 'shinua_pinned_groups';
@@ -4414,6 +4913,90 @@
       if (Array.isArray(raw)) _pinnedGroups = new Set(raw);
     } catch { /* ignore */ }
     function _savePins() { localStorage.setItem(PIN_KEY, JSON.stringify([..._pinnedGroups])); }
+
+    // ── Recent filter combos ──────────────────────────────────────
+    const RECENT_KEY = 'shinua_recent_filters';
+    const MAX_RECENT = 5;
+    function _loadRecent() {
+      try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function _saveRecentFilter() {
+      if (!state.includeTerms.length && !state.excludeTerms.length && !state.emptyOnly) return;
+      const entry = {
+        inc: state.includeTerms.slice(),
+        exc: state.excludeTerms.slice(),
+        empty: state.emptyOnly,
+        ts: Date.now()
+      };
+      const label = _recentLabel(entry);
+      if (!label) return;
+      let recents = _loadRecent();
+      // deduplicate by label
+      recents = recents.filter(r => _recentLabel(r) !== label);
+      recents.unshift(entry);
+      if (recents.length > MAX_RECENT) recents = recents.slice(0, MAX_RECENT);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+    }
+    function _recentLabel(r) {
+      const parts = [];
+      if (r.inc && r.inc.length) parts.push(r.inc.join(', '));
+      if (r.exc && r.exc.length) parts.push('!' + r.exc.join(', '));
+      if (r.empty) parts.push('ריקות');
+      return parts.join(' | ');
+    }
+    function _applyRecent(r) {
+      // Reset all fields first
+      incInputs.forEach(i => { i.value = ''; });
+      excInputs.forEach(i => { i.value = ''; });
+      (r.inc || []).forEach((t, i) => { if (incInputs[i]) incInputs[i].value = t; });
+      (r.exc || []).forEach((t, i) => { if (excInputs[i]) excInputs[i].value = t; });
+      state.includeTerms = (r.inc || []).slice();
+      state.excludeTerms = (r.exc || []).slice();
+      state.emptyOnly = !!r.empty;
+      screen.querySelector('#sr-empty-check').checked = state.emptyOnly;
+      // Show enough fields
+      allWraps.forEach((w, i) => {
+        const isInc = i < 5;
+        const idx = isInc ? i : i - 5;
+        const terms = isInc ? r.inc : r.exc;
+        if (terms && idx < terms.length) w.classList.remove('sr-hidden');
+      });
+      _filtersCollapsed = false;
+      inputsContainer.classList.remove('collapsed');
+      closeSuggestions();
+      updateActionsBar();
+      renderResults();
+    }
+    function _removeRecent(label) {
+      let recents = _loadRecent();
+      recents = recents.filter(r => _recentLabel(r) !== label);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+      renderRecentFilters();
+    }
+    function renderRecentFilters() {
+      const container = screen.querySelector('#sr-recent-filters');
+      const recents = _loadRecent();
+      // Only show when no active filter
+      if (countActive() || !recents.length) { container.innerHTML = ''; return; }
+      container.innerHTML = recents.map(r => {
+        const label = _recentLabel(r);
+        return `<button class="recent-filter-chip" data-recent='${esc(JSON.stringify(r))}'>
+          <span class="rfc-icon">⏱</span>${esc(label)}<span class="rfc-remove" data-remove-label="${esc(label)}">✕</span>
+        </button>`;
+      }).join('');
+      container.querySelectorAll('.recent-filter-chip').forEach(chip => {
+        chip.addEventListener('click', e => {
+          if (e.target.closest('.rfc-remove')) {
+            e.stopPropagation();
+            _removeRecent(e.target.dataset.removeLabel);
+            return;
+          }
+          const r = JSON.parse(chip.dataset.recent);
+          _applyRecent(r);
+        });
+      });
+    }
 
     // ── Suggestion pool ───────────────────────────────────────────
     let _suggestions = [];
@@ -4488,6 +5071,8 @@
         state.excludeTerms = excInputs.map(i => i.value.trim().toLowerCase()).filter(Boolean);
         updateActionsBar();
         renderResults();
+        _saveRecentFilter();
+        renderRecentFilters();
       }, 150);
     }
 
@@ -4510,9 +5095,12 @@
 
     // Empty-only checkbox
     screen.querySelector('#sr-empty-check').addEventListener('change', e => {
+      if (navigator.vibrate) navigator.vibrate(10);
       state.emptyOnly = e.target.checked;
       updateActionsBar();
       renderResults();
+      _saveRecentFilter();
+      renderRecentFilters();
     });
 
     // ── Actions bar ───────────────────────────────────────────────
@@ -4525,6 +5113,16 @@
       const clearBtn = document.getElementById('sr-clear-btn');
       label.textContent = count ? count + ' סינונים פעילים' : 'כל הפריטים';
       clearBtn.style.display = count ? '' : 'none';
+      updateCollapseBar();
+      updateCopyBtnLabels();
+    }
+
+    function updateCopyBtnLabels() {
+      const n = _selectedItems.size;
+      const copyBtn = document.getElementById('sr-copy-results');
+      const summBtn = document.getElementById('sr-copy-summary');
+      copyBtn.textContent = n ? `העתק תוצאות (${n})` : 'העתק תוצאות';
+      summBtn.textContent = n ? `העתק סיכום (${n})` : 'העתק סיכום';
     }
 
     // ── Filter logic ──────────────────────────────────────────────
@@ -4739,11 +5337,34 @@
       renderSummary(carts, fis);
 
       if (!carts.length && !fis.length) {
-        results.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">🔍</div>
-            <div class="empty-state-text">${countActive() ? 'לא נמצאו תוצאות לסינון הנוכחי' : 'אין פריטים במערכת'}</div>
-          </div>`;
+        if (countActive()) {
+          results.innerHTML = `
+            <div class="empty-state-rich">
+              <div class="es-illustration">🔍</div>
+              <div class="es-title">לא נמצאו תוצאות</div>
+              <div class="es-desc">נסה לשנות את מילות הסינון או להסיר סינונים</div>
+              <div class="es-actions">
+                <button class="btn btn-sm btn-outline" id="sr-empty-clear">נקה סינון</button>
+              </div>
+            </div>`;
+          const ecBtn = results.querySelector('#sr-empty-clear');
+          if (ecBtn) ecBtn.addEventListener('click', () => document.getElementById('sr-clear-btn').click());
+        } else {
+          results.innerHTML = `
+            <div class="empty-state-rich">
+              <div class="es-illustration">📦</div>
+              <div class="es-title">אין פריטים במערכת</div>
+              <div class="es-desc">התחל בייבוא נתונים או הוספת עגלות ומיקומים</div>
+              <div class="es-actions">
+                <button class="btn btn-sm btn-primary" id="sr-empty-import">📥 ייבוא נתונים</button>
+                <button class="btn btn-sm btn-outline" id="sr-empty-edit">✏️ הוספת עגלה</button>
+              </div>
+            </div>`;
+          const impBtn = results.querySelector('#sr-empty-import');
+          const edBtn = results.querySelector('#sr-empty-edit');
+          if (impBtn) impBtn.addEventListener('click', () => { Router.navigate('main'); history.replaceState(null, '', '#main'); });
+          if (edBtn) edBtn.addEventListener('click', () => { Router.navigate('edit'); history.replaceState(null, '', '#edit'); });
+        }
         return;
       }
 
@@ -4786,7 +5407,12 @@
         return aSubIdx - bSubIdx || a.sub.localeCompare(b.sub);
       });
 
-      results.innerHTML = sortedGroups.map(g => {
+      const clearSelBar = _selectedItems.size
+        ? `<div style="padding:8px 12px;display:flex;justify-content:flex-start">
+             <button id="sr-clear-sel" class="btn btn-sm btn-outline">נקה בחירות (${_selectedItems.size})</button>
+           </div>`
+        : '';
+      results.innerHTML = clearSelBar + sortedGroups.map(g => {
         const gKey = g.loc + '||' + g.sub;
         const isPinned = _pinnedGroups.has(gKey);
         return `
@@ -4889,12 +5515,36 @@
       results.querySelectorAll('.sr-check').forEach(cb => {
         cb.addEventListener('click', e => {
           e.stopPropagation();
+          if (navigator.vibrate) navigator.vibrate(10);
           const key = cb.dataset.selType + ':' + cb.dataset.selId;
           if (cb.checked) _selectedItems.add(key);
           else _selectedItems.delete(key);
           cb.closest('.sr-item').classList.toggle('sr-checked', cb.checked);
+          updateClearSelBtn();
         });
       });
+
+      // Wire clear-selections button
+      const clearSelBtn = results.querySelector('#sr-clear-sel');
+      if (clearSelBtn) {
+        clearSelBtn.addEventListener('click', () => {
+          _selectedItems.clear();
+          results.querySelectorAll('.sr-check').forEach(cb => {
+            cb.checked = false;
+            cb.closest('.sr-item').classList.remove('sr-checked');
+          });
+          updateClearSelBtn();
+        });
+      }
+    }
+
+    function updateClearSelBtn() {
+      const btn = document.getElementById('sr-clear-sel');
+      if (!btn && !_selectedItems.size) { updateCopyBtnLabels(); return; }
+      if (!btn && _selectedItems.size) { renderResults(); return; }
+      if (btn && !_selectedItems.size) { btn.parentElement.remove(); updateCopyBtnLabels(); return; }
+      btn.textContent = `נקה בחירות (${_selectedItems.size})`;
+      updateCopyBtnLabels();
     }
 
     // ── Clear all ─────────────────────────────────────────────────
@@ -4905,9 +5555,17 @@
       state.excludeTerms = [];
       state.emptyOnly = false;
       screen.querySelector('#sr-empty-check').checked = false;
+      // Reset to initial visible fields (3 inc + 1 exc)
+      allWraps.forEach((w, i) => {
+        w.classList.toggle('sr-hidden', i >= 3 && i <= 4 || i >= 6);
+      });
+      screen.querySelector('#sr-add-filter').style.display = '';
+      _filtersCollapsed = false;
+      inputsContainer.classList.remove('collapsed');
       closeSuggestions();
       updateActionsBar();
       renderResults();
+      renderRecentFilters();
     });
 
     // ── Copy results (plain text) ─────────────────────────────────
@@ -5168,6 +5826,7 @@
         buildSuggestionPool();
         updateActionsBar();
         renderResults();
+        renderRecentFilters();
       }
     });
   }
@@ -5183,7 +5842,8 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי <span style="font-size:0.5em;opacity:0.7;font-weight:400">v44</span></h1>
+        <h1>מיפוי</h1>
+        <span class="version-badge">v46</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -5240,9 +5900,18 @@
 
     // export — copy + WhatsApp
     screen.querySelector('#main-export').addEventListener('click', async () => {
-      const text = await Utils.generateExportText(DB.getRaw());
-      Utils.shareOrCopy(text);
-      Toast.show('גיבוי הועתק ונשלח', 'success');
+      Progress.show('מייצא נתונים...');
+      Progress.update(30);
+      try {
+        const text = await Utils.generateExportText(DB.getRaw());
+        Progress.update(80);
+        Utils.shareOrCopy(text);
+        Progress.update(100);
+        setTimeout(() => { Progress.hide(); Toast.show('גיבוי הועתק ונשלח', 'success'); }, 300);
+      } catch(e) {
+        Progress.hide();
+        Toast.show('שגיאה בייצוא', 'error');
+      }
     });
 
     // import — paste via modal textarea
@@ -5261,12 +5930,17 @@
             if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
             // Sanitize: remove directional marks, BOM, zero-width chars (iOS paste issue)
             text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
+            Modal.close();
+            Progress.show('מייבא נתונים...');
+            Progress.update(20);
             try {
               const jsonStr = await Utils.parseImportText(text);
+              Progress.update(60);
               DB.importJSON(jsonStr, 'merge');
-              Modal.close();
-              Toast.show('נתונים יובאו בהצלחה', 'success');
+              Progress.update(100);
+              setTimeout(() => { Progress.hide(); Toast.show('נתונים יובאו בהצלחה', 'success'); }, 300);
             } catch(err) {
+              Progress.hide();
               Toast.show('שגיאה: ' + err.message, 'error');
             }
           }},
@@ -5921,6 +6595,60 @@
       });
     });
 
+    // ── Pull-to-refresh ─────────────────────────────────────────
+    const ptrIndicator = document.createElement('div');
+    ptrIndicator.className = 'ptr-indicator';
+    ptrIndicator.innerHTML = '<span class="ptr-arrow">↓</span><span class="ptr-text">משוך לרענון</span>';
+    screen.insertBefore(ptrIndicator, screen.firstChild.nextSibling); // after header
+
+    const PTR_THRESHOLD = 70;
+    let _ptrStartY = 0, _ptrDist = 0, _ptrActive = false, _ptrRefreshing = false;
+    const scrContainer = document.getElementById('screen-container');
+
+    scrContainer.addEventListener('touchstart', e => {
+      if (Router.getCurrent() !== 'main' || _ptrRefreshing) return;
+      if (scrContainer.scrollTop > 5) return;
+      _ptrStartY = e.touches[0].clientY;
+      _ptrActive = true;
+      _ptrDist = 0;
+      ptrIndicator.classList.add('pulling');
+      ptrIndicator.classList.remove('threshold', 'refreshing');
+    }, { passive: true });
+
+    scrContainer.addEventListener('touchmove', e => {
+      if (!_ptrActive || _ptrRefreshing) return;
+      const dy = e.touches[0].clientY - _ptrStartY;
+      if (dy < 0 || scrContainer.scrollTop > 5) { _ptrActive = false; ptrIndicator.style.height = '0'; return; }
+      _ptrDist = Math.min(dy * 0.5, 100);
+      ptrIndicator.style.height = _ptrDist + 'px';
+      ptrIndicator.classList.toggle('threshold', _ptrDist >= PTR_THRESHOLD);
+      ptrIndicator.querySelector('.ptr-text').textContent = _ptrDist >= PTR_THRESHOLD ? 'שחרר לרענון' : 'משוך לרענון';
+    }, { passive: true });
+
+    scrContainer.addEventListener('touchend', () => {
+      if (!_ptrActive) return;
+      ptrIndicator.classList.remove('pulling');
+      if (_ptrDist >= PTR_THRESHOLD && !_ptrRefreshing) {
+        _ptrRefreshing = true;
+        ptrIndicator.classList.add('refreshing');
+        ptrIndicator.querySelector('.ptr-text').textContent = 'מרענן...';
+        ptrIndicator.style.height = '44px';
+        if (navigator.vibrate) navigator.vibrate(15);
+        // Reload data from localStorage (in case another tab wrote) and re-render
+        setTimeout(() => {
+          DB.load();
+          ptrIndicator.classList.remove('refreshing', 'threshold');
+          ptrIndicator.style.height = '0';
+          _ptrRefreshing = false;
+          Toast.show('נתונים רועננו', 'success');
+        }, 600);
+      } else {
+        ptrIndicator.style.height = '0';
+      }
+      _ptrActive = false;
+      _ptrDist = 0;
+    }, { passive: true });
+
     Router.register('main', {
       onShow() {}
     });
@@ -5931,6 +6659,23 @@
        SCRIPT 10 — Bootstrap + SW Registration
   ════════════════════════════════════════════════════ -->
   <script>
+  // ── Progress indicator ─────────────────────────────
+  const Progress = {
+    _el: null,
+    show(label) {
+      this._el = document.getElementById('progress-overlay');
+      this._el.innerHTML = `<div class="progress-box"><div class="progress-spinner"></div><div class="progress-label">${label || 'מעבד...'}</div><div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div></div>`;
+      this._el.hidden = false;
+    },
+    update(pct) {
+      const fill = document.getElementById('progress-fill');
+      if (fill) fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+    },
+    hide() {
+      if (this._el) { this._el.hidden = true; this._el.innerHTML = ''; }
+    }
+  };
+
   // ── Theme management ─────────────────────────────
   const THEME_KEY = 'shinua_theme';
 
@@ -5978,6 +6723,13 @@
     // Wire up theme toggle
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
+    // Global haptic feedback on checkbox/toggle taps
+    document.addEventListener('change', e => {
+      if (e.target.matches('.modern-check input, .toggle-switch input, .fp-check-label input')) {
+        if (navigator.vibrate) navigator.vibrate(10);
+      }
+    });
 
     // Navigate to initial screen
     const initial = location.hash.replace('#', '') || 'main';
