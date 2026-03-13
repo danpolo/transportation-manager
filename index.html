@@ -862,6 +862,8 @@
         if (!_cache.metadata.cartTypes)   _cache.metadata.cartTypes = [];
         if (!_cache.metadata.containerTypes) _cache.metadata.containerTypes = ['עגלה'];
         if (!_cache.metadata.containerTypes.includes('עגלה')) _cache.metadata.containerTypes.unshift('עגלה');
+        if (_cache.metadata.locationOrderLocked === undefined) _cache.metadata.locationOrderLocked = false;
+        if (_cache.metadata.propertyOrderLocked === undefined) _cache.metadata.propertyOrderLocked = false;
         if (!_cache.carts)                _cache.carts = {};
         if (!_cache.floorItems)           _cache.floorItems = {};
         // migrate carts: ensure multi-slot + nesting + containerType fields exist
@@ -1195,8 +1197,46 @@
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
       addPropertyOption, removePropertyOption, setOptionAliases, getOptionAliases,
       addMetaCart, removeMetaCart,
-      importJSON, getRaw, clear
+      importJSON, getRaw, clear,
+      setLocationOrder, setPropertyOrder,
+      setLocationOrderLocked, setPropertyOrderLocked
     };
+
+    function setLocationOrder(orderedNames) {
+      const db = load();
+      const locs = db.metadata.locations;
+      const byName = {};
+      locs.forEach(l => { byName[l.name] = l; });
+      const ordered = [];
+      orderedNames.forEach(n => { if (byName[n]) { ordered.push(byName[n]); delete byName[n]; } });
+      Object.values(byName).forEach(l => ordered.push(l));
+      db.metadata.locations = ordered;
+      save();
+    }
+
+    function setPropertyOrder(orderedNames) {
+      const db = load();
+      const props = db.metadata.properties;
+      const byName = {};
+      props.forEach(p => { byName[p.name] = p; });
+      const ordered = [];
+      orderedNames.forEach(n => { if (byName[n]) { ordered.push(byName[n]); delete byName[n]; } });
+      Object.values(byName).forEach(p => ordered.push(p));
+      db.metadata.properties = ordered;
+      save();
+    }
+
+    function setLocationOrderLocked(locked) {
+      const db = load();
+      db.metadata.locationOrderLocked = !!locked;
+      save();
+    }
+
+    function setPropertyOrderLocked(locked) {
+      const db = load();
+      db.metadata.propertyOrderLocked = !!locked;
+      save();
+    }
   })();
   </script>
 
@@ -1300,11 +1340,20 @@
       throw new Error('פורמט לא תקין');
     }
 
+    function _orderedPropValues(props, propDefs) {
+      if (!props) return '';
+      const ordered = (propDefs || []).map(p => props[p.name]).filter(Boolean);
+      const metaNames = new Set((propDefs || []).map(p => p.name));
+      Object.entries(props).forEach(([k, v]) => { if (v && !metaNames.has(k)) ordered.push(v); });
+      return ordered.join(' ');
+    }
+
     function generateMapText(db) {
       const now = formatDate(Date.now());
       const meta   = db.metadata || {};
       const carts  = db.carts || {};
       const fis    = db.floorItems || {};
+      const propDefs = meta.properties || [];
       const locs   = (meta.locations || []).filter(l => l.inMap);
 
       if (!locs.length) return `מיפוי\n${now}\n(אין מיקומים מסומנים בעמוד המיפוי)`;
@@ -1325,7 +1374,7 @@
         if (c.isEmpty || !c.itemCount) {
           line = `${prefix}${ctLabel}${idLabel}: empty`;
         } else {
-          const propVals = Object.values(c.properties || {}).filter(Boolean).join(' ');
+          const propVals = _orderedPropValues(c.properties, propDefs);
           line = (`${prefix}${ctLabel}${idLabel}: ${c.itemCount} ${propVals}`).trim();
         }
         if (c.comment) line += ` # ${c.comment}`;
@@ -1338,7 +1387,7 @@
           const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
           const chIdLabel = ch.cartId + (ch.cartType ? '(' + ch.cartType + ')' : '');
           function chLine(cnt, props, comment) {
-            const pv = Object.values(props || {}).filter(Boolean).join(' ');
+            const pv = _orderedPropValues(props, propDefs);
             let l = `    ${chCt}${chIdLabel}: ${cnt === 0 ? 'empty' : cnt + (pv ? ' ' + pv : '')}`;
             if (comment) l += ` # ${comment}`;
             return l + '\n';
@@ -1380,7 +1429,7 @@
         const floorLines = fiList
           .filter(fi => !fi.isEmpty && fi.itemCount)
           .map(fi => {
-            const propVals = Object.values(fi.properties || {}).filter(Boolean).join(' ');
+            const propVals = _orderedPropValues(fi.properties, propDefs);
             return `${fi.itemCount} ${propVals}`.trim() + '\n';
           });
         if (floorLines.length) sections.push(floorLines.join(''));
@@ -1410,7 +1459,7 @@
     }
 
     function copyMessage(cartId, count, props, from, to, containerType, itemIds) {
-      const propStr = Object.values(props || {}).filter(Boolean).join(' ');
+      const propStr = _orderedPropValues(props, (DB.getMetadata().properties || []));
       const cType = containerType || 'עגלה';
       const lines = [`${cType} ${cartId}${count === 0 ? ' ריקה' : ''}`];
       if (count) lines.push(`${count}${propStr ? ' ' + propStr : ''}`);
@@ -1454,7 +1503,8 @@
     }
 
     return { base64Encode, base64Decode, formatDate, generateExportText,
-             parseImportText, generateMapText, copyMessage, copyToClipboard, shareOrCopy };
+             parseImportText, generateMapText, copyMessage, copyToClipboard, shareOrCopy,
+             orderedPropValues: _orderedPropValues };
   })();
   </script>
 
@@ -2232,7 +2282,16 @@
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">מיקומים קיימים</div>
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+              <span>מיקומים קיימים</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.78rem;font-weight:normal">
+                  <span id="el-lock-emoji">🔓</span> נעילת סדר
+                  <input type="checkbox" id="el-order-lock">
+                </label>
+                <button class="btn-icon" id="el-order-lock-info" title="מידע" style="font-size:0.85rem;padding:2px 5px;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center">i</button>
+              </div>
+            </div>
             <div id="el-list"></div>
           </div>
 
@@ -2257,12 +2316,16 @@
         const list = tabContent.querySelector('#el-list');
         const locs = DB.getMetadata().locations;
         if (!locs.length) { list.innerHTML = '<p class="card-meta">אין מיקומים</p>'; return; }
-        list.innerHTML = locs.map(l => {
+        list.innerHTML = locs.map((l, idx) => {
           const subs = (l.subLocations || []);
           const subStr = subs.length ? subs.join(', ') : '';
           return `
-            <div class="list-item">
-              <div class="list-item-body">
+            <div class="list-item" data-loc-idx="${idx}">
+              <div style="display:flex;flex-direction:column;gap:2px;margin-inline-end:6px">
+                <button class="btn-icon el-move-up" data-idx="${idx}" title="הזז למעלה" style="font-size:0.65rem;padding:0;line-height:1"${idx === 0 ? ' disabled' : ''}>▲</button>
+                <button class="btn-icon el-move-down" data-idx="${idx}" title="הזז למטה" style="font-size:0.65rem;padding:0;line-height:1"${idx === locs.length - 1 ? ' disabled' : ''}>▼</button>
+              </div>
+              <div class="list-item-body" style="flex:1">
                 <div class="list-item-title">${l.name}</div>
                 <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}</div>
               </div>
@@ -2305,6 +2368,23 @@
       renderList();
       refreshSubLocSelect();
 
+      // lock switch
+      const lockCheck = tabContent.querySelector('#el-order-lock');
+      const lockEmoji = tabContent.querySelector('#el-lock-emoji');
+      lockCheck.checked = DB.getMetadata().locationOrderLocked || false;
+      lockEmoji.textContent = lockCheck.checked ? '🔒' : '🔓';
+      lockCheck.addEventListener('change', () => {
+        DB.setLocationOrderLocked(lockCheck.checked);
+        lockEmoji.textContent = lockCheck.checked ? '🔒' : '🔓';
+      });
+      tabContent.querySelector('#el-order-lock-info').addEventListener('click', () => {
+        Modal.open({
+          title: 'נעילת סדר',
+          html: '<p style="line-height:1.6">כאשר הסדר נעול הסדר של המיקומים יקבע אך ורק על פי הסדר במסך הזה. כאשר הוא לא נעול בעת ייבוא מיפוי הסדר במיפוי הוא שיקבע.</p>',
+          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+        });
+      });
+
       tabContent.querySelector('#el-save').addEventListener('click', () => {
         const name  = tabContent.querySelector('#el-name').value.trim();
         if (!name) { Toast.show('יש להזין שם מיקום', 'error'); return; }
@@ -2318,6 +2398,22 @@
       });
 
       tabContent.querySelector('#el-list').addEventListener('click', e => {
+        // reorder buttons
+        const moveUp = e.target.closest('.el-move-up');
+        const moveDown = e.target.closest('.el-move-down');
+        if (moveUp || moveDown) {
+          const idx = parseInt((moveUp || moveDown).dataset.idx);
+          const locs = DB.getMetadata().locations;
+          const names = locs.map(l => l.name);
+          const swapIdx = moveUp ? idx - 1 : idx + 1;
+          if (swapIdx >= 0 && swapIdx < names.length) {
+            [names[idx], names[swapIdx]] = [names[swapIdx], names[idx]];
+            DB.setLocationOrder(names);
+            renderList();
+            refreshSubLocSelect();
+          }
+          return;
+        }
         const toggleBtn = e.target.closest('.el-toggle-btn');
         const delBtn    = e.target.closest('.el-del-btn');
         if (toggleBtn) {
@@ -2392,7 +2488,16 @@
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">מאפיינים קיימים</div>
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+              <span>מאפיינים קיימים</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.78rem;font-weight:normal">
+                  <span id="ep-lock-emoji">🔓</span> נעילת סדר
+                  <input type="checkbox" id="ep-order-lock">
+                </label>
+                <button class="btn-icon" id="ep-order-lock-info" title="מידע" style="font-size:0.85rem;padding:2px 5px;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center">i</button>
+              </div>
+            </div>
             <div id="ep-list"></div>
           </div>
 
@@ -2411,16 +2516,20 @@
         const list  = tabContent.querySelector('#ep-list');
         const props = DB.getMetadata().properties;
         if (!props.length) { list.innerHTML = '<p class="card-meta">אין מאפיינים</p>'; return; }
-        list.innerHTML = props.map(p => {
+        list.innerHTML = props.map((p, idx) => {
           const aliases = p.aliases || {};
           const conds = normalizeConditions(p.condition);
           const condLabel = conds
             ? 'תנאי: ' + conds.map(c => `${esc(c.prop)} = ${c.value ? esc(c.value) : 'לא נבחר'}`).join(' או ')
             : '';
           return `
-          <div class="prop-group" data-prop="${esc(p.name)}">
+          <div class="prop-group" data-prop="${esc(p.name)}" data-prop-idx="${idx}">
             <div class="prop-group-header">
-              <div class="prop-group-header-left">
+              <div style="display:flex;flex-direction:column;gap:2px;margin-inline-end:6px">
+                <button class="btn-icon ep-move-up" data-idx="${idx}" title="הזז למעלה" style="font-size:0.65rem;padding:0;line-height:1"${idx === 0 ? ' disabled' : ''}>▲</button>
+                <button class="btn-icon ep-move-down" data-idx="${idx}" title="הזז למטה" style="font-size:0.65rem;padding:0;line-height:1"${idx === props.length - 1 ? ' disabled' : ''}>▼</button>
+              </div>
+              <div class="prop-group-header-left" style="flex:1">
                 <i class="prop-chevron">▶</i>
                 <strong>${esc(p.name)}</strong>
                 ${condLabel ? `<span class="card-meta" style="margin-inline-start:8px;font-size:0.72rem">(${condLabel})</span>` : ''}
@@ -2456,6 +2565,23 @@
       }
       renderList();
 
+      // property order lock switch
+      const epLockCheck = tabContent.querySelector('#ep-order-lock');
+      const epLockEmoji = tabContent.querySelector('#ep-lock-emoji');
+      epLockCheck.checked = DB.getMetadata().propertyOrderLocked || false;
+      epLockEmoji.textContent = epLockCheck.checked ? '🔒' : '🔓';
+      epLockCheck.addEventListener('change', () => {
+        DB.setPropertyOrderLocked(epLockCheck.checked);
+        epLockEmoji.textContent = epLockCheck.checked ? '🔒' : '🔓';
+      });
+      tabContent.querySelector('#ep-order-lock-info').addEventListener('click', () => {
+        Modal.open({
+          title: 'נעילת סדר',
+          html: '<p style="line-height:1.6">כאשר הסדר נעול הסדר של המאפיינים יקבע אך ורק על פי הסדר במסך הזה. כאשר הוא לא נעול בעת ייבוא מיפוי הסדר במיפוי הוא שיקבע.</p>',
+          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+        });
+      });
+
       tabContent.querySelector('#ep-save').addEventListener('click', () => {
         const name = tabContent.querySelector('#ep-name').value.trim();
         if (!name) { Toast.show('יש להזין שם מאפיין', 'error'); return; }
@@ -2466,6 +2592,21 @@
       });
 
       tabContent.querySelector('#ep-list').addEventListener('click', e => {
+        // reorder property categories
+        const moveUp = e.target.closest('.ep-move-up');
+        const moveDown = e.target.closest('.ep-move-down');
+        if (moveUp || moveDown) {
+          const idx = parseInt((moveUp || moveDown).dataset.idx);
+          const props = DB.getMetadata().properties;
+          const names = props.map(p => p.name);
+          const swapIdx = moveUp ? idx - 1 : idx + 1;
+          if (swapIdx >= 0 && swapIdx < names.length) {
+            [names[idx], names[swapIdx]] = [names[swapIdx], names[idx]];
+            DB.setPropertyOrder(names);
+            renderList();
+          }
+          return;
+        }
         // expand/collapse
         const header = e.target.closest('.prop-group-header');
         if (header && !e.target.closest('button')) {
@@ -2930,7 +3071,7 @@
         renderItemRows(data.itemCount || 0, data.itemIds || []);
         buildPropertyFields(screen.querySelector('#tr-prop-fields'), data.properties || {});
       } else {
-        const propStr = Object.values(data.properties || {}).filter(Boolean).join(' ');
+        const propStr = Utils.orderedPropValues(data.properties, DB.getMetadata().properties || []);
         info.innerHTML = `
           <div class="card-title">[רצפה] ${esc(propStr)} · ${data.itemCount || 0} פריטים</div>
           <div class="card-meta">מיקום: ${esc(data.location || 'לא ידוע')}</div>
@@ -3031,7 +3172,7 @@
                              itemCount: newCount, itemIds: newIds,
                              properties: _currentData.properties, isEmpty: false });
 
-        const propStr = Object.values(_currentData.properties || {}).filter(Boolean).join(' ');
+        const propStr = Utils.orderedPropValues(_currentData.properties, DB.getMetadata().properties || []);
         const floorFrom = _currentData.subLocation || _currentData.location || '?';
         const floorTo   = destSubLoc || destLoc;
         const serialStr = serials.length ? '\n' + serials.join('\n') : '';
@@ -3622,8 +3763,9 @@
       const parentCtName = destCart ? containerName(destCart) : 'עגלה';
       const loc = destCart ? (destCart.location || '?') : (ctLocation || '?');
       const msgLines = [`${ctType} ${ctId}`, `טעון על ${parentCtName} ${parentLabel}`, `מיקום: ${loc}`];
+      const _metaProps = DB.getMetadata().properties || [];
       allSlots.filter(sl => sl.itemCount).forEach(sl => {
-        const ps = Object.values(sl.properties).filter(Boolean).join(' ');
+        const ps = Utils.orderedPropValues(sl.properties, _metaProps);
         msgLines.push(`${sl.itemCount}${ps ? ' ' + ps : ''}`);
         (sl.itemIds || []).forEach(id => msgLines.push(id));
       });
@@ -3678,7 +3820,7 @@
     // ── load save logic ──
     function _confirmUnknownSerial(serial, loc, props) {
       return new Promise(resolve => {
-        const propStr = Object.values(props).filter(Boolean).join(' ');
+        const propStr = Utils.orderedPropValues(props, DB.getMetadata().properties || []);
         Modal.open({
           title: 'מספר סידורי לא נמצא',
           html: `<p class="card-meta">"${esc(serial)}" לא נמצא ב${esc(loc)}${propStr ? ' (' + esc(propStr) + ')' : ''}.</p>
@@ -3713,8 +3855,9 @@
         const ctName = destCart ? containerName(destCart) : 'עגלה';
         const loc = destCart ? (destCart.location || '?') : '?';
         const msgLines = [`${ctName} ${label}`, `מועמסת ב${loc}`];
+        const _mProps = DB.getMetadata().properties || [];
         allSlots.filter(sl => sl.itemCount).forEach(sl => {
-          const ps = Object.values(sl.properties).filter(Boolean).join(' ');
+          const ps = Utils.orderedPropValues(sl.properties, _mProps);
           msgLines.push(`${sl.itemCount}${ps ? ' ' + ps : ''}`);
           (sl.itemIds || []).forEach(id => msgLines.push(id));
         });
@@ -3774,7 +3917,7 @@
           }
 
           // Build message part
-          const ps = Object.values(props).filter(Boolean).join(' ');
+          const ps = Utils.orderedPropValues(props, DB.getMetadata().properties || []);
           msgLines.push(`${slot.itemCount}${ps ? ' ' + ps : ''}`);
           slot.itemIds.forEach(id => msgLines.push(id));
         }
@@ -3861,7 +4004,7 @@
         DB.upsertFloorItem({ location: destLoc, subLocation: destSubLoc,
                              itemCount: newCount, itemIds: newIds,
                              properties: slot.properties, isEmpty: false });
-        const propStr = Object.values(slot.properties).filter(Boolean).join(' ');
+        const propStr = Utils.orderedPropValues(slot.properties, DB.getMetadata().properties || []);
         msgParts.push(`${slot.itemCount}${propStr ? ' ' + propStr : ''}`);
       }
 
@@ -4262,7 +4405,13 @@
 
     // ── Render results ────────────────────────────────────────────
     function propSummary(props) {
-      return Object.values(props || {}).filter(Boolean).join(' · ');
+      if (!props) return '';
+      const propDefs = DB.getMetadata().properties || [];
+      const ordered = propDefs.map(p => props[p.name]).filter(Boolean);
+      // Include any props not in metadata
+      const metaNames = new Set(propDefs.map(p => p.name));
+      Object.entries(props).forEach(([k, v]) => { if (v && !metaNames.has(k)) ordered.push(v); });
+      return ordered.join(' · ');
     }
     function renderResults() {
       const results = document.getElementById('sr-results');
@@ -4293,13 +4442,30 @@
       carts.forEach(c  => addItem(c,  'cart'));
       fis.forEach(fi   => addItem(fi, 'fi'));
 
+      // Build location order index from metadata
+      const metaLocs = DB.getMetadata().locations;
+      const locOrderMap = {};
+      metaLocs.forEach((l, i) => { locOrderMap[l.name] = i; });
+      // For sub-locations, use their order within the parent location
+      const subLocOrderMap = {};
+      metaLocs.forEach(l => {
+        (l.subLocations || []).forEach((s, si) => {
+          subLocOrderMap[l.name + '||' + s] = si;
+        });
+      });
+
       const sortedGroups = Object.values(groups).sort((a,b) => {
         const aKey = a.loc + '||' + a.sub;
         const bKey = b.loc + '||' + b.sub;
         const aPin = _pinnedGroups.has(aKey) ? 0 : 1;
         const bPin = _pinnedGroups.has(bKey) ? 0 : 1;
         if (aPin !== bPin) return aPin - bPin;
-        return a.loc.localeCompare(b.loc) || a.sub.localeCompare(b.sub);
+        const aLocIdx = locOrderMap[a.loc] !== undefined ? locOrderMap[a.loc] : 999999;
+        const bLocIdx = locOrderMap[b.loc] !== undefined ? locOrderMap[b.loc] : 999999;
+        if (aLocIdx !== bLocIdx) return aLocIdx - bLocIdx;
+        const aSubIdx = subLocOrderMap[a.loc + '||' + a.sub] !== undefined ? subLocOrderMap[a.loc + '||' + a.sub] : 999999;
+        const bSubIdx = subLocOrderMap[b.loc + '||' + b.sub] !== undefined ? subLocOrderMap[b.loc + '||' + b.sub] : 999999;
+        return aSubIdx - bSubIdx || a.sub.localeCompare(b.sub);
       });
 
       results.innerHTML = sortedGroups.map(g => {
@@ -4448,7 +4614,19 @@
       carts.forEach(c => addItem(c, 'cart'));
       fis.forEach(fi => addItem(fi, 'fi'));
 
-      const sorted = Object.values(groups).sort((a,b) => a.loc.localeCompare(b.loc) || a.sub.localeCompare(b.sub));
+      const _cpMetaLocs = DB.getMetadata().locations;
+      const _cpLocOrder = {};
+      _cpMetaLocs.forEach((l, i) => { _cpLocOrder[l.name] = i; });
+      const _cpSubOrder = {};
+      _cpMetaLocs.forEach(l => { (l.subLocations || []).forEach((s, si) => { _cpSubOrder[l.name + '||' + s] = si; }); });
+      const sorted = Object.values(groups).sort((a,b) => {
+        const aIdx = _cpLocOrder[a.loc] !== undefined ? _cpLocOrder[a.loc] : 999999;
+        const bIdx = _cpLocOrder[b.loc] !== undefined ? _cpLocOrder[b.loc] : 999999;
+        if (aIdx !== bIdx) return aIdx - bIdx;
+        const aSubIdx = _cpSubOrder[a.loc + '||' + a.sub] !== undefined ? _cpSubOrder[a.loc + '||' + a.sub] : 999999;
+        const bSubIdx = _cpSubOrder[b.loc + '||' + b.sub] !== undefined ? _cpSubOrder[b.loc + '||' + b.sub] : 999999;
+        return aSubIdx - bSubIdx || a.sub.localeCompare(b.sub);
+      });
       let lineNo = 1;
       const text = sorted.map(g => {
         const header = g.loc + (g.sub ? ' / ' + g.sub : '') + ` (${g.items.length} שורות)`;
@@ -4817,6 +4995,7 @@
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
               const imported = _buildMapDB(blocks, propDefs);
               DB.importJSON(JSON.stringify(imported), 'merge');
+              _applyMapOrdering(blocks, propDefs);
               Modal.close();
               Toast.show('מיפוי נשמר בהצלחה', 'success');
             } catch(err) {
@@ -4853,6 +5032,7 @@
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
               const imported = _buildMapDB(blocks, propDefs);
               DB.importJSON(JSON.stringify(imported), 'merge');
+              _applyMapOrdering(blocks, propDefs);
               const cartCount = Object.keys(imported.carts).length;
               const floorCount = Object.keys(imported.floorItems).length;
               Modal.close();
@@ -5219,6 +5399,190 @@
         },
         carts, floorItems
       };
+    }
+
+    // Extract unambiguous property category order from parsed map data.
+    // For each cart/floor entry with matched properties, record the position index
+    // of each property category's value in the raw text. If category A's value always
+    // appears before category B's value, then A comes before B. Only unambiguous
+    // (consistent) orderings are kept.
+    function _extractPropertyOrderFromMap(blocks, propDefs) {
+      if (!propDefs || propDefs.length < 2) return propDefs.map(p => p.name);
+
+      // Build option→propName lookup
+      const optionToProp = {};
+      for (const prop of propDefs) {
+        for (const opt of (prop.options || [])) {
+          optionToProp[opt.toLowerCase()] = prop.name;
+          if (prop.aliases && prop.aliases[opt]) {
+            for (const alias of prop.aliases[opt]) {
+              if (alias.trim()) optionToProp[alias.toLowerCase().trim()] = prop.name;
+            }
+          }
+        }
+      }
+
+      // For each entry, find positions of matched property values in raw text
+      // and record pairwise orderings
+      const pairCounts = {}; // "A|B" -> { ab: count_A_before_B, ba: count_B_before_A }
+
+      function processRaw(raw) {
+        if (!raw) return;
+        const rawLower = raw.toLowerCase();
+        const positions = {}; // propName -> earliest position in raw
+
+        // Build all candidates sorted longest-first
+        const candidates = [];
+        for (const prop of propDefs) {
+          for (const opt of (prop.options || [])) {
+            candidates.push({ lower: opt.toLowerCase(), propName: prop.name });
+            if (prop.aliases && prop.aliases[opt]) {
+              for (const alias of prop.aliases[opt]) {
+                if (alias.trim()) candidates.push({ lower: alias.toLowerCase().trim(), propName: prop.name });
+              }
+            }
+          }
+        }
+        candidates.sort((a, b) => b.lower.length - a.lower.length);
+
+        for (const c of candidates) {
+          if (positions[c.propName] !== undefined) continue;
+          const escaped = c.lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const re = new RegExp('(?:^|\\s)' + escaped + '(?:\\s|$)');
+          const m = re.exec(rawLower);
+          if (m) {
+            positions[c.propName] = m.index;
+          }
+        }
+
+        // Record pairwise orderings
+        const found = Object.entries(positions);
+        for (let i = 0; i < found.length; i++) {
+          for (let j = i + 1; j < found.length; j++) {
+            const [nameA, posA] = found[i];
+            const [nameB, posB] = found[j];
+            const key = [nameA, nameB].sort().join('|');
+            if (!pairCounts[key]) pairCounts[key] = {};
+            const first = posA < posB ? nameA : nameB;
+            pairCounts[key][first] = (pairCounts[key][first] || 0) + 1;
+          }
+        }
+      }
+
+      for (const block of blocks) {
+        for (const entry of block.entries) {
+          if (entry.type === 'cart') {
+            for (const slot of entry.slots) {
+              processRaw(slot.rawProps);
+            }
+            for (const child of (entry.children || [])) {
+              for (const chSlot of child.slots) {
+                processRaw(chSlot.rawProps);
+              }
+            }
+          } else {
+            processRaw(entry.rawProps);
+          }
+        }
+      }
+
+      // Build unambiguous ordering: A before B only if all observations agree
+      const before = {}; // propName -> Set of propNames that come after it
+      for (const [key, counts] of Object.entries(pairCounts)) {
+        const [nameA, nameB] = key.split('|');
+        const countA = counts[nameA] || 0;
+        const countB = counts[nameB] || 0;
+        // Unambiguous only if one direction is observed and not the other
+        if (countA > 0 && countB === 0) {
+          if (!before[nameA]) before[nameA] = new Set();
+          before[nameA].add(nameB);
+        } else if (countB > 0 && countA === 0) {
+          if (!before[nameB]) before[nameB] = new Set();
+          before[nameB].add(nameA);
+        }
+        // Otherwise ambiguous — no ordering constraint
+      }
+
+      // Topological sort with the unambiguous constraints
+      const propNames = propDefs.map(p => p.name);
+      const sorted = [];
+      const visited = new Set();
+      const visiting = new Set();
+
+      function visit(name) {
+        if (visited.has(name)) return;
+        if (visiting.has(name)) return; // cycle — skip
+        visiting.add(name);
+        // Visit all names that should come after this one
+        for (const after of (before[name] || [])) {
+          visit(after);
+        }
+        visiting.delete(name);
+        visited.add(name);
+        sorted.unshift(name);
+      }
+
+      // Start with nodes that have most "before" relationships
+      const priority = propNames.slice().sort((a, b) => ((before[b] || new Set()).size) - ((before[a] || new Set()).size));
+      for (const name of priority) {
+        visit(name);
+      }
+
+      // Include any props not reached by the graph
+      for (const name of propNames) {
+        if (!sorted.includes(name)) sorted.push(name);
+      }
+
+      return sorted;
+    }
+
+    // Apply location and property ordering from imported map when locks are off
+    function _applyMapOrdering(blocks, propDefs) {
+      const meta = DB.getMetadata();
+
+      // Location order from map (order of location blocks)
+      if (!meta.locationOrderLocked) {
+        const mapLocOrder = [];
+        for (const block of blocks) {
+          if (block.location && !mapLocOrder.includes(block.location)) {
+            mapLocOrder.push(block.location);
+          }
+        }
+        if (mapLocOrder.length) {
+          // Merge: map order first, then existing locations not in map
+          const existingNames = meta.locations.map(l => l.name);
+          const fullOrder = [...mapLocOrder];
+          existingNames.forEach(n => { if (!fullOrder.includes(n)) fullOrder.push(n); });
+          DB.setLocationOrder(fullOrder);
+        }
+
+        // Also order sub-locations within each location based on map order
+        const subLocOrder = {}; // locName -> [subLoc1, subLoc2, ...]
+        for (const block of blocks) {
+          if (block.location && block.subLocation) {
+            if (!subLocOrder[block.location]) subLocOrder[block.location] = [];
+            if (!subLocOrder[block.location].includes(block.subLocation)) {
+              subLocOrder[block.location].push(block.subLocation);
+            }
+          }
+        }
+        for (const [locName, orderedSubs] of Object.entries(subLocOrder)) {
+          const loc = DB.getMetadata().locations.find(l => l.name === locName);
+          if (loc && loc.subLocations && loc.subLocations.length > 1) {
+            const merged = [...orderedSubs];
+            loc.subLocations.forEach(s => { if (!merged.includes(s)) merged.push(s); });
+            DB.upsertLocation({ name: locName, subLocations: merged });
+          }
+        }
+      }
+
+      // Property category order from map (unambiguous only)
+      if (!meta.propertyOrderLocked) {
+        const orderedProps = _extractPropertyOrderFromMap(blocks, propDefs);
+        if (orderedProps.length) {
+          DB.setPropertyOrder(orderedProps);
+        }
+      }
     }
 
     // delete all data
