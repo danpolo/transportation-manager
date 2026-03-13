@@ -3650,6 +3650,7 @@
         <div class="form-group">
           <div class="pill-toggle" id="tr-mode-toggle">
             <button class="active" data-mode="cart">עגלה</button>
+            <button data-mode="container">משטח</button>
             <button data-mode="floor">רצפה</button>
           </div>
         </div>
@@ -3657,6 +3658,11 @@
         <!-- cart mode -->
         <div id="tr-cart-section">
           <div id="tr-cart-form-host"></div>
+        </div>
+
+        <!-- container mode -->
+        <div id="tr-container-section" hidden>
+          <div id="tr-container-form-host"></div>
         </div>
 
         <!-- floor mode: pick source by location + properties + batch transfer -->
@@ -3775,10 +3781,11 @@
       _mode = mode;
       screen.querySelectorAll('#tr-mode-toggle button').forEach(b =>
         b.classList.toggle('active', b.dataset.mode === mode));
-      screen.querySelector('#tr-cart-section').hidden  = (mode !== 'cart');
-      screen.querySelector('#tr-floor-section').hidden = (mode !== 'floor');
+      screen.querySelector('#tr-cart-section').hidden      = (mode !== 'cart');
+      screen.querySelector('#tr-container-section').hidden = (mode !== 'container');
+      screen.querySelector('#tr-floor-section').hidden     = (mode !== 'floor');
       screen.querySelector('#tr-shared-fields').hidden = true;
-      screen.querySelector('#tr-cart-item-fields').hidden = (mode !== 'cart');
+      screen.querySelector('#tr-cart-item-fields').hidden = (mode === 'floor');
       _currentData = null; _currentType = null;
     }
 
@@ -3848,9 +3855,53 @@
       }
     });
 
+    // container form (like cart form but autocompletes only non-עגלה container types)
+    let _containerRef = null;
+    (function() {
+      const host = screen.querySelector('#tr-container-form-host');
+      host.innerHTML = `
+        <div class="form-group">
+          <label class="form-label">מספר משטח / מכולה</label>
+          <input id="tr-container-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
+        </div>
+      `;
+      const input = host.querySelector('#tr-container-id');
+      makeAutocomplete(input, () =>
+        DB.getAllCarts()
+          .filter(c => c.containerType && c.containerType !== DEFAULT_CONTAINER)
+          .map(c => cartLabel(c))
+      );
+      function lookup() {
+        const raw = input.value.trim();
+        const id  = raw.replace(/\s*\[[^\]]+\]\s*$/g, '').replace(/\([^)]+\)\s*$/, '').trim();
+        if (!id) {
+          screen.querySelector('#tr-shared-fields').hidden = true;
+          _currentData = null; _currentType = null; return;
+        }
+        const cart = DB.getCart(id) || DB.getCart(raw);
+        if (cart) {
+          showSharedFields(cart, 'cart');
+        } else {
+          screen.querySelector('#tr-shared-fields').hidden = true;
+          _currentData = null; _currentType = null;
+        }
+      }
+      input.addEventListener('change', lookup);
+      input.addEventListener('input', () => {
+        const raw = input.value.trim();
+        const id  = raw.replace(/\s*\[[^\]]+\]\s*$/g, '').replace(/\([^)]+\)\s*$/, '').trim();
+        if (DB.getCart(id) || DB.getCart(raw)) lookup();
+      });
+      _containerRef = {
+        getValue() { return input.value.trim(); },
+        clear()    { input.value = ''; },
+        setValue(val) { input.value = val; input.dispatchEvent(new Event('change', { bubbles: true })); }
+      };
+    })();
+
     // transfer save logic (returns msg or null on error)
     function doTransferSave() {
-      if (!_currentData) { Toast.show('בחר עגלה או מקור רצפה', 'error'); return null; }
+      if (!_currentData) { Toast.show('בחר עגלה, משטח או מקור רצפה', 'error'); return null; }
       const destLoc    = screen.querySelector('#tr-dest-loc').value.trim();
       const destSubLoc = screen.querySelector('#tr-dest-subloc-group').hidden
         ? '' : screen.querySelector('#tr-dest-subloc').value.trim();
@@ -3920,6 +3971,7 @@
       screen.querySelector('#tr-dest-loc').value = '';
       screen.querySelector('#tr-dest-subloc').value = '';
       if (_cartRef) _cartRef.clear();
+      if (_containerRef) _containerRef.clear();
       return msg;
     }
 
@@ -3934,12 +3986,14 @@
       doTransferSave();
     });
 
-    // empty cart
+    // empty cart / container
     screen.querySelector('#tr-empty-cart').addEventListener('click', () => {
-      if (!_currentData || _currentType !== 'cart') { Toast.show('בחר עגלה', 'error'); return; }
+      if (!_currentData || _currentType !== 'cart') { Toast.show('בחר עגלה או משטח', 'error'); return; }
       DB.upsertCart({ cartId: _currentData.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
-      Toast.show('עגלה רוקנה', 'success');
+      const entityName = containerName(_currentData);
+      Toast.show(entityName + ' רוקן/ה', 'success');
       screen.querySelector('#tr-shared-fields').hidden = true;
+      if (_mode === 'container' && _containerRef) _containerRef.clear();
       _currentData = null; _currentType = null;
     });
 
