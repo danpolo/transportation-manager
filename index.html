@@ -1646,6 +1646,14 @@
       save();
     }
 
+    function clearItemsOnly() {
+      const db = load();
+      db.carts = {};
+      db.floorItems = {};
+      db.metadata.carts = [];
+      save();
+    }
+
     return {
       load, save, getMetadata, getCart, getAllCarts, upsertCart, deleteCart,
       getChildCarts, cascadeLocationUpdate,
@@ -1656,7 +1664,7 @@
       addMetaCart, removeMetaCart,
       renameCartType, renameContainerType, renameLocation, renameSubLocation,
       renameProperty, renamePropertyOption,
-      importJSON, getRaw, clear,
+      importJSON, getRaw, clear, clearItemsOnly,
       setLocationOrder, setPropertyOrder,
       setLocationOrderLocked, setPropertyOrderLocked
     };
@@ -5941,7 +5949,15 @@
           </div>
         </button>
 
-        <button class="hero-btn" id="main-delete-all" style="margin-top:24px">
+        <button class="hero-btn" id="main-clear-items" style="margin-top:24px">
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--warning, #f59e0b) 12%, var(--card));color:var(--warning, #f59e0b);">🧹</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">מחיקת נתוני פריטים</div>
+            <div class="hero-btn-sub">מחיקת מכולות ופריטי רצפה בלבד — ההגדרות נשמרות</div>
+          </div>
+        </button>
+
+        <button class="hero-btn" id="main-delete-all" style="margin-top:8px">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--danger) 12%, var(--card));color:var(--danger);">🗑️</div>
           <div class="hero-btn-body">
             <div class="hero-btn-title">מחיקת כל הנתונים</div>
@@ -6688,6 +6704,23 @@
         }
       }
     }
+
+    // clear items only (keep settings)
+    screen.querySelector('#main-clear-items').addEventListener('click', () => {
+      Modal.open({
+        title: 'מחיקת נתוני פריטים',
+        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המכולות ופריטי הרצפה.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי מכולות <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
+        actions: [
+          { id: 'confirm-clear-items', label: 'מחק פריטים', cls: 'btn-danger', onClick: () => {
+            DB.clearItemsOnly();
+            Modal.close();
+            Toast.show('נתוני הפריטים נמחקו', 'success');
+            location.reload();
+          }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
+      });
+    });
 
     // delete all data
     screen.querySelector('#main-delete-all').addEventListener('click', () => {
