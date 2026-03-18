@@ -826,6 +826,29 @@
     .sr-suggest-item:hover, .sr-suggest-item.active {
       background: color-mix(in srgb, var(--brand) 15%, var(--card));
     }
+    .sr-disambig-header {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      direction: rtl;
+      text-align: right;
+      font-style: italic;
+    }
+    .sr-disambig-item { color: var(--brand); font-weight: 500; }
+    .sr-cat-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 12%, var(--card));
+      border-radius: 4px;
+      padding: 2px 7px;
+      margin-top: 3px;
+      cursor: pointer;
+      direction: rtl;
+      user-select: none;
+    }
+    .sr-cat-badge:hover { background: color-mix(in srgb, var(--brand) 22%, var(--card)); }
 
     /* ─── Pin button in search results ─── */
     .loc-group-header {
@@ -4908,8 +4931,10 @@
 
     // ── State ──────────────────────────────────────────────
     const state = {
-      includeTerms: [],   // lowercase normalized strings
+      includeTerms: [],      // lowercase normalized strings
       excludeTerms: [],
+      includeCategories: [], // parallel to includeTerms: propName string or null
+      excludeCategories: [], // parallel to excludeTerms: propName string or null
       emptyOnly: false
     };
 
@@ -5009,8 +5034,13 @@
     }
     function _applyRecent(r) {
       // Reset all fields first
-      incInputs.forEach(i => { i.value = ''; });
-      excInputs.forEach(i => { i.value = ''; });
+      [...incInputs, ...excInputs].forEach(i => {
+        i.value = '';
+        _inputCategoryMap.delete(i);
+        _updateCatBadge(i, null);
+      });
+      state.includeCategories = [];
+      state.excludeCategories = [];
       (r.inc || []).forEach((t, i) => { if (incInputs[i]) incInputs[i].value = t; });
       (r.exc || []).forEach((t, i) => { if (excInputs[i]) excInputs[i].value = t; });
       state.includeTerms = (r.inc || []).slice();
@@ -5094,6 +5124,81 @@
     // ── Autocomplete ─────────────────────────────────────────────
     let _activeDropdown = null;
 
+    // Map<HTMLInputElement, string|null> — selected property category per input
+    const _inputCategoryMap = new Map();
+
+    // Returns property defs whose options contain `value` (exact, case-insensitive)
+    function _getAmbiguousProps(value) {
+      const lower = value.toLowerCase();
+      return (DB.getMetadata().properties || []).filter(p =>
+        (p.options || []).some(o => o.toLowerCase() === lower)
+      );
+    }
+
+    // Show/hide the category badge below an input
+    function _updateCatBadge(input, propName) {
+      const wrap = input.closest('.sr-suggest-wrap');
+      let badge = wrap.querySelector('.sr-cat-badge');
+      if (!propName) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'sr-cat-badge';
+        wrap.appendChild(badge);
+      }
+      badge.textContent = `[${propName}] ✕`;
+      badge.onclick = () => {
+        _inputCategoryMap.delete(input);
+        _updateCatBadge(input, null);
+        onSearchInput();
+      };
+    }
+
+    // Show disambiguation picker when a value belongs to multiple property categories
+    function showDisambiguation(input, value, ambigProps) {
+      closeSuggestions();
+      const wrap = input.closest('.sr-suggest-wrap');
+      const list = document.createElement('div');
+      list.className = 'sr-suggest-list open';
+
+      const header = document.createElement('div');
+      header.className = 'sr-disambig-header';
+      header.textContent = 'הערך קיים בכמה קטגוריות — בחר:';
+      list.appendChild(header);
+
+      // "All categories" option
+      const allItem = document.createElement('div');
+      allItem.className = 'sr-suggest-item';
+      allItem.textContent = 'כל הקטגוריות';
+      allItem.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        _inputCategoryMap.delete(input);
+        _updateCatBadge(input, null);
+        closeSuggestions();
+        onSearchInput();
+      });
+      list.appendChild(allItem);
+
+      ambigProps.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = 'sr-suggest-item sr-disambig-item';
+        item.textContent = prop.name;
+        item.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          _inputCategoryMap.set(input, prop.name);
+          _updateCatBadge(input, prop.name);
+          closeSuggestions();
+          onSearchInput();
+        });
+        list.appendChild(item);
+      });
+
+      wrap.appendChild(list);
+      _activeDropdown = list;
+    }
+
     function showSuggestions(input, query) {
       closeSuggestions();
       if (!query) return;
@@ -5111,8 +5216,12 @@
         item.addEventListener('pointerdown', e => {
           e.preventDefault();
           input.value = m;
+          _inputCategoryMap.delete(input);
+          _updateCatBadge(input, null);
           closeSuggestions();
           onSearchInput();
+          const ambig = _getAmbiguousProps(m);
+          if (ambig.length > 1) setTimeout(() => showDisambiguation(input, m, ambig), 0);
         });
         list.appendChild(item);
       });
@@ -5129,8 +5238,12 @@
     function onSearchInput() {
       clearTimeout(_debounceTimer);
       _debounceTimer = setTimeout(() => {
-        state.includeTerms = incInputs.map(i => i.value.trim().toLowerCase()).filter(Boolean);
-        state.excludeTerms = excInputs.map(i => i.value.trim().toLowerCase()).filter(Boolean);
+        const incPairs = incInputs.map(i => ({ term: i.value.trim().toLowerCase(), cat: _inputCategoryMap.get(i) || null })).filter(p => p.term);
+        const excPairs = excInputs.map(i => ({ term: i.value.trim().toLowerCase(), cat: _inputCategoryMap.get(i) || null })).filter(p => p.term);
+        state.includeTerms = incPairs.map(p => p.term);
+        state.includeCategories = incPairs.map(p => p.cat);
+        state.excludeTerms = excPairs.map(p => p.term);
+        state.excludeCategories = excPairs.map(p => p.cat);
         updateActionsBar();
         renderResults();
         _saveRecentFilter();
@@ -5141,9 +5254,17 @@
     // Wire up input events
     [...incInputs, ...excInputs].forEach(input => {
       input.addEventListener('input', () => {
+        // Reset category restriction whenever the user modifies the field
+        _inputCategoryMap.delete(input);
+        _updateCatBadge(input, null);
         const q = input.value.trim();
-        if (q.length >= 1) showSuggestions(input, q);
-        else closeSuggestions();
+        if (q.length >= 1) {
+          const ambig = _getAmbiguousProps(q);
+          if (ambig.length > 1) showDisambiguation(input, q, ambig);
+          else showSuggestions(input, q);
+        } else {
+          closeSuggestions();
+        }
         onSearchInput();
       });
       input.addEventListener('focus', () => {
@@ -5238,12 +5359,24 @@
       return false;
     }
 
+    function _propMatchesTerm(item, propName, term) {
+      const topVal = ((item.properties || {})[propName] || '').toLowerCase();
+      if (topVal === term) return true;
+      return (item.extraItems || []).some(ex => ((ex.properties || {})[propName] || '').toLowerCase() === term);
+    }
+
     function itemPasses(item) {
       if (state.emptyOnly && !item.isEmpty) return false;
       if (!state.includeTerms.length && !state.excludeTerms.length) return true;
       const parts = buildSearchableParts(item);
-      for (const t of state.includeTerms) { if (!termMatchesParts(t, parts)) return false; }
-      for (const t of state.excludeTerms) { if (termMatchesParts(t, parts)) return false; }
+      for (let i = 0; i < state.includeTerms.length; i++) {
+        const t = state.includeTerms[i], cat = state.includeCategories[i];
+        if (cat ? !_propMatchesTerm(item, cat, t) : !termMatchesParts(t, parts)) return false;
+      }
+      for (let i = 0; i < state.excludeTerms.length; i++) {
+        const t = state.excludeTerms[i], cat = state.excludeCategories[i];
+        if (cat ? _propMatchesTerm(item, cat, t) : termMatchesParts(t, parts)) return false;
+      }
       return true;
     }
 
@@ -5611,10 +5744,15 @@
 
     // ── Clear all ─────────────────────────────────────────────────
     document.getElementById('sr-clear-btn').addEventListener('click', () => {
-      incInputs.forEach(i => { i.value = ''; });
-      excInputs.forEach(i => { i.value = ''; });
+      [...incInputs, ...excInputs].forEach(i => {
+        i.value = '';
+        _inputCategoryMap.delete(i);
+        _updateCatBadge(i, null);
+      });
       state.includeTerms = [];
       state.excludeTerms = [];
+      state.includeCategories = [];
+      state.excludeCategories = [];
       state.emptyOnly = false;
       screen.querySelector('#sr-empty-check').checked = false;
       // Reset to initial visible fields (3 inc + 1 exc)
