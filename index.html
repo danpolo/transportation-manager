@@ -6117,11 +6117,11 @@
     // Returns an array of human-readable error strings (empty = valid).
     // Only checks when locationOrderLocked is true.
     function _validateImportLocations(blocks) {
-      if (!DB.getMetadata().locationOrderLocked) return [];
+      const meta = DB.getMetadata();
+      if (!meta.locationOrderLocked) return [];
 
-      const knownLocs = DB.getMetadata().locations || [];
       const knownLocMap = {};
-      knownLocs.forEach(l => { knownLocMap[l.name] = l.subLocations || []; });
+      (meta.locations || []).forEach(l => { knownLocMap[l.name] = new Set(l.subLocations || []); });
 
       const errors = [];
       const seenLocs = new Set();
@@ -6142,7 +6142,7 @@
         } else if (seenSubLocs[locName]) {
           const knownSubs = knownLocMap[locName];
           for (const subLoc of seenSubLocs[locName]) {
-            if (!knownSubs.includes(subLoc)) {
+            if (!knownSubs.has(subLoc)) {
               errors.push(`תת-מיקום "${subLoc}" תחת "${locName}" לא קיים בהגדרות`);
             }
           }
