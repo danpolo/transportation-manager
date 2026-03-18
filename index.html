@@ -1931,7 +1931,7 @@
           .filter(fi => !fi.isEmpty && fi.itemCount)
           .map(fi => {
             const propVals = _orderedPropValues(fi.properties, propDefs);
-            return `${fi.itemCount} ${propVals}`.trim() + '\n';
+            return `${propVals} - ${fi.itemCount}`.trim() + '\n';
           });
         if (floorLines.length) sections.push(floorLines.join(''));
 
@@ -6047,7 +6047,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v50</span>
+        <span class="version-badge">v51</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6406,7 +6406,6 @@
         const mCart = RE_CART_WITH_TYPE.exec(line);
         if (mCart) {
           if (mode === 'multiline') flushMultiline();
-          if (mode === 'floor') { flushEntries(); mode = 'normal'; }
           const rawId = mCart[1].trim();
           const [rawContent, entryComment] = _stripComment(mCart[2].trim());
           const content = rawContent;
@@ -6482,10 +6481,7 @@
             }
           } else {
             // no content → header
-            if (before.startsWith('רצפה')) {
-              if (mode === 'multiline') flushMultiline();
-              flushEntries(); subLocation = before; mode = 'floor';
-            } else if (!blockStarted) {
+            if (!blockStarted) {
               flushEntries(); location = before; subLocation = ''; blockStarted = true; mode = 'normal';
             } else {
               flushEntries(); subLocation = before; mode = 'normal';
@@ -6494,9 +6490,8 @@
           continue;
         }
 
-        // floor item: props - count
-        if (mode === 'floor') {
-          if (!line.includes(' - ')) continue;
+        // floor item: identified purely by format "props - count" (digit after last ' - ')
+        if (/ - \d+$/.test(line)) {
           const [count, rawProps] = _parsePropsDashCount(line);
           entries.push({ type: 'floor', itemCount: count, isEmpty: count === 0, rawProps });
           continue;
