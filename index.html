@@ -3906,8 +3906,9 @@
         const raw = input.value.trim();
         const id  = raw.replace(/\s*\[[^\]]+\]\s*$/g, '').replace(/\([^)]+\)\s*$/, '').trim();
         if (!id) {
-          screen.querySelector('#tr-shared-fields').hidden = true;
-          _currentData = null; _currentType = null; return;
+          // No ID — show fields for anonymous container
+          showSharedFields({ cartId: '', containerType: 'משטח', location: '', isEmpty: true }, 'cart');
+          return;
         }
         const cart = DB.getCart(id) || DB.getCart(raw);
         if (cart) {
@@ -3944,16 +3945,18 @@
         const count   = parseInt(screen.querySelector('#tr-count').value) || 0;
         const itemIds = [...screen.querySelectorAll('.item-id-input')].map(i => i.value.trim()).filter(Boolean);
         const props   = readPropertyFields(screen.querySelector('#tr-prop-fields'));
-        DB.upsertCart({
-          cartId:      _currentData.cartId,
-          location:    destLoc,
-          subLocation: destSubLoc,
-          itemCount:   count,
-          itemIds,
-          properties:  props,
-          isEmpty:     count === 0
-        });
-        DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
+        if (_currentData.cartId) {
+          DB.upsertCart({
+            cartId:      _currentData.cartId,
+            location:    destLoc,
+            subLocation: destSubLoc,
+            itemCount:   count,
+            itemIds,
+            properties:  props,
+            isEmpty:     count === 0
+          });
+          DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
+        }
         const fromLabel = _currentData.subLocation || _currentData.location || '';
         const toLabel   = destSubLoc || destLoc;
         msg = Utils.copyMessage(cartLabel(_currentData), count, props, fromLabel, toLabel, _currentData.containerType, itemIds);
@@ -4540,7 +4543,6 @@
     async function doContainerSave() {
       const rawCtId = ctIdInput.value.trim();
       const ctId = rawCtId.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
-      if (!ctId) { Toast.show('יש להזין מספר משטח / מכולה', 'error'); return null; }
 
       const rawParent = screen.querySelector('#lu-ct-parent-cart').value.trim();
       const parentCartId = rawParent.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
@@ -4552,19 +4554,21 @@
       const extras = allSlots.slice(1);
 
       // Determine container type
-      const existingCt = DB.getCart(ctId);
+      const existingCt = ctId ? DB.getCart(ctId) : null;
       const ctType = existingCt ? (existingCt.containerType || 'משטח') : 'משטח';
       const ctLocation = existingCt ? (existingCt.location || '') : '';
 
-      // Upsert the container cart with items and parent
-      DB.upsertCart({
-        cartId: ctId,
-        containerType: ctType,
-        itemCount: slot0.itemCount, itemIds: slot0.itemIds, properties: slot0.properties,
-        extraItems: extras,
-        parentCartId: parentCartId,
-        isEmpty: !allSlots.some(s => s.itemCount > 0)
-      });
+      // Upsert the container cart with items and parent (only if an ID was given)
+      if (ctId) {
+        DB.upsertCart({
+          cartId: ctId,
+          containerType: ctType,
+          itemCount: slot0.itemCount, itemIds: slot0.itemIds, properties: slot0.properties,
+          extraItems: extras,
+          parentCartId: parentCartId,
+          isEmpty: !allSlots.some(s => s.itemCount > 0)
+        });
+      }
 
       // Make sure parent cart exists
       const parentCart = DB.getCart(parentCartId);
@@ -4577,7 +4581,7 @@
       const parentLabel = destCart ? cartLabel(destCart) : parentCartId;
       const parentCtName = destCart ? containerName(destCart) : 'עגלה';
       const loc = destCart ? (destCart.location || '?') : (ctLocation || '?');
-      const msgLines = [`${ctType} ${ctId}`, `טעון על ${parentCtName} ${parentLabel}`, `מיקום: ${loc}`];
+      const msgLines = [ctId ? `${ctType} ${ctId}` : ctType, `טעון על ${parentCtName} ${parentLabel}`, `מיקום: ${loc}`];
       const _metaProps = DB.getMetadata().properties || [];
       allSlots.filter(sl => sl.itemCount).forEach(sl => {
         const ps = Utils.orderedPropValues(sl.properties, _metaProps);
@@ -4595,7 +4599,7 @@
       }
 
       const msg = msgLines.join('\n');
-      Toast.show(ctType + ' הועמס על ' + parentCtName, 'success');
+      Toast.show((ctId ? ctType + ' ' + ctId : ctType) + ' הועמס על ' + parentCtName, 'success');
 
       // Reset
       ctIdInput.value = '';
@@ -6194,13 +6198,16 @@
               const normalizedText = _normalizeAliases(text, propDefs);
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
-              const locErrors = _validateImportLocations(blocks);
-              if (locErrors.length) { _showLocationLockError(locErrors); return; }
-              const imported = _buildMapDB(blocks, propDefs);
-              DB.importJSON(JSON.stringify(imported), 'merge');
-              _applyMapOrdering(blocks, propDefs);
-              Modal.close();
-              Toast.show('מיפוי נשמר בהצלחה', 'success');
+              const diffs = _getLocationDiffs(blocks);
+              const doImport = () => {
+                const imported = _buildMapDB(blocks, propDefs);
+                DB.importJSON(JSON.stringify(imported), 'merge');
+                _applyMapOrdering(blocks, propDefs);
+                Modal.close();
+                Toast.show('מיפוי נשמר בהצלחה', 'success');
+              };
+              if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
+              doImport();
             } catch(err) {
               Toast.show('שגיאה: ' + err.message, 'error');
             }
@@ -6233,15 +6240,18 @@
               const normalizedText = _normalizeAliases(text, propDefs);
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
-              const locErrors = _validateImportLocations(blocks);
-              if (locErrors.length) { _showLocationLockError(locErrors); return; }
-              const imported = _buildMapDB(blocks, propDefs);
-              DB.importJSON(JSON.stringify(imported), 'merge');
-              _applyMapOrdering(blocks, propDefs);
-              const cartCount = Object.keys(imported.carts).length;
-              const floorCount = Object.keys(imported.floorItems).length;
-              Modal.close();
-              Toast.show(`יובאו ${cartCount} מכולות ו-${floorCount} פריטי רצפה`, 'success');
+              const diffs = _getLocationDiffs(blocks);
+              const doImport = () => {
+                const imported = _buildMapDB(blocks, propDefs);
+                DB.importJSON(JSON.stringify(imported), 'merge');
+                _applyMapOrdering(blocks, propDefs);
+                const cartCount = Object.keys(imported.carts).length;
+                const floorCount = Object.keys(imported.floorItems).length;
+                Modal.close();
+                Toast.show(`יובאו ${cartCount} מכולות ו-${floorCount} פריטי רצפה`, 'success');
+              };
+              if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
+              doImport();
             } catch(err) {
               Toast.show('שגיאה: ' + err.message, 'error');
             }
@@ -6252,18 +6262,19 @@
     });
 
     // ── Location lock validation ──
-    // Returns an array of human-readable error strings (empty = valid).
-    // Only checks when locationOrderLocked is true.
-    function _validateImportLocations(blocks) {
+    // Returns structured diff objects for locations/sub-locations in the import
+    // that are missing from settings. Only checks when locationOrderLocked is true.
+    // Each diff: { type: 'location'|'sublocation', locName, subLocName?, label }
+    function _getLocationDiffs(blocks) {
       const meta = DB.getMetadata();
       if (!meta.locationOrderLocked) return [];
 
       const knownLocMap = {};
       (meta.locations || []).forEach(l => { knownLocMap[l.name] = new Set(l.subLocations || []); });
 
-      const errors = [];
+      const diffs = [];
       const seenLocs = new Set();
-      const seenSubLocs = {}; // locName -> Set of subLoc names
+      const seenSubLocs = {};
 
       for (const block of blocks) {
         if (!block.location) continue;
@@ -6276,31 +6287,54 @@
 
       for (const locName of seenLocs) {
         if (!(locName in knownLocMap)) {
-          errors.push(`מיקום "${locName}" לא קיים בהגדרות`);
+          diffs.push({ type: 'location', locName, label: `מיקום "${locName}"` });
         } else if (seenSubLocs[locName]) {
           const knownSubs = knownLocMap[locName];
           for (const subLoc of seenSubLocs[locName]) {
             if (!knownSubs.has(subLoc)) {
-              errors.push(`תת-מיקום "${subLoc}" תחת "${locName}" לא קיים בהגדרות`);
+              diffs.push({ type: 'sublocation', locName, subLocName: subLoc, label: `תת-מיקום "${subLoc}" תחת "${locName}"` });
             }
           }
         }
       }
 
-      return errors;
+      return diffs;
     }
 
-    function _showLocationLockError(errors) {
+    // Show the interactive diff modal. onProceed(checkedDiffs) is called when the user confirms.
+    function _showLocationDiffModal(diffs, onProceed) {
+      const checkboxRows = diffs.map((d, i) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border);direction:rtl;cursor:pointer">
+          <input type="checkbox" data-diff-idx="${i}" checked style="width:16px;height:16px;flex-shrink:0">
+          <span style="font-size:0.9rem">${esc(d.label)}</span>
+        </label>`).join('');
+
       Modal.open({
-        title: 'שגיאת ייבוא — מיקומים',
+        title: 'עדכון הגדרות לפני ייבוא 🔒',
         html: `
-          <p style="margin-bottom:10px;font-weight:600;color:var(--danger)">הייבוא נחסם — סדר המיקומים נעול 🔒</p>
-          <ul style="margin:0;padding-right:18px;line-height:1.9;font-size:0.92rem">
-            ${errors.map(e => `<li>${esc(e)}</li>`).join('')}
-          </ul>
-          <p style="margin-top:12px;color:var(--muted);font-size:0.83rem">יש לתקן את המיפוי כך שיכיל רק מיקומים ותת-מיקומים המוגדרים בהגדרות.</p>
+          <p style="margin-bottom:10px;font-size:0.88rem;color:var(--muted)">המיפוי מכיל מיקומים שאינם בהגדרות. בחר מה להוסיף להגדרות לפני הייבוא:</p>
+          <div style="max-height:260px;overflow-y:auto;margin-bottom:4px">${checkboxRows}</div>
         `,
-        actions: [{ id: 'ok', label: 'סגור', onClick: Modal.close }]
+        actions: [
+          { id: 'apply-import', label: 'הוסף ויייבא', cls: 'btn-primary', onClick: () => {
+            const overlay = document.getElementById('modal-overlay');
+            const checked = [...overlay.querySelectorAll('[data-diff-idx]:checked')]
+              .map(cb => diffs[+cb.dataset.diffIdx]);
+            // Apply location additions first so sublocations have a parent
+            for (const d of checked.filter(d => d.type === 'location')) {
+              DB.upsertLocation({ name: d.locName, subLocations: [] });
+            }
+            for (const d of checked.filter(d => d.type === 'sublocation')) {
+              const loc = DB.getMetadata().locations.find(l => l.name === d.locName);
+              const subs = [...(loc ? loc.subLocations || [] : [])];
+              if (!subs.includes(d.subLocName)) subs.push(d.subLocName);
+              DB.upsertLocation({ name: d.locName, subLocations: subs });
+            }
+            Modal.close();
+            onProceed();
+          }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
       });
     }
 
@@ -6853,7 +6887,7 @@
             DB.clearItemsOnly();
             Modal.close();
             Toast.show('נתוני הפריטים נמחקו', 'success');
-            location.reload();
+            Router.navigate('main');
           }},
           { id: 'cancel', label: 'ביטול', onClick: Modal.close }
         ]
@@ -6867,10 +6901,10 @@
         html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המכולות, פריטי רצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
         actions: [
           { id: 'confirm-delete', label: 'מחק הכל', cls: 'btn-danger', onClick: () => {
-            localStorage.removeItem('shinua_data');
+            DB.clear();
             Modal.close();
             Toast.show('כל הנתונים נמחקו', 'success');
-            location.reload();
+            Router.navigate('main');
           }},
           { id: 'cancel', label: 'ביטול', onClick: Modal.close }
         ]
