@@ -1598,7 +1598,7 @@
             _floorKey(e.location || '', e.properties, e.subLocation) === _floorKey(fi.location || '', fi.properties, fi.subLocation)
           );
           if (!existing || (fi.lastUpdated || 0) > (existing.lastUpdated || 0)) {
-            const id = (existing && existing.id) || ('fi_' + Date.now());
+            const id = (existing && existing.id) || fi.id || ('fi_' + Date.now());
             db.floorItems[id] = Object.assign({}, existing || {}, fi, { id });
           }
         }
@@ -6047,7 +6047,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v51</span>
+        <span class="version-badge">v52</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6395,7 +6395,7 @@
 
         if (!line) { if (mode === 'multiline') flushMultiline(); continue; }
         if (/^מיפוי\s+\d{1,2}:\d{2}/.test(line)) continue;
-        if (/^={3,}$/.test(line)) {
+        if (/^={3,}$/.test(line) || /^-{3,}$/.test(line)) {
           if (mode === 'multiline') flushMultiline();
           flushEntries();
           location = null; subLocation = ''; blockStarted = false; mode = 'normal';
@@ -6475,7 +6475,7 @@
               entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
             } else {
-              const [count, rawProps] = _parsePropsDashCount(after);
+              const [count, rawProps] = _parseCountProps(after);
               entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
             }
