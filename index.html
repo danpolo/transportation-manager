@@ -6053,7 +6053,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v52</span>
+        <span class="version-badge">v53</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6705,9 +6705,13 @@
             }
           } else {
             const props = _matchProps(entry.rawProps, propDefs);
-            if (entry.rawProps && propDefs.length && Object.values(props).every(v => !v)) {
+            const hasMatch = Object.values(props).some(v => v);
+            if (entry.rawProps && !hasMatch) {
               const locLabel = locName + (subLoc ? ' / ' + subLoc : '');
               unmatchedFloorLines.push(`${locLabel}: ${entry.rawProps} - ${entry.itemCount}`);
+              // Store rawProps as a synthetic discriminator so dedup doesn't collapse
+              // multiple unmatched floor items into one entry (they keep unique _floorKey values)
+              props['_unmatched'] = entry.rawProps;
             }
             const fiId = 'fi_' + (nowMs + fiCounter);
             fiCounter++;
