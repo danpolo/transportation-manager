@@ -1884,6 +1884,12 @@
 
       function emitCartWithChildren(c) {
         let s = cartLine(c, '');
+        (c.extraItems || []).filter(ex => ex.itemCount).forEach(ex => {
+          const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
+          const idLabel = c.cartId + (c.cartType ? '(' + c.cartType + ')' : '');
+          const pv = _orderedPropValues(ex.properties, propDefs);
+          s += (`${ctLabel}${idLabel}: ${ex.itemCount}${pv ? ' ' + pv : ''}`).trim() + '\n';
+        });
         (childrenOf[c.cartId] || []).forEach(ch => {
           const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
           const chIdLabel = ch.cartId + (ch.cartType ? '(' + ch.cartType + ')' : '');
@@ -6047,7 +6053,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v51</span>
+        <span class="version-badge">v52</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6199,12 +6205,16 @@
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
-              const doImport = () => {
-                const imported = _buildMapDB(blocks, propDefs);
-                DB.importJSON(JSON.stringify(imported), 'merge');
+              const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
+              const doActualImport = () => {
+                DB.importJSON(JSON.stringify(importedDb), 'merge');
                 _applyMapOrdering(blocks, propDefs);
                 Modal.close();
                 Toast.show('מיפוי נשמר בהצלחה', 'success');
+              };
+              const doImport = () => {
+                if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, doActualImport); return; }
+                doActualImport();
               };
               if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
               doImport();
@@ -6241,14 +6251,18 @@
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
-              const doImport = () => {
-                const imported = _buildMapDB(blocks, propDefs);
-                DB.importJSON(JSON.stringify(imported), 'merge');
+              const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
+              const doActualImport = () => {
+                DB.importJSON(JSON.stringify(importedDb), 'merge');
                 _applyMapOrdering(blocks, propDefs);
-                const cartCount = Object.keys(imported.carts).length;
-                const floorCount = Object.keys(imported.floorItems).length;
+                const cartCount = Object.keys(importedDb.carts).length;
+                const floorCount = Object.keys(importedDb.floorItems).length;
                 Modal.close();
                 Toast.show(`יובאו ${cartCount} מכולות ו-${floorCount} פריטי רצפה`, 'success');
+              };
+              const doImport = () => {
+                if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, doActualImport); return; }
+                doActualImport();
               };
               if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
               doImport();
@@ -6333,6 +6347,23 @@
             Modal.close();
             onProceed();
           }},
+          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+        ]
+      });
+    }
+
+    function _showUnmatchedFloorModal(lines, onProceed) {
+      const listHtml = lines.map(l =>
+        `<li style="font-family:monospace;font-size:0.82rem;padding:4px 2px;border-bottom:1px solid var(--border)">${esc(l)}</li>`
+      ).join('');
+      Modal.open({
+        title: 'פריטי רצפה עם מאפיינים לא מוכרים',
+        html: `
+          <p style="margin-bottom:10px;font-size:0.88rem;color:var(--muted)">השורות הבאות מכילות מאפיינים שאינם קיימים בהגדרות. הן ייובאו ללא מאפיינים — בדוק את ההגדרות או את הטקסט:</p>
+          <ul style="list-style:none;max-height:240px;overflow-y:auto;margin-bottom:4px">${listHtml}</ul>
+        `,
+        actions: [
+          { id: 'continue-import', label: 'המשך בכל זאת', cls: 'btn-primary', onClick: () => { Modal.close(); onProceed(); } },
           { id: 'cancel', label: 'ביטול', onClick: Modal.close }
         ]
       });
@@ -6571,6 +6602,7 @@
       let fiCounter = 0;
       const carts = {}, floorItems = {};
       const cartIdList = [], locationSet = {}, containerTypesSet = new Set(['עגלה']);
+      const unmatchedFloorLines = [];
 
       for (const block of blocks) {
         const { location: locName, subLocation: subLoc, entries } = block;
@@ -6608,7 +6640,15 @@
 
               if (!carts[cid] || (slotIdx === 0 && carts[cid])) {
                 if (carts[cid] && slotIdx === 0) {
-                  // same cartId in a later block — overwrite (last occurrence wins)
+                  if (carts[cid].location === locName && carts[cid].subLocation === subLoc) {
+                    // same cart, same location — additional slot (multi-props format)
+                    carts[cid].extraItems.push(slotData);
+                    const s0Empty = !carts[cid].itemCount;
+                    const exEmpty = carts[cid].extraItems.every(s => !s.itemCount);
+                    carts[cid].isEmpty = s0Empty && exEmpty;
+                    continue;
+                  }
+                  // same cartId, different location — overwrite (cart moved)
                   carts[cid].containerType = ct;
                   carts[cid].location = locName;
                   carts[cid].subLocation = subLoc;
@@ -6665,6 +6705,10 @@
             }
           } else {
             const props = _matchProps(entry.rawProps, propDefs);
+            if (entry.rawProps && propDefs.length && Object.values(props).every(v => !v)) {
+              const locLabel = locName + (subLoc ? ' / ' + subLoc : '');
+              unmatchedFloorLines.push(`${locLabel}: ${entry.rawProps} - ${entry.itemCount}`);
+            }
             const fiId = 'fi_' + (nowMs + fiCounter);
             fiCounter++;
             floorItems[fiId] = {
@@ -6677,7 +6721,7 @@
       }
 
       const cartTypes = [...new Set(Object.values(carts).map(c => c.cartType).filter(Boolean))].sort();
-      return {
+      const db = {
         metadata: {
           carts: cartIdList, cartTypes,
           containerTypes: [...containerTypesSet].sort(),
@@ -6686,6 +6730,7 @@
         },
         carts, floorItems
       };
+      return { db, unmatchedFloorLines };
     }
 
     // Extract unambiguous property category order from parsed map data.
