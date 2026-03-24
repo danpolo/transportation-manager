@@ -1870,7 +1870,8 @@
 
       function cartLine(c, prefix) {
         const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
-        const idLabel = c.cartId + (c.cartType ? '(' + c.cartType + ')' : '');
+        const displayId = /^#\d+$/.test(c.cartId) ? '#' : c.cartId;
+        const idLabel = displayId + (c.cartType ? '(' + c.cartType + ')' : '');
         let line;
         if (c.isEmpty || !c.itemCount) {
           line = `${prefix}${ctLabel}${idLabel}: empty`;
@@ -1886,7 +1887,8 @@
         let s = cartLine(c, '');
         (c.extraItems || []).filter(ex => ex.itemCount).forEach(ex => {
           const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
-          const idLabel = c.cartId + (c.cartType ? '(' + c.cartType + ')' : '');
+          const exDisplayId = /^#\d+$/.test(c.cartId) ? '#' : c.cartId;
+          const idLabel = exDisplayId + (c.cartType ? '(' + c.cartType + ')' : '');
           const pv = _orderedPropValues(ex.properties, propDefs);
           s += (`${ctLabel}${idLabel}: ${ex.itemCount}${pv ? ' ' + pv : ''}`).trim() + '\n';
         });
@@ -1914,19 +1916,20 @@
         const emptyCarts = cartList.filter(c => c.isEmpty || !c.itemCount);
         const fullCarts  = cartList.filter(c => !c.isEmpty && c.itemCount);
 
-        // 1) Empty carts grouped by cartType
+        // 1) Empty carts grouped by cartType (anon carts each get their own group)
         const emptyByType = {};
         emptyCarts.forEach(c => {
-          const key = c.cartType || '';
+          const key = /^#\d+$/.test(c.cartId) ? c.cartId : (c.cartType || '');
           if (!emptyByType[key]) emptyByType[key] = [];
           emptyByType[key].push(emitCartWithChildren(c));
         });
         Object.values(emptyByType).forEach(lines => sections.push(lines.join('')));
 
-        // 2) Non-empty carts grouped by property values
+        // 2) Non-empty carts grouped by property values (anon carts each get their own group)
         const fullByProps = {};
         fullCarts.forEach(c => {
-          const key = Object.values(c.properties || {}).filter(Boolean).join(' ');
+          const key = /^#\d+$/.test(c.cartId) ? c.cartId :
+            Object.values(c.properties || {}).filter(Boolean).join(' ');
           if (!fullByProps[key]) fullByProps[key] = [];
           fullByProps[key].push(emitCartWithChildren(c));
         });
@@ -6053,7 +6056,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v53</span>
+        <span class="version-badge">v54</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6409,6 +6412,7 @@
       const results = [];
       let location = null, subLocation = '', entries = [], mode = 'normal';
       let multilineCart = null, blockStarted = false;
+      let anonCounter = 0, lastWasAnonLine = false;
 
       function flushEntries() {
         if (location !== null) {
@@ -6424,7 +6428,7 @@
       for (const raw of text.split('\n')) {
         const line = raw.trim();
 
-        if (!line) { if (mode === 'multiline') flushMultiline(); continue; }
+        if (!line) { if (mode === 'multiline') flushMultiline(); lastWasAnonLine = false; continue; }
         if (/^מיפוי\s+\d{1,2}:\d{2}/.test(line)) continue;
         if (/^={3,}$/.test(line)) {
           if (mode === 'multiline') flushMultiline();
@@ -6441,8 +6445,15 @@
           const [rawContent, entryComment] = _stripComment(mCart[2].trim());
           const content = rawContent;
           const mId = RE_ID_TYPE.exec(rawId);
-          const cartId = mId ? mId[1].trim() : rawId;
+          let cartId = mId ? mId[1].trim() : rawId;
           const cartType = mId ? mId[2].trim() : '';
+          if (cartId === '#') {
+            if (!lastWasAnonLine) anonCounter++;
+            cartId = `#${anonCounter}`;
+            lastWasAnonLine = true;
+          } else {
+            lastWasAnonLine = false;
+          }
           if (!content) {
             multilineCart = { type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment, slots: [] };
             mode = 'multiline';
@@ -6502,16 +6513,24 @@
             } else {
               containerType = 'עגלה'; cId = before;
             }
+            if (cId === '#') {
+              if (!lastWasAnonLine) anonCounter++;
+              cId = `#${anonCounter}`;
+              lastWasAnonLine = true;
+            } else {
+              lastWasAnonLine = false;
+            }
             if (after === 'empty') {
               entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
             } else {
-              const [count, rawProps] = _parsePropsDashCount(after);
+              const [count, rawProps] = _parseCountProps(after);
               entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
             }
           } else {
             // no content → header
+            lastWasAnonLine = false;
             if (!blockStarted) {
               flushEntries(); location = before; subLocation = ''; blockStarted = true; mode = 'normal';
             } else {
@@ -6522,6 +6541,7 @@
         }
 
         // floor item: identified purely by format "props - count" (digit after last ' - ')
+        lastWasAnonLine = false;
         if (/ - \d+$/.test(line)) {
           const [count, rawProps] = _parsePropsDashCount(line);
           entries.push({ type: 'floor', itemCount: count, isEmpty: count === 0, rawProps });
