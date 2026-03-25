@@ -6056,7 +6056,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v56</span>
+        <span class="version-badge">v57</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6482,7 +6482,8 @@
             entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment,
               slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
           } else {
-            const [count, rawProps] = _parseCountProps(content);
+            let [count, rawProps] = _parseCountProps(content);
+            if (count === 0 && / - \d+$/.test(content)) { [count, rawProps] = _parsePropsDashCount(content); }
             entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment,
               slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
           }
@@ -6545,7 +6546,8 @@
               entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
             } else {
-              const [count, rawProps] = _parseCountProps(after);
+              let [count, rawProps] = _parseCountProps(after);
+              if (count === 0 && / - \d+$/.test(after)) { [count, rawProps] = _parsePropsDashCount(after); }
               entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
             }
