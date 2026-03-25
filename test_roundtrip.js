@@ -18,10 +18,10 @@ function extractLines(from, to) {
 
 // Line ranges of functions we need (from grep)
 const code = [
-  extractLines(1302, 1306),   // _floorKey
-  extractLines(1799, 1808),   // formatDate
-  extractLines(1844, 1970),   // _orderedPropValues + generateMapText
-  extractLines(6377, 6775),   // _normalizeAliases, _parseMap, helpers, _buildMapDB
+  extractLines(1318, 1322),   // _floorKey
+  extractLines(1816, 1825),   // formatDate
+  extractLines(1861, 1986),   // _orderedPropValues + generateMapText
+  extractLines(6630, 7053),   // _normalizeAliases, _parseMap, helpers, _buildMapDB
 ].join('\n');
 
 // Eval in a sandbox that exposes the functions

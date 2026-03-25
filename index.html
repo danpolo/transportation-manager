@@ -98,6 +98,7 @@
     #app {
       display: grid;
       grid-template-rows: 1fr var(--nav-h);
+      height: 100vh;
       height: 100dvh;
       overflow: hidden;
     }
@@ -142,7 +143,6 @@
     #bottom-nav {
       display: flex;
       background: var(--card);
-      backdrop-filter: blur(8px);
       border-top: 1px solid var(--line);
       padding-top: 6px;
       padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -1187,6 +1187,11 @@
       color: var(--muted); font-size: 0.65rem; margin-inline-start: 2px;
       padding: 2px;
     }
+    .recent-filter-chip.active {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
   </style>
 </head>
 <body>
@@ -1266,6 +1271,11 @@
       const slot0Empty = !(merged.itemCount || 0);
       const extraEmpty = merged.extraItems.every(s => !(s.itemCount || 0));
       merged.isEmpty = slot0Empty && extraEmpty;
+      // clear properties on empty slots so they don't appear in property searches
+      if (slot0Empty) merged.properties = {};
+      merged.extraItems = merged.extraItems.map(s =>
+        (s.itemCount || 0) === 0 ? Object.assign({}, s, { properties: {} }) : s
+      );
       db.carts[data.cartId] = merged;
       // ensure cartId is in metadata.carts list
       if (!db.metadata.carts.includes(data.cartId)) {
@@ -2371,13 +2381,13 @@
           <span>${item.label}</span>
         </button>
       `).join('');
-      nav.addEventListener('click', e => {
+      nav.onclick = e => {
         const btn = e.target.closest('.nav-item');
         if (!btn) return;
-        const screen = btn.dataset.screen;
-        Router.navigate(screen);
-        history.replaceState(null, '', '#' + screen);
-      });
+        const scr = btn.dataset.screen;
+        Router.navigate(scr);
+        history.replaceState(null, '', '#' + scr);
+      };
     }
   };
 
@@ -3813,14 +3823,10 @@
             <input id="tr-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
 
-          <!-- cart-mode: count + item rows + properties -->
+          <!-- cart-mode: multi-slot support -->
           <div id="tr-cart-item-fields">
-            <div class="form-group">
-              <label class="form-label">מספר פריטים</label>
-              <input id="tr-count" class="form-input" type="number" min="0" placeholder="0">
-            </div>
-            <div id="tr-item-rows" class="item-rows"></div>
-            <div id="tr-prop-fields" class="mt-12"></div>
+            <div id="tr-slots-container"></div>
+            <button id="tr-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
           </div>
 
           <div style="display:flex;gap:8px;margin-top:16px">
@@ -3922,10 +3928,7 @@
           ${data.comment ? `<div class="card-meta" style="color:var(--muted);font-style:italic">${esc(data.comment)}</div>` : ''}
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = false;
-        const countInput = screen.querySelector('#tr-count');
-        countInput.value = data.itemCount || 0;
-        renderItemRows(data.itemCount || 0, data.itemIds || []);
-        buildPropertyFields(screen.querySelector('#tr-prop-fields'), data.properties || {});
+        _trPopulateSlots(data);
       } else {
         const propStr = Utils.orderedPropValues(data.properties, DB.getMetadata().properties || []);
         info.innerHTML = `
@@ -3936,25 +3939,86 @@
       }
     }
 
-    function renderItemRows(n, existing) {
-      const container = screen.querySelector('#tr-item-rows');
+    // ── Multi-slot helpers (mirrors load/unload screen) ───────────
+    function _trRenderItemRows(container, n, existing) {
       const rows = [];
       for (let i = 0; i < n; i++) {
-        rows.push(`
-          <div class="item-row">
-            <span class="item-row-num">${i+1}</span>
-            <input class="item-id-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
-          </div>
-        `);
+        rows.push(`<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}"></div>`);
       }
       container.innerHTML = rows.join('');
     }
-
-    // count input changes (cart mode)
-    screen.querySelector('#tr-count').addEventListener('input', () => {
-      const n = parseInt(screen.querySelector('#tr-count').value) || 0;
-      const existing = [...screen.querySelectorAll('.item-id-input')].map(i => i.value);
-      renderItemRows(n, existing);
+    function _trMakeSlotEl(idx, slot) {
+      const div = document.createElement('div');
+      div.className = 'item-slot-card';
+      div.dataset.slotIdx = String(idx);
+      const existingCount = slot ? (slot.itemCount || 0) : 0;
+      const existingIds   = slot ? (slot.itemIds   || []) : [];
+      div.innerHTML = `
+        <div class="item-slot-header">
+          <span class="card-meta" style="font-weight:600"></span>
+          <button class="btn-icon slot-del-btn" title="הסר סוג" style="font-size:1rem;padding:0 4px">✕</button>
+        </div>
+        <div class="slot-props"></div>
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">כמות</label>
+          <input class="form-input slot-count-input" type="number" min="0" placeholder="0" value="${existingCount}">
+        </div>
+        <div class="item-rows slot-item-rows"></div>
+      `;
+      buildPropertyFields(div.querySelector('.slot-props'), slot ? (slot.properties || {}) : {});
+      _trRenderItemRows(div.querySelector('.slot-item-rows'), existingCount, existingIds);
+      div.querySelector('.slot-count-input').addEventListener('input', () => {
+        const n    = parseInt(div.querySelector('.slot-count-input').value) || 0;
+        const prev = [...div.querySelectorAll('.item-id-input')].map(i => i.value);
+        _trRenderItemRows(div.querySelector('.slot-item-rows'), n, prev);
+      });
+      div.querySelector('.slot-del-btn').addEventListener('click', () => {
+        const parent = div.parentElement;
+        div.remove();
+        _trRenumberSlots(parent);
+      });
+      return div;
+    }
+    function _trRenumberSlots(container) {
+      if (!container) return;
+      const slots = container.querySelectorAll('.item-slot-card');
+      slots.forEach((el, idx) => {
+        el.dataset.slotIdx = String(idx);
+        const lbl = el.querySelector('.item-slot-header span');
+        if (lbl) lbl.textContent = idx === 0 ? 'סוג ראשון' : `סוג ${idx + 1}`;
+        const del = el.querySelector('.slot-del-btn');
+        if (del) del.hidden = (slots.length === 1);
+      });
+    }
+    function _trReadAllSlots() {
+      return [...screen.querySelectorAll('#tr-slots-container .item-slot-card')].map(el => ({
+        properties: readPropertyFields(el.querySelector('.slot-props')),
+        itemCount:  parseInt(el.querySelector('.slot-count-input').value) || 0,
+        itemIds:    [...el.querySelectorAll('.item-id-input')].map(i => i.value.trim()).filter(Boolean)
+      }));
+    }
+    function _trPopulateSlots(cart) {
+      const container = screen.querySelector('#tr-slots-container');
+      container.innerHTML = '';
+      const slots = [
+        { properties: cart.properties || {}, itemCount: cart.itemCount || 0, itemIds: cart.itemIds || [] },
+        ...(cart.extraItems || [])
+      ];
+      slots.forEach((slot, idx) => container.appendChild(_trMakeSlotEl(idx, slot)));
+      _trRenumberSlots(container);
+    }
+    function _trInitSlots() {
+      const container = screen.querySelector('#tr-slots-container');
+      container.innerHTML = '';
+      container.appendChild(_trMakeSlotEl(0, null));
+      _trRenumberSlots(container);
+    }
+    _trInitSlots();
+    screen.querySelector('#tr-add-slot-btn').addEventListener('click', () => {
+      const container = screen.querySelector('#tr-slots-container');
+      const idx = container.querySelectorAll('.item-slot-card').length;
+      container.appendChild(_trMakeSlotEl(idx, null));
+      _trRenumberSlots(container);
     });
 
     // mode toggle
@@ -3980,7 +4044,7 @@
       const host = screen.querySelector('#tr-container-form-host');
       host.innerHTML = `
         <div class="form-group">
-          <label class="form-label">מספר משטח / מיכל</label>
+          <label class="form-label">מספר משטח</label>
           <input id="tr-container-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
         </div>
       `;
@@ -4030,24 +4094,25 @@
       let msg;
 
       if (_currentType === 'cart') {
-        const count   = parseInt(screen.querySelector('#tr-count').value) || 0;
-        const itemIds = [...screen.querySelectorAll('.item-id-input')].map(i => i.value.trim()).filter(Boolean);
-        const props   = readPropertyFields(screen.querySelector('#tr-prop-fields'));
+        const allSlots = _trReadAllSlots();
+        const slot0    = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
+        const extras   = allSlots.slice(1);
         if (_currentData.cartId) {
           DB.upsertCart({
             cartId:      _currentData.cartId,
             location:    destLoc,
             subLocation: destSubLoc,
-            itemCount:   count,
-            itemIds,
-            properties:  props,
-            isEmpty:     count === 0
+            itemCount:   slot0.itemCount,
+            itemIds:     slot0.itemIds,
+            properties:  slot0.properties,
+            extraItems:  extras,
+            isEmpty:     !allSlots.some(s => s.itemCount > 0)
           });
           DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
         }
         const fromLabel = _currentData.subLocation || _currentData.location || '';
         const toLabel   = destSubLoc || destLoc;
-        msg = Utils.copyMessage(cartLabel(_currentData), count, props, fromLabel, toLabel, _currentData.containerType, itemIds);
+        msg = Utils.copyMessage(cartLabel(_currentData), slot0.itemCount, slot0.properties, fromLabel, toLabel, _currentData.containerType, slot0.itemIds);
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
         const moveCount = parseInt(screen.querySelector('#tr-floor-count').value) || 0;
@@ -4209,7 +4274,7 @@
         <!-- ═══ CONTAINER ON CART SECTION ═══ -->
         <div id="lu-container-section" hidden>
           <div class="form-group">
-            <label class="form-label">מספר משטח / מיכל</label>
+            <label class="form-label">מספר משטח</label>
             <input id="lu-ct-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
           </div>
           <div id="lu-ct-info" class="card" style="margin:0 0 14px;display:none"></div>
@@ -4621,7 +4686,7 @@
         populateSlots(ctSlotsContainer, cart);
       } else {
         ctInfoEl.style.display = '';
-        ctInfoEl.innerHTML = `<div class="card-meta">מיכל חדש: ${esc(cid)}</div>`;
+        ctInfoEl.innerHTML = `<div class="card-meta">קטגוריה חדשה: ${esc(cid)}</div>`;
         initCtSlots();
       }
     }
@@ -5002,11 +5067,15 @@
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 3 (לא לכלול)"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-4" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 4 (לא לכלול)"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-5" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 5 (לא לכלול)"></div>
-        <div class="sr-add-filter" id="sr-add-filter"><a>+ הוסף שדה סינון</a></div>
+        <div style="display:flex;gap:8px;">
+          <div class="sr-add-filter" id="sr-add-filter" style="flex:1"><a>+ הוסף שדה סינון</a></div>
+          <div class="sr-add-filter" id="sr-add-exc-filter" style="flex:1"><a>+ הוסף שדה החרגה</a></div>
+        </div>
         <label class="sr-empty-label" style="padding:6px 0;">
           <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> הצג ריקות בלבד
         </label>
       </div>
+      <div id="sr-type-filters" class="recent-filters" style="padding-bottom:2px"></div>
       <div id="sr-recent-filters" class="recent-filters"></div>
       <div class="sr-filter-actions">
         <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
@@ -5027,7 +5096,8 @@
       excludeTerms: [],
       includeCategories: [], // parallel to includeTerms: propName string or null
       excludeCategories: [], // parallel to excludeTerms: propName string or null
-      emptyOnly: false
+      emptyOnly: false,
+      itemTypeFilter: null   // null=all, 'floor', or container type string
     };
 
     const _selectedItems = new Set(); // 'cart:ID' or 'fi:ID'
@@ -5035,7 +5105,9 @@
 
     const incInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-inc-' + n));
     const excInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-exc-' + n));
-    const allWraps = [...incInputs, ...excInputs].map(i => i.closest('.sr-suggest-wrap'));
+    const incWraps  = incInputs.map(i => i.closest('.sr-suggest-wrap'));
+    const excWraps  = excInputs.map(i => i.closest('.sr-suggest-wrap'));
+    const allWraps  = [...incWraps, ...excWraps];
 
     // ── Collapse / expand filters ─────────────────────────────────
     let _filtersCollapsed = false;
@@ -5075,14 +5147,19 @@
 
     // ── Add filter fields on demand ────────────────────────────────
     function revealNextHidden() {
-      const hidden = allWraps.filter(w => w.classList.contains('sr-hidden'));
+      const hidden = incWraps.filter(w => w.classList.contains('sr-hidden'));
       if (hidden.length) hidden[0].classList.remove('sr-hidden');
-      // Hide the button if all fields are visible
-      if (allWraps.every(w => !w.classList.contains('sr-hidden'))) {
+      if (incWraps.every(w => !w.classList.contains('sr-hidden')))
         screen.querySelector('#sr-add-filter').style.display = 'none';
-      }
+    }
+    function revealNextHiddenExc() {
+      const hidden = excWraps.filter(w => w.classList.contains('sr-hidden'));
+      if (hidden.length) hidden[0].classList.remove('sr-hidden');
+      if (excWraps.every(w => !w.classList.contains('sr-hidden')))
+        screen.querySelector('#sr-add-exc-filter').style.display = 'none';
     }
     screen.querySelector('#sr-add-filter').addEventListener('click', revealNextHidden);
+    screen.querySelector('#sr-add-exc-filter').addEventListener('click', revealNextHiddenExc);
 
     // ── Pinned location groups ────────────────────────────────────
     const PIN_KEY = 'shinua_pinned_groups';
@@ -5140,12 +5217,8 @@
       state.emptyOnly = !!r.empty;
       screen.querySelector('#sr-empty-check').checked = state.emptyOnly;
       // Show enough fields
-      allWraps.forEach((w, i) => {
-        const isInc = i < 5;
-        const idx = isInc ? i : i - 5;
-        const terms = isInc ? r.inc : r.exc;
-        if (terms && idx < terms.length) w.classList.remove('sr-hidden');
-      });
+      incWraps.forEach((w, i) => { if (r.inc && i < r.inc.length) w.classList.remove('sr-hidden'); });
+      excWraps.forEach((w, i) => { if (r.exc && i < r.exc.length) w.classList.remove('sr-hidden'); });
       _filtersCollapsed = false;
       inputsContainer.classList.remove('collapsed');
       closeSuggestions();
@@ -5488,7 +5561,41 @@
       return (item.extraItems || []).some(ex => ((ex.properties || {})[propName] || '').toLowerCase() === term);
     }
 
+    function renderTypeFilter() {
+      const container = screen.querySelector('#sr-type-filters');
+      if (!container) return;
+      const meta = DB.getMetadata();
+      const ctypes = meta.containerTypes || [DEFAULT_CONTAINER];
+      const chips = [
+        { label: 'הכל', value: null },
+        ...ctypes.map(ct => ({ label: ct, value: ct })),
+        { label: 'רצפה', value: 'floor' }
+      ];
+      container.innerHTML = chips.map(c => {
+        const active = state.itemTypeFilter === c.value ? ' active' : '';
+        const val = c.value === null ? '' : c.value;
+        return `<button class="recent-filter-chip${active}" data-type="${esc(val)}">${esc(c.label)}</button>`;
+      }).join('');
+      container.querySelectorAll('.recent-filter-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          state.itemTypeFilter = chip.dataset.type || null;
+          renderTypeFilter();
+          renderResults();
+        });
+      });
+    }
+
     function itemPasses(item) {
+      if (state.itemTypeFilter) {
+        const isCart = !!item.cartId;
+        if (state.itemTypeFilter === 'floor') {
+          if (isCart) return false;
+        } else {
+          if (!isCart) return false;
+          const ct = item.containerType || DEFAULT_CONTAINER;
+          if (ct !== state.itemTypeFilter) return false;
+        }
+      }
       if (state.emptyOnly && !item.isEmpty) return false;
       if (!state.includeTerms.length && !state.excludeTerms.length) return true;
       const parts = buildSearchableParts(item);
@@ -5879,10 +5986,10 @@
       state.emptyOnly = false;
       screen.querySelector('#sr-empty-check').checked = false;
       // Reset to initial visible fields (3 inc + 1 exc)
-      allWraps.forEach((w, i) => {
-        w.classList.toggle('sr-hidden', i >= 3 && i <= 4 || i >= 6);
-      });
+      incWraps.forEach((w, i) => w.classList.toggle('sr-hidden', i >= 3));
+      excWraps.forEach((w, i) => w.classList.toggle('sr-hidden', i >= 1));
       screen.querySelector('#sr-add-filter').style.display = '';
+      screen.querySelector('#sr-add-exc-filter').style.display = '';
       _filtersCollapsed = false;
       inputsContainer.classList.remove('collapsed');
       closeSuggestions();
@@ -6161,6 +6268,7 @@
     Router.register('search', {
       onShow() {
         buildSuggestionPool();
+        renderTypeFilter();
         updateActionsBar();
         renderResults();
         renderRecentFilters();
@@ -6180,7 +6288,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v60</span>
+        <span class="version-badge">v62</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6228,7 +6336,7 @@
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--warning, #f59e0b) 12%, var(--card));color:var(--warning, #f59e0b);">🧹</div>
           <div class="hero-btn-body">
             <div class="hero-btn-title">מחיקת נתוני פריטים</div>
-            <div class="hero-btn-sub">מחיקת מיכלים ופריטי רצפה בלבד — ההגדרות נשמרות</div>
+            <div class="hero-btn-sub">מחיקת פריטים בלבד - ההגדרות נשמרות</div>
           </div>
         </button>
 
@@ -6385,7 +6493,7 @@
                 const cartCount = Object.keys(importedDb.carts).length;
                 const floorCount = Object.keys(importedDb.floorItems).length;
                 Modal.close();
-                Toast.show(`יובאו ${cartCount} מיכלים ו-${floorCount} פריטי רצפה`, 'success');
+                Toast.show(`יובאו ${cartCount + floorCount} פריטים`, 'success');
               };
               const doImport = () => {
                 if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, importedDb, propDefs, doActualImport); return; }
@@ -7132,7 +7240,7 @@
     screen.querySelector('#main-clear-items').addEventListener('click', () => {
       Modal.open({
         title: 'מחיקת נתוני פריטים',
-        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המיכלים ופריטי הרצפה.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי מיכלים <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
+        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל הפריטים.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי עגלות <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
         actions: [
           { id: 'confirm-clear-items', label: 'מחק פריטים', cls: 'btn-danger', onClick: () => {
             DB.clearItemsOnly();
@@ -7149,7 +7257,7 @@
     screen.querySelector('#main-delete-all').addEventListener('click', () => {
       Modal.open({
         title: 'מחיקת כל הנתונים',
-        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המיכלים, פריטי רצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
+        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל העגלות, פריטי הרצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
         actions: [
           { id: 'confirm-delete', label: 'מחק הכל', cls: 'btn-danger', onClick: () => {
             DB.clear();
@@ -7322,6 +7430,7 @@
   // Re-navigate on tab/PWA restore (iOS/Android may freeze & resume pages)
   window.addEventListener('pageshow', e => {
     if (e.persisted) {
+      BottomNav.render();
       const name = Router.getCurrent() || location.hash.replace('#','') || 'main';
       Router.navigate(name);
     }
