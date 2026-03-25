@@ -1593,12 +1593,13 @@
         }
         // FloorItems: merge by location+subLocation+properties key (not by ID)
         const inFI = incoming.floorItems || {};
+        let _fiNewId = Date.now();
         for (const fi of Object.values(inFI)) {
           const existing = Object.values(db.floorItems).find(e =>
             _floorKey(e.location || '', e.properties, e.subLocation) === _floorKey(fi.location || '', fi.properties, fi.subLocation)
           );
           if (!existing || (fi.lastUpdated || 0) > (existing.lastUpdated || 0)) {
-            const id = (existing && existing.id) || ('fi_' + Date.now());
+            const id = (existing && existing.id) || ('fi_' + (_fiNewId++));
             db.floorItems[id] = Object.assign({}, existing || {}, fi, { id });
           }
         }
@@ -6056,7 +6057,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v57</span>
+        <span class="version-badge">v58</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
