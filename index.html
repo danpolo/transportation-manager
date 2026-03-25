@@ -1970,7 +1970,7 @@
           out += `${sub}:\n`;
           out += emitGrouped(subCarts, subFIs);
         }
-        out += '----------------------------------\n';
+        out += '===\n';
       }
       return out.trim();
     }
@@ -3980,7 +3980,7 @@
       const host = screen.querySelector('#tr-container-form-host');
       host.innerHTML = `
         <div class="form-group">
-          <label class="form-label">מספר משטח / מכולה</label>
+          <label class="form-label">מספר משטח / מיכל</label>
           <input id="tr-container-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
         </div>
       `;
@@ -4209,7 +4209,7 @@
         <!-- ═══ CONTAINER ON CART SECTION ═══ -->
         <div id="lu-container-section" hidden>
           <div class="form-group">
-            <label class="form-label">מספר משטח / מכולה</label>
+            <label class="form-label">מספר משטח / מיכל</label>
             <input id="lu-ct-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
           </div>
           <div id="lu-ct-info" class="card" style="margin:0 0 14px;display:none"></div>
@@ -4621,7 +4621,7 @@
         populateSlots(ctSlotsContainer, cart);
       } else {
         ctInfoEl.style.display = '';
-        ctInfoEl.innerHTML = `<div class="card-meta">מכולה חדשה: ${esc(cid)}</div>`;
+        ctInfoEl.innerHTML = `<div class="card-meta">מיכל חדש: ${esc(cid)}</div>`;
         initCtSlots();
       }
     }
@@ -5163,7 +5163,13 @@
       const recents = _loadRecent();
       // Only show when no active filter
       if (countActive() || !recents.length) { container.innerHTML = ''; return; }
-      container.innerHTML = recents.map(r => {
+      // Only show recents where all terms still exist in the suggestion pool
+      const poolSet = new Set(_suggestions.map(s => s.toLowerCase()));
+      const validRecents = recents.filter(r =>
+        [...(r.inc || []), ...(r.exc || [])].every(t => poolSet.has(t.toLowerCase()))
+      );
+      if (!validRecents.length) { container.innerHTML = ''; return; }
+      container.innerHTML = validRecents.map(r => {
         const label = _recentLabel(r);
         return `<button class="recent-filter-chip" data-recent='${esc(JSON.stringify(r))}'>
           <span class="rfc-icon">⏱</span>${esc(label)}<span class="rfc-remove" data-remove-label="${esc(label)}">✕</span>
@@ -5189,16 +5195,23 @@
       const meta = DB.getMetadata();
       const carts = DB.getAllCarts();
       const fis = DB.getAllFloorItems();
-      // locations & sub-locations
+      // locations & sub-locations + their aliases
       (meta.locations || []).forEach(l => {
         pool.add(l.name);
-        (l.subLocations || []).forEach(s => pool.add(s));
+        (l.aliases || []).forEach(a => { if (a.trim()) pool.add(a); });
+        (l.subLocations || []).forEach(s => {
+          pool.add(s);
+          ((l.subLocationAliases || {})[s] || []).forEach(a => { if (a.trim()) pool.add(a); });
+        });
       });
       // cart types, container types
       (meta.cartTypes || []).forEach(t => pool.add(t));
       (meta.containerTypes || []).forEach(t => pool.add(t));
-      // property options
-      (meta.properties || []).forEach(p => (p.options || []).forEach(o => pool.add(o)));
+      // property options + their aliases
+      (meta.properties || []).forEach(p => {
+        (p.options || []).forEach(o => pool.add(o));
+        Object.values(p.aliases || {}).forEach(aliasList => aliasList.forEach(a => { if (a.trim()) pool.add(a); }));
+      });
       // cart IDs, serial numbers
       carts.forEach(c => {
         pool.add(c.cartId);
@@ -5211,6 +5224,24 @@
         (fi.itemIds || []).forEach(id => pool.add(id));
       });
       _suggestions = [...pool].filter(Boolean).sort();
+    }
+
+    // Resolve a search term through property/location aliases → canonical form
+    function _resolveSearchTerm(term) {
+      const meta = DB.getMetadata();
+      const lower = term.toLowerCase();
+      for (const prop of (meta.properties || [])) {
+        for (const [canonical, aliasList] of Object.entries(prop.aliases || {})) {
+          if ((aliasList || []).some(a => a.toLowerCase() === lower)) return canonical.toLowerCase();
+        }
+      }
+      for (const loc of (meta.locations || [])) {
+        if ((loc.aliases || []).some(a => a.toLowerCase() === lower)) return loc.name.toLowerCase();
+        for (const [canonical, aliasList] of Object.entries(loc.subLocationAliases || {})) {
+          if ((aliasList || []).some(a => a.toLowerCase() === lower)) return canonical.toLowerCase();
+        }
+      }
+      return term;
     }
 
     // ── Autocomplete ─────────────────────────────────────────────
@@ -5462,11 +5493,11 @@
       if (!state.includeTerms.length && !state.excludeTerms.length) return true;
       const parts = buildSearchableParts(item);
       for (let i = 0; i < state.includeTerms.length; i++) {
-        const t = state.includeTerms[i], cat = state.includeCategories[i];
+        const t = _resolveSearchTerm(state.includeTerms[i]), cat = state.includeCategories[i];
         if (cat ? !_propMatchesTerm(item, cat, t) : !termMatchesParts(t, parts)) return false;
       }
       for (let i = 0; i < state.excludeTerms.length; i++) {
-        const t = state.excludeTerms[i], cat = state.excludeCategories[i];
+        const t = _resolveSearchTerm(state.excludeTerms[i]), cat = state.excludeCategories[i];
         if (cat ? _propMatchesTerm(item, cat, t) : termMatchesParts(t, parts)) return false;
       }
       return true;
@@ -5923,9 +5954,23 @@
       if (!all.length) { Toast.show('אין תוצאות', 'error'); return; }
 
       const totalItems = all.reduce((s, x) => s + (x.itemCount || 0), 0);
-      const emptyCount = all.filter(x => x.isEmpty).length;
       const meta = DB.getMetadata();
       const propDefs = meta.properties || [];
+      // Per-container-type breakdown
+      const byType = {};
+      carts.forEach(c => {
+        const ct = c.containerType || 'עגלה';
+        if (!byType[ct]) byType[ct] = { count: 0, empty: 0 };
+        byType[ct].count++;
+        if (c.isEmpty) byType[ct].empty++;
+      });
+      const containerParts = Object.entries(byType)
+        .map(([ct, s]) => `${s.count} ${ct}${s.empty ? ` (${s.empty} ריקות)` : ''}`);
+      if (fis.length) {
+        const fiEmpty = fis.filter(f => f.isEmpty).length;
+        containerParts.push(`${fis.length} פריטי רצפה${fiEmpty ? ` (${fiEmpty} ריקות)` : ''}`);
+      }
+      const summaryLine = `סה"כ: ${totalItems} פריטים${containerParts.length ? ' | ' + containerParts.join(', ') : ''}`;
       const comboStats = {};
       all.filter(x => !x.isEmpty && x.itemCount).forEach(item => {
         const label = propDefs.map(p => (item.properties || {})[p.name]).filter(Boolean).join(' ');
@@ -5933,7 +5978,7 @@
         if (!comboStats[key]) comboStats[key] = 0;
         comboStats[key] += item.itemCount;
       });
-      const lines = [`סה"כ: ${totalItems} פריטים, ${all.length} מכולות${emptyCount ? ', ' + emptyCount + ' ריקות' : ''}`];
+      const lines = [summaryLine];
       Object.entries(comboStats).sort((a,b) => b[1] - a[1]).forEach(([label, count]) => {
         lines.push(`${count} ${label}`);
       });
@@ -6135,7 +6180,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v59</span>
+        <span class="version-badge">v60</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6183,7 +6228,7 @@
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--warning, #f59e0b) 12%, var(--card));color:var(--warning, #f59e0b);">🧹</div>
           <div class="hero-btn-body">
             <div class="hero-btn-title">מחיקת נתוני פריטים</div>
-            <div class="hero-btn-sub">מחיקת מכולות ופריטי רצפה בלבד — ההגדרות נשמרות</div>
+            <div class="hero-btn-sub">מחיקת מיכלים ופריטי רצפה בלבד — ההגדרות נשמרות</div>
           </div>
         </button>
 
@@ -6340,7 +6385,7 @@
                 const cartCount = Object.keys(importedDb.carts).length;
                 const floorCount = Object.keys(importedDb.floorItems).length;
                 Modal.close();
-                Toast.show(`יובאו ${cartCount} מכולות ו-${floorCount} פריטי רצפה`, 'success');
+                Toast.show(`יובאו ${cartCount} מיכלים ו-${floorCount} פריטי רצפה`, 'success');
               };
               const doImport = () => {
                 if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, importedDb, propDefs, doActualImport); return; }
@@ -7087,7 +7132,7 @@
     screen.querySelector('#main-clear-items').addEventListener('click', () => {
       Modal.open({
         title: 'מחיקת נתוני פריטים',
-        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המכולות ופריטי הרצפה.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי מכולות <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
+        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המיכלים ופריטי הרצפה.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי מיכלים <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
         actions: [
           { id: 'confirm-clear-items', label: 'מחק פריטים', cls: 'btn-danger', onClick: () => {
             DB.clearItemsOnly();
@@ -7104,7 +7149,7 @@
     screen.querySelector('#main-delete-all').addEventListener('click', () => {
       Modal.open({
         title: 'מחיקת כל הנתונים',
-        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המכולות, פריטי רצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
+        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל המיכלים, פריטי רצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
         actions: [
           { id: 'confirm-delete', label: 'מחק הכל', cls: 'btn-danger', onClick: () => {
             DB.clear();
@@ -7156,14 +7201,8 @@
         ptrIndicator.querySelector('.ptr-text').textContent = 'מרענן...';
         ptrIndicator.style.height = '44px';
         if (navigator.vibrate) navigator.vibrate(15);
-        // Reload data from localStorage (in case another tab wrote) and re-render
-        setTimeout(() => {
-          DB.load();
-          ptrIndicator.classList.remove('refreshing', 'threshold');
-          ptrIndicator.style.height = '0';
-          _ptrRefreshing = false;
-          Toast.show('נתונים רועננו', 'success');
-        }, 600);
+        // Reload the page to pick up the latest version
+        setTimeout(() => { location.reload(); }, 600);
       } else {
         ptrIndicator.style.height = '0';
       }
@@ -7257,9 +7296,12 @@
     initSearch();
     initMain();
 
-    // Wire up theme toggle
+    // Wire up theme toggle + sync button label (button didn't exist during initTheme)
     const themeBtn = document.getElementById('theme-toggle');
-    if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+    if (themeBtn) {
+      themeBtn.addEventListener('click', toggleTheme);
+      setTheme(document.body.getAttribute('data-theme') || 'light');
+    }
 
     // Version badge: tap to reload (picks up latest version)
     const vBadge = document.querySelector('.version-badge');
