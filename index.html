@@ -6066,9 +6066,9 @@
           if (sub) mapStr += `${sub}:\n`;
           mapStr += text + '\n===\n';
           try {
-            const normalized = _normalizeAliases(mapStr, propDefs);
-            const blocks = _parseMap(normalized);
-            const { db: importedDb } = _buildMapDB(blocks, propDefs);
+            const normalized = window._normalizeAliases(mapStr, propDefs);
+            const blocks = window._parseMap(normalized);
+            const { db: importedDb } = window._buildMapDB(blocks, propDefs);
             DB.importJSON(JSON.stringify(importedDb), 'merge');
             form.hidden = true;
             form.querySelector('textarea').value = '';
@@ -6459,7 +6459,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v64</span>
+        <span class="version-badge">v65</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6797,6 +6797,10 @@
     }
 
     // ── Map parser (ported from map2shinua.py) ──
+    // Expose parser functions globally so other screens (e.g. search + button) can call them
+    window._normalizeAliases = (...a) => _normalizeAliases(...a);
+    window._parseMap = (...a) => _parseMap(...a);
+    window._buildMapDB = (...a) => _buildMapDB(...a);
 
     function _normalizeAliases(text, propDefs, locations) {
       // ── Property value aliases ───────────────────────────────────────────────
