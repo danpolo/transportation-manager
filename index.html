@@ -4237,14 +4237,19 @@
         const toLabel = (toLoc && toLoc.showSubInWhatsapp) ? (destSubLoc || destLoc) : destLoc;
         const _propDefs = DB.getMetadata().properties || [];
         const _ctName = containerName(_currentData);
-        const _msgLines = [_ctName + ' ' + msgCartLabel(_currentData)];
-        allSlots.filter(s => s.itemCount).forEach(s => {
-          const ps = Utils.orderedPropValues(s.properties, _propDefs);
-          _msgLines.push(`${s.itemCount}${ps ? ' ' + ps : ''}`);
-          (s.itemIds || []).forEach(id => _msgLines.push(id));
-        });
-        if (fromLabel || toLabel) _msgLines.push(`מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`);
-        msg = _msgLines.join('\n');
+        const isEmpty = !allSlots.some(s => s.itemCount > 0);
+        if (isEmpty) {
+          msg = `${_ctName} ${msgCartLabel(_currentData)} ריקה מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`;
+        } else {
+          const _msgLines = [_ctName + ' ' + msgCartLabel(_currentData)];
+          allSlots.filter(s => s.itemCount).forEach(s => {
+            const ps = Utils.orderedPropValues(s.properties, _propDefs);
+            _msgLines.push(`${s.itemCount}${ps ? ' ' + ps : ''}`);
+            (s.itemIds || []).forEach(id => _msgLines.push(id));
+          });
+          if (fromLabel || toLabel) _msgLines.push(`מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`);
+          msg = _msgLines.join('\n');
+        }
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
         const moveCount = parseInt(screen.querySelector('#tr-floor-count').value) || 0;
@@ -6575,7 +6580,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v68</span>
+        <span class="version-badge">v69</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
