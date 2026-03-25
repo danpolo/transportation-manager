@@ -4278,7 +4278,7 @@
         const floorFrom = _currentData.subLocation || _currentData.location || '?';
         const floorTo   = destSubLoc || destLoc;
         const serialStr = serials.length ? '\n' + serials.join('\n') : '';
-        msg = `[רצפה] ${moveCount} ${propStr}\nמ${floorFrom} ל${floorTo}${serialStr}`.trim();
+        msg = `על משטח ${moveCount} ${propStr}\nמ${floorFrom} ל${floorTo}${serialStr}`.trim();
         Toast.show(moveCount + ' פריטי רצפה הועברו', 'success');
         screen.querySelector('#tr-floor-count').value = '';
         screen.querySelector('#tr-floor-item-rows').innerHTML = '';
@@ -6575,7 +6575,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v67</span>
+        <span class="version-badge">v68</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
