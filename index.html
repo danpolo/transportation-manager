@@ -1087,6 +1087,12 @@
       font-weight: 500;
       letter-spacing: 0.02em;
       white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    .version-badge.update-ready {
+      background: #f59e0b;
+      color: #fff;
     }
 
     /* ─── Inline edit button ─── */
@@ -3012,6 +3018,7 @@
                 <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}</div>
               </div>
               <div class="list-item-actions">
+                <button class="btn-icon-edit el-alias-btn" data-name="${esc(l.name)}" title="שמות חלופיים">🔤</button>
                 <button class="btn-icon-edit el-rename-btn" data-name="${esc(l.name)}" title="שנה שם">✏️</button>
                 <button class="btn-icon el-toggle-btn" data-name="${esc(l.name)}" title="${l.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי'}">${l.inMap ? '🗺️' : '📍'}</button>
                 <button class="btn-icon el-del-btn" data-name="${esc(l.name)}" title="מחק">🗑️</button>
@@ -3045,6 +3052,7 @@
           <div class="prop-option-row">
             <span>• ${s}</span>
             <div style="display:flex;gap:4px">
+              <button class="btn-icon-edit el-sub-alias" data-loc="${esc(locName)}" data-sub="${esc(s)}" title="שמות חלופיים">🔤</button>
               <button class="btn-icon-edit el-sub-rename" data-loc="${esc(locName)}" data-sub="${esc(s)}" title="שנה שם">✏️</button>
               <button class="btn-icon el-sub-del" data-loc="${esc(locName)}" data-sub="${esc(s)}">✕</button>
             </div>
@@ -3054,6 +3062,51 @@
 
       renderList();
       refreshSubLocSelect();
+
+      // ── Shared alias modal helper ─────────────────────────────────────────
+      function showAliasModal(itemName, aliases, onSave) {
+        let current = [...aliases];
+        function aliasRowsHtml() {
+          return current.length
+            ? current.map((a, i) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <span style="flex:1;font-size:0.9rem">${esc(a)}</span>
+                <button class="btn-icon alias-rm-btn" data-rm="${i}">✕</button>
+              </div>`).join('')
+            : `<p style="font-size:0.83rem;color:var(--muted);margin-bottom:4px">אין שמות חלופיים</p>`;
+        }
+        function refreshRows() {
+          document.getElementById('alias-rows').innerHTML = aliasRowsHtml();
+        }
+        Modal.open({
+          title: `שמות חלופיים — ${itemName}`,
+          html: `
+            <p style="font-size:0.83rem;color:var(--muted);margin-bottom:10px">שמות נוספים שיזוהו בייבוא מיפוי ויומרו לשם הרשמי</p>
+            <div id="alias-rows">${aliasRowsHtml()}</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <input id="alias-new-input" class="form-input" style="flex:1;font-size:0.88rem;padding:6px 10px" placeholder="שם חלופי חדש">
+              <button id="alias-add-btn" class="btn btn-outline btn-sm">הוסף</button>
+            </div>`,
+          actions: [
+            { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => { Modal.close(); onSave(current); Toast.show('נשמר', 'success'); } },
+            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          ]
+        });
+        const overlay = document.getElementById('modal-overlay');
+        overlay.querySelector('#alias-add-btn').addEventListener('click', () => {
+          const val = overlay.querySelector('#alias-new-input').value.trim();
+          if (!val || current.includes(val)) return;
+          current.push(val);
+          refreshRows();
+          overlay.querySelector('#alias-new-input').value = '';
+        });
+        overlay.querySelector('#alias-new-input').addEventListener('keydown', e => {
+          if (e.key === 'Enter') overlay.querySelector('#alias-add-btn').click();
+        });
+        overlay.querySelector('#alias-rows').addEventListener('click', e => {
+          const rm = e.target.closest('.alias-rm-btn');
+          if (rm) { current.splice(parseInt(rm.dataset.rm), 1); refreshRows(); }
+        });
+      }
 
       // lock switch
       const lockCheck = tabContent.querySelector('#el-order-lock');
@@ -3100,9 +3153,19 @@
       });
 
       tabContent.querySelector('#el-list').addEventListener('click', e => {
+        const aliasBtn  = e.target.closest('.el-alias-btn');
         const renameBtn = e.target.closest('.el-rename-btn');
         const toggleBtn = e.target.closest('.el-toggle-btn');
         const delBtn    = e.target.closest('.el-del-btn');
+        if (aliasBtn) {
+          const locName = aliasBtn.dataset.name;
+          const loc = DB.getMetadata().locations.find(l => l.name === locName);
+          showAliasModal(locName, (loc && loc.aliases) || [], newAliases => {
+            DB.upsertLocation({ name: locName, aliases: newAliases });
+            renderList();
+          });
+          return;
+        }
         if (renameBtn) {
           const oldName = renameBtn.dataset.name;
           Modal.open({
@@ -3165,8 +3228,23 @@
         if (e.key === 'Enter') tabContent.querySelector('#el-sub-add').click();
       });
 
-      // rename / delete sublocation (event delegation on the sub-list)
+      // rename / delete / alias sublocation (event delegation on the sub-list)
       tabContent.querySelector('#el-sub-list').addEventListener('click', e => {
+        const subAliasBtn = e.target.closest('.el-sub-alias');
+        if (subAliasBtn) {
+          const locName = subAliasBtn.dataset.loc;
+          const subName = subAliasBtn.dataset.sub;
+          const loc = DB.getMetadata().locations.find(l => l.name === locName);
+          const curAliases = ((loc && loc.subLocationAliases) || {})[subName] || [];
+          showAliasModal(subName, curAliases, newAliases => {
+            const locObj = DB.getMetadata().locations.find(l => l.name === locName);
+            const subLocAliases = Object.assign({}, (locObj && locObj.subLocationAliases) || {});
+            if (newAliases.length) subLocAliases[subName] = newAliases;
+            else delete subLocAliases[subName];
+            DB.upsertLocation({ name: locName, subLocationAliases: subLocAliases });
+          });
+          return;
+        }
         const renameBtn = e.target.closest('.el-sub-rename');
         if (renameBtn) {
           const locName = renameBtn.dataset.loc;
@@ -6057,7 +6135,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v58</span>
+        <span class="version-badge">v59</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6205,7 +6283,7 @@
             if (!text) { Toast.show('אין טקסט', 'error'); return; }
             try {
               const propDefs = DB.getMetadata().properties || [];
-              const normalizedText = _normalizeAliases(text, propDefs);
+              const normalizedText = _normalizeAliases(text, propDefs, DB.getMetadata().locations);
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
@@ -6251,7 +6329,7 @@
             if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
             try {
               const propDefs = DB.getMetadata().properties || [];
-              const normalizedText = _normalizeAliases(text, propDefs);
+              const normalizedText = _normalizeAliases(text, propDefs, DB.getMetadata().locations);
               const blocks = _parseMap(normalizedText);
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
@@ -6396,8 +6474,8 @@
 
     // ── Map parser (ported from map2shinua.py) ──
 
-    function _normalizeAliases(text, propDefs) {
-      // Build a map from alias (lowercase) → canonical option name
+    function _normalizeAliases(text, propDefs, locations) {
+      // ── Property value aliases ───────────────────────────────────────────────
       const aliasMap = {};
       for (const prop of propDefs) {
         if (!prop.aliases) continue;
@@ -6407,23 +6485,51 @@
           }
         }
       }
-      if (!Object.keys(aliasMap).length) return text;
-      // Sort aliases by length descending so longer aliases are replaced first
-      const sortedAliases = Object.keys(aliasMap).sort((a, b) => b.length - a.length);
-      // Replace line by line, matching aliases as standalone tokens
-      return text.split('\n').map(line => {
-        for (const alias of sortedAliases) {
-          const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const regex = new RegExp('(^|[\\s,;:])(' + escaped + ')($|[\\s,;:])', 'gi');
-          // Use a loop to handle overlapping boundary characters
-          let prev;
-          do {
-            prev = line;
-            line = line.replace(regex, (m, before, match, after) => before + aliasMap[match.toLowerCase()] + after);
-          } while (line !== prev);
+      if (Object.keys(aliasMap).length) {
+        const sortedAliases = Object.keys(aliasMap).sort((a, b) => b.length - a.length);
+        text = text.split('\n').map(line => {
+          for (const alias of sortedAliases) {
+            const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp('(^|[\\s,;:])(' + escaped + ')($|[\\s,;:])', 'gi');
+            let prev;
+            do {
+              prev = line;
+              line = line.replace(regex, (m, before, match, after) => before + aliasMap[match.toLowerCase()] + after);
+            } while (line !== prev);
+          }
+          return line;
+        }).join('\n');
+      }
+
+      // ── Location / sub-location aliases ──────────────────────────────────────
+      if (locations && locations.length) {
+        const locAliasMap = {};
+        const subLocAliasMap = {};
+        for (const loc of locations) {
+          for (const alias of (loc.aliases || [])) {
+            if (alias.trim()) locAliasMap[alias.trim().toLowerCase()] = loc.name;
+          }
+          for (const [canonical, aliasList] of Object.entries(loc.subLocationAliases || {})) {
+            for (const alias of (aliasList || [])) {
+              if (alias.trim()) subLocAliasMap[alias.trim().toLowerCase()] = canonical;
+            }
+          }
         }
-        return line;
-      }).join('\n');
+        if (Object.keys(locAliasMap).length || Object.keys(subLocAliasMap).length) {
+          text = text.split('\n').map(line => {
+            const t = line.trim();
+            // Match header lines: "name:" with nothing after the colon
+            if (/^[^:]+:\s*$/.test(t)) {
+              const name = t.slice(0, t.lastIndexOf(':')).trim().toLowerCase();
+              if (locAliasMap[name]) return locAliasMap[name] + ':';
+              if (subLocAliasMap[name]) return subLocAliasMap[name] + ':';
+            }
+            return line;
+          }).join('\n');
+        }
+      }
+
+      return text;
     }
 
     function _parseMap(text) {
@@ -7121,9 +7227,24 @@
     // Apply theme before anything renders
     initTheme();
 
-    // Register service worker
+    // Register service worker + detect updates
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(console.warn);
+      navigator.serviceWorker.register('./sw.js').then(reg => {
+        function _markUpdateReady() {
+          const badge = document.querySelector('.version-badge');
+          if (badge && !badge.classList.contains('update-ready')) {
+            badge.classList.add('update-ready');
+            badge.title = 'עדכון זמין — לחץ לרענון';
+          }
+        }
+        if (reg.waiting) { _markUpdateReady(); }
+        reg.addEventListener('updatefound', () => {
+          const w = reg.installing;
+          w.addEventListener('statechange', () => {
+            if (w.state === 'installed' && navigator.serviceWorker.controller) _markUpdateReady();
+          });
+        });
+      }).catch(console.warn);
     }
 
     // Build nav
@@ -7139,6 +7260,10 @@
     // Wire up theme toggle
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
+    // Version badge: tap to reload (picks up latest version)
+    const vBadge = document.querySelector('.version-badge');
+    if (vBadge) vBadge.addEventListener('click', () => location.reload());
 
     // Global haptic feedback on checkbox/toggle taps
     document.addEventListener('change', e => {
