@@ -96,17 +96,18 @@
 
     /* ─── App Shell ─── */
     #app {
-      display: grid;
-      grid-template-rows: 1fr var(--nav-h);
       height: 100vh;
       height: 100dvh;
-      overflow: hidden;
     }
 
     #screen-container {
+      height: 100vh;
+      height: 100dvh;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       position: relative;
+      padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+      box-sizing: border-box;
     }
 
     .screen {
@@ -141,11 +142,17 @@
 
     /* ─── Bottom Nav ─── */
     #bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
       display: flex;
       background: var(--card);
       border-top: 1px solid var(--line);
       padding-top: 6px;
       padding-bottom: env(safe-area-inset-bottom, 0px);
+      height: var(--nav-h);
     }
     .nav-item {
       flex: 1;
@@ -2590,6 +2597,7 @@
   function initEdit() {
     const screen = document.getElementById('screen-edit');
     let activeTab = 'carts';
+    let _prefillCartId = null;
 
     screen.innerHTML = `
       <div class="screen-header">
@@ -2965,6 +2973,24 @@
           ]
         });
       });
+
+      // Pre-fill form if navigated here with a cart ID
+      if (_prefillCartId) {
+        const cart = DB.getCart(_prefillCartId);
+        if (cart) {
+          tabContent.querySelector('#ec-containertype').value = cart.containerType || 'עגלה';
+          updateFormLabels();
+          tabContent.querySelector('#ec-cartid').value = cart.cartId;
+          tabContent.querySelector('#ec-carttype').value = cart.cartType || '';
+          const ecLoc = tabContent.querySelector('#ec-loc');
+          ecLoc.value = cart.location || '';
+          ecLoc.dispatchEvent(new Event('change', { bubbles: true }));
+          tabContent.querySelector('#ec-subloc').value = cart.subLocation || '';
+          renderParentOptions(cart.cartId);
+          tabContent.querySelector('#ec-parent').value = cart.parentCartId || '';
+          setTimeout(() => tabContent.querySelector('#ec-form-title').scrollIntoView({ behavior: 'smooth' }), 80);
+        }
+      }
     }
 
     // ── Locations Tab ──
@@ -3758,7 +3784,15 @@
 
     // ── Floor Items Tab ──────────────────────────────────────
     Router.register('edit', {
-      onShow() { renderTab(activeTab); }
+      onShow(params) {
+        if (params && params.cartId) {
+          _prefillCartId = params.cartId;
+          renderTab('carts');
+          _prefillCartId = null;
+        } else {
+          renderTab(activeTab);
+        }
+      }
     });
   }
   </script>
@@ -6168,6 +6202,11 @@
               Modal.close();
               openEditCartModal(cart);
             }},
+            { id: 'edit-screen', label: '🗂️ עריכה בטאב', cls: 'btn-outline', onClick: () => {
+              Modal.close();
+              Router.navigate('edit', { cartId: id });
+              history.replaceState(null, '', '#edit');
+            }},
             { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
               Modal.close();
               Router.navigate('transfer', { cartId: id });
@@ -6288,7 +6327,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v62</span>
+        <span class="version-badge">v63</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
