@@ -6056,7 +6056,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v54</span>
+        <span class="version-badge">v55</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6726,11 +6726,23 @@
           } else {
             const props = _matchProps(entry.rawProps, propDefs);
             const hasMatch = Object.values(props).some(v => v);
-            if (entry.rawProps && !hasMatch) {
+            // Check for partial matches: tokens in rawProps not covered by any matched value
+            let hasUncovered = false;
+            if (hasMatch && entry.rawProps) {
+              let remaining = entry.rawProps.toLowerCase();
+              for (const v of Object.values(props)) {
+                if (v) remaining = remaining.replace(
+                  new RegExp('(?:^|\\s)' + v.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=\\s|$)'),
+                  ' '
+                );
+              }
+              hasUncovered = remaining.trim().length > 0;
+            }
+            if (entry.rawProps && (!hasMatch || hasUncovered)) {
               const locLabel = locName + (subLoc ? ' / ' + subLoc : '');
               unmatchedFloorLines.push(`${locLabel}: ${entry.rawProps} - ${entry.itemCount}`);
               // Store rawProps as a synthetic discriminator so dedup doesn't collapse
-              // multiple unmatched floor items into one entry (they keep unique _floorKey values)
+              // multiple floor items with the same partial match into one entry
               props['_unmatched'] = entry.rawProps;
             }
             const fiId = 'fi_' + (nowMs + fiCounter);
