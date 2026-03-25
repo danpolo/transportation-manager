@@ -1361,7 +1361,7 @@
 
     function _floorKey(location, properties, subLocation) {
       const props = Object.entries(properties || {})
-        .filter(([,v]) => v).sort().map(([k,v]) => k + '=' + v).join(',');
+        .filter(([k,v]) => v && !k.startsWith('_')).sort().map(([k,v]) => k + '=' + v).join(',');
       return (location || '') + '|' + (subLocation || '') + '|' + props;
     }
 
@@ -2524,6 +2524,13 @@
     return label;
   }
 
+  // ── msgCartLabel ──
+  // Like cartLabel but without the [containerType] bracket — for WhatsApp messages
+  function msgCartLabel(cart) {
+    if (!cart) return '';
+    return cart.cartId + (cart.cartType ? '(' + cart.cartType + ')' : '');
+  }
+
   // ── cartTotalCount ──
   // Total items across all slots (slot 0 + extraItems)
   function cartTotalCount(cart) {
@@ -2536,7 +2543,7 @@
   // ── CartForm ──
   // Creates a cart ID input with autocomplete datalist inside `container`
   let _cartFormSeq = 0;
-  function CartForm(container, { onCartLoaded } = {}) {
+  function CartForm(container, { onCartLoaded, cartFilter } = {}) {
     const inputId = 'cart-id-input-' + (++_cartFormSeq);
     container.innerHTML = `
       <div class="form-group">
@@ -2546,7 +2553,10 @@
       </div>
     `;
     const input = container.querySelector('.cart-id-input');
-    makeAutocomplete(input, () => DB.getAllCarts().map(c => cartLabel(c)));
+    makeAutocomplete(input, () => {
+      const all = DB.getAllCarts();
+      return (cartFilter ? all.filter(cartFilter) : all).map(c => cartLabel(c));
+    });
 
     function lookup() {
       const raw = input.value.trim();
@@ -2555,7 +2565,8 @@
       if (!id) { if (onCartLoaded) onCartLoaded(null); return; }
       // fall back to raw value if stripped ID not found (handles cart IDs that contain parentheses)
       const cart = DB.getCart(id) || DB.getCart(raw);
-      if (onCartLoaded) onCartLoaded(cart || null);
+      const filtered = !cartFilter || !cart || cartFilter(cart);
+      if (onCartLoaded) onCartLoaded(filtered ? cart || null : null);
     }
 
     input.addEventListener('change', lookup);
@@ -3108,6 +3119,7 @@
                 <button class="btn-icon-edit el-alias-btn" data-name="${esc(l.name)}" title="שמות חלופיים">🔤</button>
                 <button class="btn-icon-edit el-rename-btn" data-name="${esc(l.name)}" title="שנה שם">✏️</button>
                 <button class="btn-icon el-toggle-btn" data-name="${esc(l.name)}" title="${l.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי'}">${l.inMap ? '🗺️' : '📍'}</button>
+                <button class="btn-icon el-wa-sub-btn" data-name="${esc(l.name)}" title="${l.showSubInWhatsapp ? 'הסתר תת-מיקום בוואצאפ' : 'הצג תת-מיקום בוואצאפ'}" style="opacity:${l.showSubInWhatsapp ? '1' : '0.35'}">💬</button>
                 <button class="btn-icon el-del-btn" data-name="${esc(l.name)}" title="מחק">🗑️</button>
               </div>
               <div class="reorder-handle" data-idx="${idx}"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
@@ -3276,6 +3288,12 @@
           const name = toggleBtn.dataset.name;
           const loc  = DB.getMetadata().locations.find(l => l.name === name);
           if (loc) { DB.upsertLocation({ name, inMap: !loc.inMap }); renderList(); }
+        }
+        const waSubBtn = e.target.closest('.el-wa-sub-btn');
+        if (waSubBtn) {
+          const name = waSubBtn.dataset.name;
+          const loc  = DB.getMetadata().locations.find(l => l.name === name);
+          if (loc) { DB.upsertLocation({ name, showSubInWhatsapp: !loc.showSubInWhatsapp }); renderList(); }
         }
         if (delBtn) {
           DB.deleteLocation(delBtn.dataset.name);
@@ -4114,6 +4132,7 @@
 
     // cart form
     _cartRef = CartForm(screen.querySelector('#tr-cart-form-host'), {
+      cartFilter: c => !c.containerType || c.containerType === DEFAULT_CONTAINER,
       onCartLoaded(cart) {
         if (cart) {
           showSharedFields(cart, 'cart');
@@ -4195,9 +4214,22 @@
           });
           DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
         }
-        const fromLabel = _currentData.subLocation || _currentData.location || '';
-        const toLabel   = destSubLoc || destLoc;
-        msg = Utils.copyMessage(cartLabel(_currentData), slot0.itemCount, slot0.properties, fromLabel, toLabel, _currentData.containerType, slot0.itemIds);
+        const fromLoc = DB.getMetadata().locations.find(l => l.name === _currentData.location);
+        const fromLabel = (fromLoc && fromLoc.showSubInWhatsapp)
+          ? (_currentData.subLocation || _currentData.location || '')
+          : (_currentData.location || '');
+        const toLoc = DB.getMetadata().locations.find(l => l.name === destLoc);
+        const toLabel = (toLoc && toLoc.showSubInWhatsapp) ? (destSubLoc || destLoc) : destLoc;
+        const _propDefs = DB.getMetadata().properties || [];
+        const _ctName = containerName(_currentData);
+        const _msgLines = [_ctName + ' ' + msgCartLabel(_currentData)];
+        allSlots.filter(s => s.itemCount).forEach(s => {
+          const ps = Utils.orderedPropValues(s.properties, _propDefs);
+          _msgLines.push(`${s.itemCount}${ps ? ' ' + ps : ''}`);
+          (s.itemIds || []).forEach(id => _msgLines.push(id));
+        });
+        if (fromLabel || toLabel) _msgLines.push(`מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`);
+        msg = _msgLines.join('\n');
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
         const moveCount = parseInt(screen.querySelector('#tr-floor-count').value) || 0;
@@ -4341,6 +4373,10 @@
               <label class="form-label">מיקום מקור</label>
               <input id="lu-src-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
+            <div class="form-group" id="lu-src-subloc-group" hidden>
+              <label class="form-label">תת-מיקום מקור</label>
+              <input id="lu-src-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+            </div>
             <div id="lu-floor-slots-container"></div>
             <button id="lu-floor-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
           </div>
@@ -4409,7 +4445,11 @@
     let _unloadCartRef = null;
 
     // autocomplete + location setups
-    makeAutocomplete(screen.querySelector('#lu-src-loc'), () => DB.getMetadata().locations.map(l => l.name));
+    setupLocationFields(
+      screen.querySelector('#lu-src-loc'),
+      screen.querySelector('#lu-src-subloc-group'),
+      screen.querySelector('#lu-src-subloc')
+    );
     makeAutocomplete(screen.querySelector('#lu-dest-cart'), () => DB.getAllCarts().map(c => cartLabel(c)));
     makeAutocomplete(screen.querySelector('#lu-load-move-dest'), () => DB.getMetadata().locations.map(l => l.name));
     setupLocationFields(
@@ -4420,12 +4460,18 @@
 
     // ── Floor slot helpers ──────────────────────────────────────────
     function _getFloorLoc() { return screen.querySelector('#lu-src-loc').value.trim(); }
+    function _getFloorSubloc() {
+      const grp = screen.querySelector('#lu-src-subloc-group');
+      return (!grp || grp.hidden) ? '' : screen.querySelector('#lu-src-subloc').value.trim();
+    }
 
-    // Find all floor items at the current location
+    // Find all floor items at the current location (+ subloc)
     function _floorItemsAtLoc() {
       const loc = _getFloorLoc();
+      const subloc = _getFloorSubloc();
       if (!loc) return [];
-      return DB.getAllFloorItems().filter(fi => fi.location === loc && !fi.isEmpty);
+      return DB.getAllFloorItems().filter(fi =>
+        fi.location === loc && (!subloc || (fi.subLocation || '') === subloc) && !fi.isEmpty);
     }
 
     // Find a serial across ALL floor items
@@ -4438,8 +4484,9 @@
 
     function _getFloorAvail(props) {
       const loc = _getFloorLoc();
+      const subloc = _getFloorSubloc();
       if (!loc) return { count: 0, ids: [] };
-      const fi = DB.findFloorItem(loc, props);
+      const fi = DB.findFloorItem(loc, props, subloc || undefined);
       return { count: fi ? (fi.itemCount || 0) : 0, ids: fi ? (fi.itemIds || []) : [] };
     }
 
@@ -4590,13 +4637,15 @@
       renumberFloorSlots(container);
     });
 
-    // Refresh all floor slots when location changes
-    screen.querySelector('#lu-src-loc').addEventListener('change', () => {
+    // Refresh all floor slots when location or sublocation changes
+    function _refreshAllFloorSlots() {
       screen.querySelectorAll('#lu-floor-slots-container .floor-slot').forEach(slot => {
         const propsContainer = slot.querySelector('.floor-slot-props');
         propsContainer.dispatchEvent(new Event('change', { bubbles: true }));
       });
-    });
+    }
+    screen.querySelector('#lu-src-loc').addEventListener('change', _refreshAllFloorSlots);
+    screen.querySelector('#lu-src-subloc').addEventListener('change', _refreshAllFloorSlots);
 
     function renderItemRows(container, n, existing) {
       const rows = [];
@@ -4808,32 +4857,34 @@
         });
       }
 
-      // Make sure parent cart exists
+      // Make sure parent cart exists and mark it as occupied (has a container)
       const parentCart = DB.getCart(parentCartId);
       if (!parentCart) {
-        DB.upsertCart({ cartId: parentCartId, containerType: DEFAULT_CONTAINER, isEmpty: true, itemCount: 0, itemIds: [], properties: {} });
+        DB.upsertCart({ cartId: parentCartId, containerType: DEFAULT_CONTAINER, isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
+      } else if (parentCart.isEmpty) {
+        DB.upsertCart({ cartId: parentCartId, isEmpty: false });
       }
 
-      // Build message
+      // Build message (format: container header, items, loaded-on line, optional move)
       const destCart = DB.getCart(parentCartId);
-      const parentLabel = destCart ? cartLabel(destCart) : parentCartId;
+      const parentLabel = destCart ? msgCartLabel(destCart) : parentCartId;
       const parentCtName = destCart ? containerName(destCart) : 'עגלה';
-      const loc = destCart ? (destCart.location || '?') : (ctLocation || '?');
-      const msgLines = [ctId ? `${ctType} ${ctId}` : ctType, `טעון על ${parentCtName} ${parentLabel}`, `מיקום: ${loc}`];
+      const msgLines = [ctId ? `${ctType} ${ctId}` : ctType];
       const _metaProps = DB.getMetadata().properties || [];
       allSlots.filter(sl => sl.itemCount).forEach(sl => {
         const ps = Utils.orderedPropValues(sl.properties, _metaProps);
         msgLines.push(`${sl.itemCount}${ps ? ' ' + ps : ''}`);
         (sl.itemIds || []).forEach(id => msgLines.push(id));
       });
+      msgLines.push(`מועמס על ${parentCtName} ${parentLabel}`);
 
       // Optional destination — move parent cart
       const moveDest = screen.querySelector('#lu-ct-move-dest').value.trim();
       if (moveDest) {
         DB.upsertCart({ cartId: parentCartId, location: moveDest });
         // Also update container's location
-        DB.upsertCart({ cartId: ctId, location: moveDest });
-        msgLines.push('מועברת ל' + moveDest);
+        if (ctId) DB.upsertCart({ cartId: ctId, location: moveDest });
+        msgLines.push('מועבר ל' + moveDest);
       }
 
       const msg = msgLines.join('\n');
@@ -4863,6 +4914,15 @@
         _srcCart = cart || null;
         const fields = screen.querySelector('#lu-unload-fields');
         if (!cart) { fields.hidden = true; return; }
+        // If cart is empty, switch to load tab with this cart pre-filled
+        if (cart.isEmpty && !cart.itemCount && !(cart.extraItems && cart.extraItems.some(e => e.itemCount))) {
+          fields.hidden = true;
+          if (_unloadCartRef) _unloadCartRef.clear();
+          setOp('load');
+          screen.querySelector('#lu-dest-cart').value = cartLabel(cart);
+          Toast.show('העגלה ריקה — עובר להעמסה', 'info');
+          return;
+        }
         fields.hidden = false;
         const total = cartTotalCount(cart);
         screen.querySelector('#lu-unload-cart-info').innerHTML = `
@@ -4908,7 +4968,7 @@
           extraItems: extras
         });
         const destCart = DB.getCart(destCartId);
-        const label    = destCart ? cartLabel(destCart) : destCartId;
+        const label    = destCart ? msgCartLabel(destCart) : destCartId;
         const ctName = destCart ? containerName(destCart) : 'עגלה';
         const loc = destCart ? (destCart.location || '?') : '?';
         const msgLines = [`${ctName} ${label}`, `מועמסת ב${loc}`];
@@ -4924,13 +4984,14 @@
       } else {
         // Floor mode: multi-slot
         const loc = _getFloorLoc();
+        const subloc = _getFloorSubloc();
         if (!loc) { Toast.show('יש להזין מיקום מקור', 'error'); return null; }
         const floorSlots = readAllFloorSlots();
         if (!floorSlots.some(s => s.itemCount > 0)) { Toast.show('יש להזין כמות', 'error'); return null; }
 
         // Validate serials — check for unknowns
         for (const slot of floorSlots) {
-          const srcFI = DB.findFloorItem(loc, slot.properties);
+          const srcFI = DB.findFloorItem(loc, slot.properties, subloc || undefined);
           const knownIds = srcFI ? (srcFI.itemIds || []) : [];
           const allKnown = knownIds.length >= (srcFI ? (srcFI.itemCount || 0) : 0);
           for (const serial of slot.itemIds) {
@@ -4950,11 +5011,11 @@
           const props = slot.properties;
 
           // Remove from source floor
-          const srcFI = DB.findFloorItem(loc, props);
+          const srcFI = DB.findFloorItem(loc, props, subloc || undefined);
           if (srcFI) {
             const remainIds = (srcFI.itemIds || []).filter(id => !slot.itemIds.includes(id));
             const remaining = Math.max(0, (srcFI.itemCount || 0) - slot.itemCount);
-            DB.upsertFloorItem({ location: loc, properties: props,
+            DB.upsertFloorItem({ location: loc, subLocation: subloc || undefined, properties: props,
                                  itemCount: remaining, itemIds: remainIds, isEmpty: remaining === 0 });
           }
 
@@ -5016,6 +5077,7 @@
       screen.querySelector('#lu-dest-cart').value = '';
       screen.querySelector('#lu-load-move-dest').value = '';
       screen.querySelector('#lu-src-loc').value = '';
+      screen.querySelector('#lu-src-subloc').value = '';
       return msg;
     }
 
@@ -5069,8 +5131,9 @@
                       itemCount: remain0Count, itemIds: remain0Ids,
                       extraItems: newExtras });
 
-      const label = cartLabel(_srcCart);
-      const unloadDest = destSubLoc || destLoc;
+      const label = msgCartLabel(_srcCart);
+      const toLoc2 = DB.getMetadata().locations.find(l => l.name === destLoc);
+      const unloadDest = (toLoc2 && toLoc2.showSubInWhatsapp) ? (destSubLoc || destLoc) : destLoc;
       const msg   = [`${containerName(_srcCart)} ${label}`, ...msgParts, `פורקו ל${unloadDest}`].join('\n');
       Toast.show('פריטים פורקו לרצפה', 'success');
 
@@ -5111,6 +5174,10 @@
             const fi = DB.getFloorItem(floorItemId);
             if (fi) {
               screen.querySelector('#lu-src-loc').value = fi.location || '';
+              screen.querySelector('#lu-src-loc').dispatchEvent(new Event('change'));
+              if (fi.subLocation) {
+                screen.querySelector('#lu-src-subloc').value = fi.subLocation;
+              }
               // Set properties on first floor slot
               const firstSlot = screen.querySelector('#lu-floor-slots-container .floor-slot');
               if (firstSlot) {
@@ -5186,7 +5253,7 @@
     };
 
     const _selectedItems = new Set(); // 'cart:ID' or 'fi:ID'
-    const _summaryCollapsed = { loc: false, combo: false };
+    const _summaryCollapsed = { loc: true, combo: true };
 
     const incInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-inc-' + n));
     const excInputs = [1,2,3,4,5].map(n => screen.querySelector('#sr-exc-' + n));
@@ -6334,11 +6401,6 @@
               Modal.close();
               openEditCartModal(cart);
             }},
-            { id: 'edit-screen', label: '🗂️ עריכה בטאב', cls: 'btn-outline', onClick: () => {
-              Modal.close();
-              Router.navigate('edit', { cartId: id });
-              history.replaceState(null, '', '#edit');
-            }},
             { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
               Modal.close();
               Router.navigate('transfer', { cartId: id });
@@ -6366,6 +6428,31 @@
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(fi.lastUpdated)}</p>
           `,
           actions: [
+            { id: 'edit-fi', label: '✏️ עריכה', cls: 'btn-outline', onClick: () => {
+              Modal.close();
+              const fiEdit = DB.getFloorItem(id);
+              if (!fiEdit) return;
+              Modal.open({
+                title: 'עריכת פריטי רצפה',
+                html: `
+                  <div class="form-group"><label class="form-label">כמות</label><input id="fi-edit-count" class="form-input" type="number" min="0" value="${fiEdit.itemCount || 0}"></div>
+                  <div class="form-group"><label class="form-label">הערה</label><input id="fi-edit-comment" class="form-input" value="${esc(fiEdit.comment || '')}" placeholder="הערה"></div>
+                `,
+                actions: [
+                  { id: 'fi-save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                    const newCount = parseInt(document.getElementById('fi-edit-count').value) || 0;
+                    const newComment = (document.getElementById('fi-edit-comment').value || '').trim();
+                    DB.upsertFloorItem({ location: fiEdit.location, subLocation: fiEdit.subLocation,
+                                         properties: fiEdit.properties, itemCount: newCount,
+                                         isEmpty: newCount === 0, comment: newComment });
+                    Modal.close();
+                    renderResults();
+                    Toast.show('פריטי רצפה עודכנו', 'success');
+                  }},
+                  { id: 'fi-cancel', label: 'ביטול', onClick: Modal.close }
+                ]
+              });
+            }},
             { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
               Modal.close();
               Router.navigate('transfer', { floorItemId: id });
@@ -6459,7 +6546,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v65</span>
+        <span class="version-badge">v66</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
