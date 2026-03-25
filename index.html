@@ -2083,9 +2083,102 @@
       shareViaWhatsApp(text);
     }
 
+    function generateOffMapText(db, label) {
+      const now = formatDate(Date.now());
+      const meta     = db.metadata || {};
+      const carts    = db.carts || {};
+      const fis      = db.floorItems || {};
+      const propDefs = meta.properties || [];
+      const locs     = (meta.locations || []).filter(l => !l.inMap);
+      const title    = `מיפוי ${label || 'חיצוני'}`;
+
+      if (!locs.length) return `${title}\n${now}\n(אין מיקומים חיצוניים)`;
+
+      const childrenOf = {};
+      Object.values(carts).forEach(c => {
+        if (c.parentCartId) {
+          if (!childrenOf[c.parentCartId]) childrenOf[c.parentCartId] = [];
+          childrenOf[c.parentCartId].push(c);
+        }
+      });
+
+      function cartLine(c) {
+        const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
+        const displayId = /^#\d+$/.test(c.cartId) ? '#' : c.cartId;
+        const idLabel = displayId + (c.cartType ? '(' + c.cartType + ')' : '');
+        let line = (c.isEmpty || !c.itemCount)
+          ? `${ctLabel}${idLabel}: empty`
+          : (`${ctLabel}${idLabel}: ${c.itemCount} ${_orderedPropValues(c.properties, propDefs)}`).trim();
+        if (c.comment) line += ` # ${c.comment}`;
+        return line + '\n';
+      }
+
+      function emitCartWithChildren(c) {
+        let s = cartLine(c);
+        (c.extraItems || []).filter(ex => ex.itemCount).forEach(ex => {
+          const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
+          const exId = (/^#\d+$/.test(c.cartId) ? '#' : c.cartId) + (c.cartType ? '(' + c.cartType + ')' : '');
+          const pv = _orderedPropValues(ex.properties, propDefs);
+          s += (`${ctLabel}${exId}: ${ex.itemCount}${pv ? ' ' + pv : ''}`).trim() + '\n';
+        });
+        (childrenOf[c.cartId] || []).forEach(ch => {
+          const chCt = (ch.containerType && ch.containerType !== 'עגלה') ? `${ch.containerType} ` : '';
+          const chId = ch.cartId + (ch.cartType ? '(' + ch.cartType + ')' : '');
+          const pv = _orderedPropValues(ch.properties, propDefs);
+          s += `    ${chCt}${chId}: ${(!ch.itemCount) ? 'empty' : ch.itemCount + (pv ? ' ' + pv : '')}\n`;
+          (ch.extraItems || []).forEach(sl => {
+            if (!sl.itemCount) return;
+            const spv = _orderedPropValues(sl.properties, propDefs);
+            s += `    ${chCt}${chId}: ${sl.itemCount}${spv ? ' ' + spv : ''}\n`;
+          });
+        });
+        return s;
+      }
+
+      function emitGrouped(cartList, fiList) {
+        const sections = [];
+        const emptyCarts = cartList.filter(c => c.isEmpty || !c.itemCount);
+        const fullCarts  = cartList.filter(c => !c.isEmpty && c.itemCount);
+        const emptyByType = {};
+        emptyCarts.forEach(c => {
+          const key = /^#\d+$/.test(c.cartId) ? c.cartId : (c.cartType || '');
+          (emptyByType[key] = emptyByType[key] || []).push(emitCartWithChildren(c));
+        });
+        Object.values(emptyByType).forEach(lines => sections.push(lines.join('')));
+        const fullByProps = {};
+        fullCarts.forEach(c => {
+          const key = /^#\d+$/.test(c.cartId) ? c.cartId : Object.values(c.properties || {}).filter(Boolean).join(' ');
+          (fullByProps[key] = fullByProps[key] || []).push(emitCartWithChildren(c));
+        });
+        Object.values(fullByProps).forEach(lines => sections.push(lines.join('')));
+        const floorLines = fiList.filter(fi => !fi.isEmpty && fi.itemCount).map(fi =>
+          `${_orderedPropValues(fi.properties, propDefs)} - ${fi.itemCount}`.trim() + '\n');
+        if (floorLines.length) sections.push(floorLines.join(''));
+        return sections.join('\n');
+      }
+
+      let out = `${title}\n${now}\n`;
+      for (const loc of locs) {
+        out += `${loc.name}:\n`;
+        const subs = loc.subLocations || [];
+        const noSubCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && !c.subLocation);
+        const noSubFIs   = Object.values(fis).filter(fi => fi.location === loc.name && !fi.subLocation);
+        out += emitGrouped(noSubCarts, noSubFIs);
+        for (const sub of subs) {
+          const subCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && c.subLocation === sub);
+          const subFIs   = Object.values(fis).filter(fi => fi.location === loc.name && fi.subLocation === sub);
+          if (!subCarts.length && !subFIs.length) continue;
+          out += `${sub}:\n`;
+          out += emitGrouped(subCarts, subFIs);
+        }
+        out += '===\n';
+      }
+      return out.trim();
+    }
+
     return { base64Encode, base64Decode, formatDate, generateExportText,
-             parseImportText, generateMapText, copyMessage, copyToClipboard, shareOrCopy,
-             orderedPropValues: _orderedPropValues };
+             parseImportText, generateMapText, generateOffMapText, copyMessage,
+             copyToClipboard, shareOrCopy, orderedPropValues: _orderedPropValues };
   })();
   </script>
 
@@ -3060,6 +3153,17 @@
       tabContent.innerHTML = `
         <div class="p-screen">
           <div class="card">
+            <div class="card-title">הגדרות מיפוי</div>
+            <div class="form-group">
+              <label class="form-label">שם מיפוי חיצוני</label>
+              <div style="display:flex;gap:8px">
+                <input id="el-offmap-label" class="form-input" placeholder="חיצוני" autocomplete="off">
+                <button id="el-offmap-label-save" class="btn btn-primary" style="white-space:nowrap">שמור</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-12">
             <div class="card-title">הוספת מיקום</div>
             <div class="form-group">
               <label class="form-label">שם מיקום</label>
@@ -3222,6 +3326,16 @@
           html: '<p style="line-height:1.6">כאשר הסדר נעול הסדר של המיקומים יקבע אך ורק על פי הסדר במסך הזה. כאשר הוא לא נעול בעת ייבוא מיפוי הסדר במיפוי הוא שיקבע.</p>',
           actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
         });
+      });
+
+      // Off-map label setting
+      const _offMapInput = tabContent.querySelector('#el-offmap-label');
+      _offMapInput.value = DB.getMetadata().offMapLabel || '';
+      tabContent.querySelector('#el-offmap-label-save').addEventListener('click', () => {
+        const val = _offMapInput.value.trim();
+        DB.getMetadata().offMapLabel = val || '';
+        DB.save();
+        Toast.show('שם מיפוי חיצוני נשמר', 'success');
       });
 
       tabContent.querySelector('#el-save').addEventListener('click', () => {
@@ -6580,7 +6694,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v69</span>
+        <span class="version-badge">v70</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6624,6 +6738,22 @@
           </div>
         </button>
 
+        <button class="hero-btn" id="main-movements-update">
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--brand-2) 12%, var(--card));color:var(--brand-2);">📲</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title">עדכון תנועות</div>
+            <div class="hero-btn-sub">עדכן מיקומים מהודעות WhatsApp</div>
+          </div>
+        </button>
+
+        <button class="hero-btn" id="main-offmap">
+          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--success) 10%, var(--card));color:var(--success);">🗄️</div>
+          <div class="hero-btn-body">
+            <div class="hero-btn-title" id="main-offmap-title">מיפוי חיצוני</div>
+            <div class="hero-btn-sub">מפת מיקומים שאינם בעמוד המיפוי</div>
+          </div>
+        </button>
+
         <button class="hero-btn" id="main-clear-items" style="margin-top:24px">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--warning, #f59e0b) 12%, var(--card));color:var(--warning, #f59e0b);">🧹</div>
           <div class="hero-btn-body">
@@ -6642,6 +6772,10 @@
 
       </div>
     `;
+
+    // set dynamic off-map label
+    const _offMapLabel = () => DB.getMetadata().offMapLabel || 'חיצוני';
+    screen.querySelector('#main-offmap-title').textContent = `מיפוי ${_offMapLabel()}`;
 
     // export — copy + WhatsApp
     screen.querySelector('#main-export').addEventListener('click', async () => {
@@ -7566,6 +7700,180 @@
           { id: 'cancel', label: 'ביטול', onClick: Modal.close }
         ]
       });
+    });
+
+    // ── עדכון תנועות ─────────────────────────────────────────────
+    screen.querySelector('#main-movements-update').addEventListener('click', () => {
+      Modal.open({
+        title: 'עדכון תנועות',
+        html: `
+          <p class="card-meta" style="margin-bottom:10px">הדבק כאן הודעות WhatsApp שנשלחו מהאפליקציה. כל הודעה בנפרד — הפרד בשורה ריקה:</p>
+          <textarea id="movements-paste-area" rows="10"
+            style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
+                   font-size:0.82rem;font-family:monospace;direction:rtl;text-align:right;resize:vertical;line-height:1.6"></textarea>
+          <div id="movements-results" style="margin-top:10px;font-size:0.84rem;display:none"></div>
+        `,
+        actions: [
+          { id: 'do-movements', label: 'עדכן', cls: 'btn-primary', onClick: () => {
+            let text = document.getElementById('movements-paste-area').value.trim();
+            if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+            // Strip WhatsApp/iOS directional marks
+            text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
+            const results = _parseAndApplyMovements(text);
+            const ok = results.filter(r => r.ok);
+            const fail = results.filter(r => !r.ok);
+            const resEl = document.getElementById('movements-results');
+            resEl.style.display = '';
+            const okHtml = ok.length ? `<div style="color:var(--success);margin-bottom:4px">✓ עודכנו ${ok.length} תנועות:<br>${ok.map(r => esc(r.msg)).join('<br>')}</div>` : '';
+            const failHtml = fail.length ? `<div style="color:var(--danger)">✗ לא זוהו ${fail.length}:<br>${fail.map(r => esc(r.msg)).join('<br>')}</div>` : '';
+            resEl.innerHTML = okHtml + failHtml;
+            if (ok.length) Toast.show(`עודכנו ${ok.length} תנועות`, 'success');
+          }},
+          { id: 'cancel-movements', label: 'סגור', onClick: Modal.close }
+        ]
+      });
+    });
+
+    function _parseAndApplyMovements(text) {
+      const allCarts    = DB.getAllCarts();
+      const meta        = DB.getMetadata();
+      const allLocs     = meta.locations || [];
+      const ctypes      = (meta.containerTypes || []).concat(['עגלה']);
+      const results     = [];
+
+      function resolveLocLabel(label) {
+        label = (label || '').trim();
+        if (allLocs.find(l => l.name === label)) return { location: label, subLocation: '' };
+        for (const loc of allLocs) {
+          if ((loc.subLocations || []).includes(label)) return { location: loc.name, subLocation: label };
+          for (const [sub, aliases] of Object.entries(loc.subLocationAliases || {})) {
+            if ((aliases || []).includes(label)) return { location: loc.name, subLocation: sub };
+          }
+        }
+        return { location: label, subLocation: '' };
+      }
+
+      function extractCartId(line) {
+        let stripped = (line || '').trim();
+        // Remove leading container-type prefix
+        for (const ct of ctypes) {
+          if (stripped.startsWith(ct + ' ')) { stripped = stripped.slice(ct.length + 1).trim(); break; }
+        }
+        // Strip (cartType) suffix
+        const cartId = stripped.replace(/\([^)]+\)\s*$/, '').trim();
+        return allCarts.find(c => c.cartId === cartId) ? cartId : null;
+      }
+
+      const blocks = text.split(/\n[ \t]*\n/).map(b => b.trim()).filter(Boolean);
+
+      for (const block of blocks) {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        if (!lines.length) continue;
+        let handled = false;
+
+        // 1. Empty cart transfer (single line): "עגלה X-Y(Z) ריקה מועברת מA לB"
+        const emptyM = lines[0].match(/ריקה\s+מועברת\s+מ(.+?)\s+ל(.+)$/);
+        if (!handled && emptyM && lines.length === 1) {
+          const beforeRika = lines[0].replace(/\s+ריקה.*$/, '').trim();
+          let stripped = beforeRika;
+          for (const ct of ctypes) {
+            if (stripped.startsWith(ct + ' ')) { stripped = stripped.slice(ct.length + 1).trim(); break; }
+          }
+          const cartId = stripped.replace(/\([^)]+\)\s*$/, '').trim();
+          if (allCarts.find(c => c.cartId === cartId)) {
+            const { location, subLocation } = resolveLocLabel(emptyM[2]);
+            DB.upsertCart({ cartId, location, subLocation });
+            results.push({ ok: true, msg: `${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+          } else {
+            results.push({ ok: false, msg: `עגלה לא נמצאה: ${beforeRika}` });
+          }
+          handled = true;
+        }
+
+        // 2. Cart with "מועברת מX לY" line
+        if (!handled) {
+          const tLine = lines.find(l => /מועברת\s+מ.+\s+ל/.test(l));
+          if (tLine) {
+            const m = tLine.match(/מועברת\s+מ(.+?)\s+ל(.+)$/);
+            if (m) {
+              const cartId = extractCartId(lines[0]);
+              if (cartId) {
+                const { location, subLocation } = resolveLocLabel(m[2]);
+                DB.upsertCart({ cartId, location, subLocation });
+                results.push({ ok: true, msg: `${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+              } else {
+                results.push({ ok: false, msg: `עגלה לא נמצאה: ${lines[0]}` });
+              }
+              handled = true;
+            }
+          }
+        }
+
+        // 3. Load: "מועמסת בX"
+        if (!handled) {
+          const lLine = lines.find(l => /מועמסת\s+ב/.test(l));
+          if (lLine) {
+            const m = lLine.match(/מועמסת\s+ב(.+)$/);
+            if (m) {
+              const cartId = extractCartId(lines[0]);
+              if (cartId) {
+                const { location, subLocation } = resolveLocLabel(m[1]);
+                DB.upsertCart({ cartId, location, subLocation });
+                results.push({ ok: true, msg: `${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+              } else {
+                results.push({ ok: false, msg: `עגלה לא נמצאה: ${lines[0]}` });
+              }
+              handled = true;
+            }
+          }
+        }
+
+        // 4. Floor transfer: "על משטח …\nמX לY"
+        if (!handled && lines[0].startsWith('על משטח')) {
+          const mLine = lines.find(l => /^מ.+\s+ל/.test(l));
+          if (mLine) {
+            const m = mLine.match(/^מ(.+?)\s+ל(.+)$/);
+            if (m) {
+              const { location: srcLoc } = resolveLocLabel(m[1]);
+              const { location: destLoc, subLocation: destSub } = resolveLocLabel(m[2]);
+              const floorItems = Object.values(DB.load().floorItems).filter(fi => fi.location === srcLoc);
+              if (floorItems.length) {
+                floorItems.forEach(fi => DB.setFloorItemLocation(fi.id, destLoc, destSub));
+                results.push({ ok: true, msg: `רצפה ${srcLoc} → ${destLoc}${destSub ? '/' + destSub : ''}` });
+              } else {
+                results.push({ ok: false, msg: `לא נמצאו פריטי רצפה ב${srcLoc}` });
+              }
+              handled = true;
+            }
+          }
+        }
+
+        if (!handled) {
+          results.push({ ok: false, msg: `לא זוהה: "${lines[0].slice(0, 40)}"` });
+        }
+      }
+      return results;
+    }
+
+    // ── מיפוי חיצוני ────────────────────────────────────────────
+    screen.querySelector('#main-offmap').addEventListener('click', () => {
+      const raw = DB.load();
+      const label = _offMapLabel();
+      const mapText = Utils.generateOffMapText(raw, label);
+      Utils.copyToClipboard(mapText)
+        .then(() => Toast.show(`מיפוי ${label} הועתק ללוח`, 'success'))
+        .catch(() => {
+          Modal.open({
+            title: `מיפוי ${label}`,
+            html: `<pre style="font-size:0.82rem;white-space:pre-wrap;word-break:break-word;direction:rtl;text-align:right">${esc(mapText)}</pre>`,
+            actions: [
+              { id: 'copy-offmap', label: 'העתק', cls: 'btn-outline', onClick: () => {
+                Utils.copyToClipboard(mapText).then(() => Toast.show('הועתק', 'success'));
+              }},
+              { id: 'close', label: 'סגור', onClick: Modal.close }
+            ]
+          });
+        });
     });
 
     // ── Pull-to-refresh ─────────────────────────────────────────
