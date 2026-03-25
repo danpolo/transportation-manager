@@ -4164,7 +4164,7 @@
       } else {
         const propStr = Utils.orderedPropValues(data.properties, DB.getMetadata().properties || []);
         info.innerHTML = `
-          <div class="card-title">[רצפה] ${esc(propStr)} · ${data.itemCount || 0} פריטים</div>
+          <div class="card-title">על משטח ${esc(propStr)} · ${data.itemCount || 0} פריטים</div>
           <div class="card-meta">מיקום: ${esc(data.location || 'לא ידוע')}</div>
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = true;
@@ -6425,7 +6425,7 @@
             return `${num}. ${cartLabel(data)}: ${data.isEmpty ? 'ריקה' : (count ? count + (ps ? ' ' + ps : '') : ps)}`;
           } else {
             const ps = propSummary(data.properties);
-            return `${num}. [רצפה] ${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + (ps ? ' ' + ps : '') : ps)}`;
+            return `${num}. על משטח ${data.isEmpty ? 'ריקה' : (data.itemCount ? data.itemCount + (ps ? ' ' + ps : '') : ps)}`;
           }
         }).join('\n');
         return header + '\n' + lines;
@@ -6694,7 +6694,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v70</span>
+        <span class="version-badge">v71</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -7755,20 +7755,39 @@
 
       function extractCartId(line) {
         let stripped = (line || '').trim();
-        // Remove leading container-type prefix
         for (const ct of ctypes) {
           if (stripped.startsWith(ct + ' ')) { stripped = stripped.slice(ct.length + 1).trim(); break; }
         }
-        // Strip (cartType) suffix
         const cartId = stripped.replace(/\([^)]+\)\s*$/, '').trim();
         return allCarts.find(c => c.cartId === cartId) ? cartId : null;
       }
 
-      const blocks = text.split(/\n[ \t]*\n/).map(b => b.trim()).filter(Boolean);
+      // Detect and parse WhatsApp multi-message format: [M/D, HH:MM] Name: content
+      const waHeaderRe = /^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}\]\s*[^:]+:/;
+      let processedBlocks;
+      if (waHeaderRe.test(text)) {
+        const raw = [];
+        let cur = null;
+        for (const line of text.split('\n')) {
+          const hm = line.match(/^\[(\d{1,2})\/(\d{1,2}),\s*(\d{1,2}:\d{2})\]\s*[^:]+:\s*(.*)/);
+          if (hm) {
+            if (cur) raw.push(cur);
+            cur = { time: `${hm[1]}/${hm[2]} ${hm[3]}`, lines: hm[4].trim() ? [hm[4].trim()] : [] };
+          } else if (cur) {
+            if (line.trim()) cur.lines.push(line.trim());
+          }
+        }
+        if (cur) raw.push(cur);
+        processedBlocks = raw.filter(b => b.lines.length);
+      } else {
+        processedBlocks = text.split(/\n[ \t]*\n/)
+          .map(b => ({ time: null, lines: b.trim().split('\n').map(l => l.trim()).filter(Boolean) }))
+          .filter(b => b.lines.length);
+      }
 
-      for (const block of blocks) {
-        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+      for (const { time, lines } of processedBlocks) {
         if (!lines.length) continue;
+        const timePrefix = time ? `[${time}] ` : '';
         let handled = false;
 
         // 1. Empty cart transfer (single line): "עגלה X-Y(Z) ריקה מועברת מA לB"
@@ -7783,9 +7802,9 @@
           if (allCarts.find(c => c.cartId === cartId)) {
             const { location, subLocation } = resolveLocLabel(emptyM[2]);
             DB.upsertCart({ cartId, location, subLocation });
-            results.push({ ok: true, msg: `${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+            results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
           } else {
-            results.push({ ok: false, msg: `עגלה לא נמצאה: ${beforeRika}` });
+            results.push({ ok: false, msg: `${timePrefix}עגלה לא נמצאה: ${beforeRika}` });
           }
           handled = true;
         }
@@ -7800,9 +7819,9 @@
               if (cartId) {
                 const { location, subLocation } = resolveLocLabel(m[2]);
                 DB.upsertCart({ cartId, location, subLocation });
-                results.push({ ok: true, msg: `${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
               } else {
-                results.push({ ok: false, msg: `עגלה לא נמצאה: ${lines[0]}` });
+                results.push({ ok: false, msg: `${timePrefix}עגלה לא נמצאה: ${lines[0]}` });
               }
               handled = true;
             }
@@ -7819,9 +7838,9 @@
               if (cartId) {
                 const { location, subLocation } = resolveLocLabel(m[1]);
                 DB.upsertCart({ cartId, location, subLocation });
-                results.push({ ok: true, msg: `${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
               } else {
-                results.push({ ok: false, msg: `עגלה לא נמצאה: ${lines[0]}` });
+                results.push({ ok: false, msg: `${timePrefix}עגלה לא נמצאה: ${lines[0]}` });
               }
               handled = true;
             }
@@ -7839,9 +7858,9 @@
               const floorItems = Object.values(DB.load().floorItems).filter(fi => fi.location === srcLoc);
               if (floorItems.length) {
                 floorItems.forEach(fi => DB.setFloorItemLocation(fi.id, destLoc, destSub));
-                results.push({ ok: true, msg: `רצפה ${srcLoc} → ${destLoc}${destSub ? '/' + destSub : ''}` });
+                results.push({ ok: true, msg: `${timePrefix}רצפה ${srcLoc} → ${destLoc}${destSub ? '/' + destSub : ''}` });
               } else {
-                results.push({ ok: false, msg: `לא נמצאו פריטי רצפה ב${srcLoc}` });
+                results.push({ ok: false, msg: `${timePrefix}לא נמצאו פריטי רצפה ב${srcLoc}` });
               }
               handled = true;
             }
@@ -7849,7 +7868,7 @@
         }
 
         if (!handled) {
-          results.push({ ok: false, msg: `לא זוהה: "${lines[0].slice(0, 40)}"` });
+          results.push({ ok: false, msg: `${timePrefix}לא זוהה: "${lines[0].slice(0, 40)}"` });
         }
       }
       return results;
