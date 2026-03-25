@@ -6056,7 +6056,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v55</span>
+        <span class="version-badge">v56</span>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -6216,7 +6216,7 @@
                 Toast.show('מיפוי נשמר בהצלחה', 'success');
               };
               const doImport = () => {
-                if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, doActualImport); return; }
+                if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, importedDb, propDefs, doActualImport); return; }
                 doActualImport();
               };
               if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
@@ -6264,7 +6264,7 @@
                 Toast.show(`יובאו ${cartCount} מכולות ו-${floorCount} פריטי רצפה`, 'success');
               };
               const doImport = () => {
-                if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, doActualImport); return; }
+                if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, importedDb, propDefs, doActualImport); return; }
                 doActualImport();
               };
               if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
@@ -6355,18 +6355,39 @@
       });
     }
 
-    function _showUnmatchedFloorModal(lines, onProceed) {
-      const listHtml = lines.map(l =>
-        `<li style="font-family:monospace;font-size:0.82rem;padding:4px 2px;border-bottom:1px solid var(--border)">${esc(l)}</li>`
+    function _showUnmatchedFloorModal(unmatchedItems, importedDb, propDefs, onProceed) {
+      const optionsHint = propDefs.map(p => `${p.name}: ${(p.options||[]).join(', ')}`).filter(s => s.includes(':')).join('  |  ');
+      const rowsHtml = unmatchedItems.map(item =>
+        `<div style="margin-bottom:10px;padding:8px;background:var(--surface2,#f0f0f0);border-radius:6px">
+          <div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px">${esc(item.label)} — ${item.itemCount} יח׳</div>
+          <input data-fi-id="${esc(item.fiId)}" value="${esc(item.rawProps)}"
+            style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:0.9rem;direction:rtl;box-sizing:border-box" />
+        </div>`
       ).join('');
+      const hintHtml = optionsHint
+        ? `<p style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;direction:ltr;text-align:left">${esc(optionsHint)}</p>`
+        : '';
       Modal.open({
         title: 'פריטי רצפה עם מאפיינים לא מוכרים',
         html: `
-          <p style="margin-bottom:10px;font-size:0.88rem;color:var(--muted)">השורות הבאות מכילות מאפיינים שאינם קיימים בהגדרות. הן ייובאו ללא מאפיינים — בדוק את ההגדרות או את הטקסט:</p>
-          <ul style="list-style:none;max-height:240px;overflow-y:auto;margin-bottom:4px">${listHtml}</ul>
+          <p style="font-size:0.84rem;margin-bottom:8px">ערוך את המאפיינים ולחץ המשך, או השאר כפי שהוא:</p>
+          ${hintHtml}
+          <div style="max-height:300px;overflow-y:auto">${rowsHtml}</div>
         `,
         actions: [
-          { id: 'continue-import', label: 'המשך בכל זאת', cls: 'btn-primary', onClick: () => { Modal.close(); onProceed(); } },
+          { id: 'continue-import', label: 'המשך', cls: 'btn-primary', onClick: () => {
+            document.querySelectorAll('[data-fi-id]').forEach(inp => {
+              const fi = importedDb.floorItems[inp.dataset.fiId];
+              if (!fi) return;
+              const newRaw = inp.value.trim();
+              const newProps = _matchProps(newRaw, propDefs);
+              delete newProps['_unmatched'];
+              if (newRaw && !Object.values(newProps).some(v => v)) newProps['_unmatched'] = newRaw;
+              fi.properties = newProps;
+            });
+            Modal.close();
+            onProceed();
+          }},
           { id: 'cancel', label: 'ביטול', onClick: Modal.close }
         ]
       });
@@ -6738,14 +6759,14 @@
               }
               hasUncovered = remaining.trim().length > 0;
             }
+            const fiId = 'fi_' + (nowMs + fiCounter);
             if (entry.rawProps && (!hasMatch || hasUncovered)) {
               const locLabel = locName + (subLoc ? ' / ' + subLoc : '');
-              unmatchedFloorLines.push(`${locLabel}: ${entry.rawProps} - ${entry.itemCount}`);
+              unmatchedFloorLines.push({ fiId, label: locLabel, rawProps: entry.rawProps, itemCount: entry.itemCount });
               // Store rawProps as a synthetic discriminator so dedup doesn't collapse
               // multiple floor items with the same partial match into one entry
               props['_unmatched'] = entry.rawProps;
             }
-            const fiId = 'fi_' + (nowMs + fiCounter);
             fiCounter++;
             floorItems[fiId] = {
               id: fiId, location: locName, subLocation: subLoc,
