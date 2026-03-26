@@ -743,6 +743,23 @@
       white-space: nowrap;
     }
 
+    /* ─── Undo button ─── */
+    .undo-btn {
+      padding: 6px 12px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font-weight: 600;
+      font-size: 1rem;
+      font-family: inherit;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+      opacity: 0.6;
+    }
+    .undo-btn.can-undo { opacity: 1; }
+
     /* ─── Search screen inputs ─── */
     .sr-search-inputs {
       display: grid;
@@ -1260,6 +1277,8 @@
   const DB = (() => {
     const KEY = 'shinua_data';
     let _cache = null;
+    let _undoSnapshot = null;
+    let _undoGroupTimer = null;
 
     function _empty() {
       return { metadata: { carts: [], cartTypes: [], containerTypes: ['עגלה'], properties: [], locations: [] }, carts: {}, floorItems: {} };
@@ -1296,8 +1315,26 @@
     }
 
     function save() {
+      if (!_undoGroupTimer) {
+        const prev = localStorage.getItem(KEY);
+        if (prev) _undoSnapshot = prev;
+      }
+      clearTimeout(_undoGroupTimer);
+      _undoGroupTimer = setTimeout(() => { _undoGroupTimer = null; }, 150);
       localStorage.setItem(KEY, JSON.stringify(_cache));
     }
+
+    function undo() {
+      if (!_undoSnapshot) return false;
+      clearTimeout(_undoGroupTimer);
+      _undoGroupTimer = null;
+      localStorage.setItem(KEY, _undoSnapshot);
+      _undoSnapshot = null;
+      _cache = null;
+      return true;
+    }
+
+    function canUndo() { return !!_undoSnapshot; }
 
     function getMetadata() { return load().metadata; }
 
@@ -1760,7 +1797,8 @@
       renameProperty, renamePropertyOption,
       importJSON, getRaw, clear, clearItemsOnly,
       setLocationOrder, setPropertyOrder,
-      setLocationOrderLocked, setPropertyOrderLocked
+      setLocationOrderLocked, setPropertyOrderLocked,
+      undo, canUndo
     };
 
     function setLocationOrder(orderedNames) {
@@ -2758,6 +2796,7 @@
       <div class="screen-header">
         <span class="header-icon">✏️</span>
         <h1>עריכת נתונים</h1>
+        <button class="undo-btn" title="בטל פעולה">↩</button>
       </div>
       <div class="tabs">
         <button class="tab-btn active" data-tab="carts">עגלות</button>
@@ -3991,6 +4030,7 @@
       <div class="screen-header">
         <span class="header-icon">🔄</span>
         <h1>העברה / פריטים</h1>
+        <button class="undo-btn" title="בטל פעולה">↩</button>
       </div>
       <div class="p-screen">
         <div class="form-group">
@@ -4472,6 +4512,7 @@
       <div class="screen-header">
         <span class="header-icon">📦</span>
         <h1>העמסה / פירוק</h1>
+        <button class="undo-btn" title="בטל פעולה">↩</button>
       </div>
       <div class="p-screen">
         <div class="form-group">
@@ -5351,6 +5392,7 @@
       <div class="screen-header">
         <span class="header-icon">🔍</span>
         <h1>חיפוש</h1>
+        <button class="undo-btn" title="בטל פעולה">↩</button>
       </div>
       <div id="sr-collapse-bar" class="sr-collapse-bar" style="display:none">
         <span class="sr-collapse-summary" id="sr-collapse-summary"></span>
@@ -6694,7 +6736,8 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v71</span>
+        <span class="version-badge">v72</span>
+        <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
@@ -8039,6 +8082,23 @@
     // Version badge: tap to reload (picks up latest version)
     const vBadge = document.querySelector('.version-badge');
     if (vBadge) vBadge.addEventListener('click', () => location.reload());
+
+    // Global undo button handler
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.undo-btn');
+      if (!btn) return;
+      if (!DB.canUndo()) { Toast.show('אין פעולה לביטול', 'info'); return; }
+      DB.undo();
+      Toast.show('פעולה בוטלה', 'success');
+      Router.navigate(Router.getCurrent());
+    });
+
+    // Refresh undo button state on every navigate
+    const _origNavigate = Router.navigate.bind(Router);
+    Router.navigate = function(name) {
+      _origNavigate(name);
+      document.querySelectorAll('.undo-btn').forEach(b => b.classList.toggle('can-undo', DB.canUndo()));
+    };
 
     // Global haptic feedback on checkbox/toggle taps
     document.addEventListener('change', e => {
