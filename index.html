@@ -2515,7 +2515,7 @@
   // ── Location + conditional sublocation ──
   // For non-map locations: autocomplete also offers "loc / subloc" combined entries.
   // Selecting a combined entry auto-fills both fields.
-  function setupLocationFields(locInput, subGroup, subInput) {
+  function setupLocationFields(locInput, subGroup, subInput, sub2Group, sub2Input) {
     makeAutocomplete(locInput, () => {
       const locs = DB.getMetadata().locations;
       const suggestions = [];
@@ -2531,6 +2531,12 @@
       const loc = DB.getMetadata().locations.find(l => l.name === locInput.value.trim());
       return (loc && loc.subLocations) || [];
     });
+    if (sub2Input) {
+      makeAutocomplete(sub2Input, () => {
+        const loc = DB.getMetadata().locations.find(l => l.name === locInput.value.trim());
+        return (loc && loc.subLocations) || [];
+      });
+    }
 
     function updateSub() {
       let locName = locInput.value.trim();
@@ -2546,6 +2552,10 @@
       const subs = loc && loc.subLocations && loc.subLocations.length;
       subGroup.hidden = !subs;
       if (!subs) subInput.value = '';
+      if (sub2Group) {
+        sub2Group.hidden = !subs;
+        if (!subs && sub2Input) sub2Input.value = '';
+      }
     }
 
     locInput.addEventListener('change', updateSub);
@@ -4083,6 +4093,10 @@
             <label class="form-label">תת-מיקום יעד</label>
             <input id="tr-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
+          <div class="form-group" id="tr-dest-subloc2-group" hidden>
+            <label class="form-label">תת-מיקום נוסף (אופציונלי)</label>
+            <input id="tr-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
+          </div>
 
           <!-- cart-mode: multi-slot support -->
           <div id="tr-cart-item-fields">
@@ -4107,7 +4121,9 @@
     setupLocationFields(
       screen.querySelector('#tr-dest-loc'),
       screen.querySelector('#tr-dest-subloc-group'),
-      screen.querySelector('#tr-dest-subloc')
+      screen.querySelector('#tr-dest-subloc'),
+      screen.querySelector('#tr-dest-subloc2-group'),
+      screen.querySelector('#tr-dest-subloc2')
     );
 
     // Floor source: location + sublocation + property pickers
@@ -4360,8 +4376,9 @@
     function doTransferSave() {
       if (!_currentData) { Toast.show('בחר עגלה, משטח או מקור רצפה', 'error'); return null; }
       const destLoc    = screen.querySelector('#tr-dest-loc').value.trim();
-      const destSubLoc = screen.querySelector('#tr-dest-subloc-group').hidden
-        ? '' : screen.querySelector('#tr-dest-subloc').value.trim();
+      const _dSub1 = screen.querySelector('#tr-dest-subloc-group').hidden ? '' : screen.querySelector('#tr-dest-subloc').value.trim();
+      const _dSub2 = screen.querySelector('#tr-dest-subloc2-group').hidden ? '' : screen.querySelector('#tr-dest-subloc2').value.trim();
+      const destSubLoc = (_dSub1 && _dSub2) ? `${_dSub1}/${_dSub2}` : _dSub1;
       if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return null; }
 
       let msg;
@@ -4450,6 +4467,7 @@
       screen.querySelector('#tr-shared-fields').hidden = true;
       screen.querySelector('#tr-dest-loc').value = '';
       screen.querySelector('#tr-dest-subloc').value = '';
+      screen.querySelector('#tr-dest-subloc2').value = '';
       if (_cartRef) _cartRef.clear();
       if (_containerRef) _containerRef.clear();
       return msg;
@@ -4567,6 +4585,10 @@
             <label class="form-label">תת-מיקום יעד</label>
             <input id="lu-load-move-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
+          <div class="form-group" id="lu-load-move-dest-subloc2-group" hidden>
+            <label class="form-label">תת-מיקום נוסף (אופציונלי)</label>
+            <input id="lu-load-move-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
+          </div>
           <div style="display:flex;gap:8px;margin-top:16px">
             <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">שמור</button>
             <button id="lu-load-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
@@ -4611,6 +4633,10 @@
               <label class="form-label">תת-מיקום יעד</label>
               <input id="lu-unload-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
+            <div class="form-group" id="lu-unload-dest-subloc2-group" hidden>
+              <label class="form-label">תת-מיקום נוסף (אופציונלי)</label>
+              <input id="lu-unload-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
+            </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
             <button id="lu-unload-save-only" class="btn btn-outline" style="flex:1">שמור</button>
@@ -4635,12 +4661,16 @@
     setupLocationFields(
       screen.querySelector('#lu-load-move-dest'),
       screen.querySelector('#lu-load-move-dest-subloc-group'),
-      screen.querySelector('#lu-load-move-dest-subloc')
+      screen.querySelector('#lu-load-move-dest-subloc'),
+      screen.querySelector('#lu-load-move-dest-subloc2-group'),
+      screen.querySelector('#lu-load-move-dest-subloc2')
     );
     setupLocationFields(
       screen.querySelector('#lu-unload-dest-loc'),
       screen.querySelector('#lu-unload-dest-subloc-group'),
-      screen.querySelector('#lu-unload-dest-subloc')
+      screen.querySelector('#lu-unload-dest-subloc'),
+      screen.querySelector('#lu-unload-dest-subloc2-group'),
+      screen.querySelector('#lu-unload-dest-subloc2')
     );
 
     // ── Floor slot helpers ──────────────────────────────────────────
@@ -5257,14 +5287,19 @@
       const moveDest = screen.querySelector('#lu-load-move-dest').value.trim();
       if (moveDest) {
         const moveDestSublocGrp = screen.querySelector('#lu-load-move-dest-subloc-group');
-        const moveDestSubloc = (!moveDestSublocGrp || moveDestSublocGrp.hidden)
+        const _mSub1 = (!moveDestSublocGrp || moveDestSublocGrp.hidden)
           ? '' : screen.querySelector('#lu-load-move-dest-subloc').value.trim();
+        const _mSub2Grp = screen.querySelector('#lu-load-move-dest-subloc2-group');
+        const _mSub2 = (!_mSub2Grp || _mSub2Grp.hidden)
+          ? '' : screen.querySelector('#lu-load-move-dest-subloc2').value.trim();
+        const moveDestSubloc = (_mSub1 && _mSub2) ? `${_mSub1}/${_mSub2}` : _mSub1;
         DB.upsertCart({ cartId: destCartId, location: moveDest, subLocation: moveDestSubloc });
         msg += '\nמועברת ל' + moveDest;
       }
       screen.querySelector('#lu-dest-cart').value = '';
       screen.querySelector('#lu-load-move-dest').value = '';
       screen.querySelector('#lu-load-move-dest-subloc').value = '';
+      screen.querySelector('#lu-load-move-dest-subloc2').value = '';
       screen.querySelector('#lu-src-loc').value = '';
       screen.querySelector('#lu-src-subloc').value = '';
       return msg;
@@ -5283,8 +5318,9 @@
       if (!_srcCart) { Toast.show('יש לבחור מקור לפירוק', 'error'); return null; }
       const destLoc = screen.querySelector('#lu-unload-dest-loc').value.trim();
       if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return null; }
-      const destSubLoc = screen.querySelector('#lu-unload-dest-subloc-group').hidden
-        ? '' : screen.querySelector('#lu-unload-dest-subloc').value.trim();
+      const _uSub1 = screen.querySelector('#lu-unload-dest-subloc-group').hidden ? '' : screen.querySelector('#lu-unload-dest-subloc').value.trim();
+      const _uSub2 = screen.querySelector('#lu-unload-dest-subloc2-group').hidden ? '' : screen.querySelector('#lu-unload-dest-subloc2').value.trim();
+      const destSubLoc = (_uSub1 && _uSub2) ? `${_uSub1}/${_uSub2}` : _uSub1;
 
       const slotsContainer = screen.querySelector('#lu-unload-slots-container');
       const allSlots = readAllSlots(slotsContainer);
@@ -5330,6 +5366,7 @@
       screen.querySelector('#lu-unload-fields').hidden = true;
       screen.querySelector('#lu-unload-dest-loc').value = '';
       screen.querySelector('#lu-unload-dest-subloc').value = '';
+      screen.querySelector('#lu-unload-dest-subloc2').value = '';
       if (_unloadCartRef) _unloadCartRef.clear();
       return msg;
     }
@@ -6736,7 +6773,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v72</span>
+        <span class="version-badge">v73</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
