@@ -5215,10 +5215,12 @@
       // Optional destination — move parent cart
       const moveDest = screen.querySelector('#lu-ct-move-dest').value.trim();
       if (moveDest) {
-        DB.upsertCart({ cartId: parentCartId, location: moveDest });
-        // Also update container's location
-        if (ctId) DB.upsertCart({ cartId: ctId, location: moveDest });
-        msgLines.push('מועבר ל' + moveDest);
+        const _sepIdx = moveDest.indexOf(' / ');
+        const moveLocName = _sepIdx >= 0 ? moveDest.slice(0, _sepIdx).trim() : moveDest;
+        const moveSubLoc  = _sepIdx >= 0 ? moveDest.slice(_sepIdx + 3).trim() : '';
+        DB.upsertCart({ cartId: parentCartId, location: moveLocName, subLocation: moveSubLoc });
+        if (ctId) DB.upsertCart({ cartId: ctId, location: moveLocName, subLocation: moveSubLoc });
+        msgLines.push('מועבר ל' + waMsgLoc(moveLocName, moveSubLoc));
       }
 
       const msg = msgLines.join('\n');
@@ -6961,7 +6963,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v100</span>
+        <span class="version-badge">v101</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8572,8 +8574,8 @@ const BarcodeScanner = (() => {
     if (!window.ZXing) throw new Error('ZXing not loaded');
     const hints = new Map();
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    _zxingReader = new ZXing.MultiFormatReader();
-    _zxingReader.setHints(hints);
+    // BrowserMultiFormatReader handles iOS canvas correctly
+    _zxingReader = new ZXing.BrowserMultiFormatReader(hints);
     return _zxingReader;
   }
 
@@ -8582,16 +8584,23 @@ const BarcodeScanner = (() => {
       if (!_detector) _detector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'] });
       return await _detector.detect(cvs);
     }
-    // ZXing fallback
+    // ZXing fallback (iOS)
     const reader = await _getZXingReader();
-    const ctx = cvs.getContext('2d');
-    const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
-    const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
-    const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
     try {
-      const res = reader.decode(bmp);
+      const res = reader.decodeFromCanvas(cvs);
       return [{ rawValue: res.getText() }];
-    } catch(e) { return []; }
+    } catch(e) {
+      // Second attempt with GlobalHistogramBinarizer for uneven lighting
+      try {
+        const ctx = cvs.getContext('2d');
+        const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
+        const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
+        const bmp2 = new ZXing.BinaryBitmap(new ZXing.GlobalHistogramBinarizer(lum));
+        const mr = new ZXing.MultiFormatReader();
+        mr.setHints(new Map([[ZXing.DecodeHintType.TRY_HARDER, true]]));
+        return [{ rawValue: mr.decode(bmp2).getText() }];
+      } catch(e2) { return []; }
+    }
   }
 
   function open(inputEl) {
