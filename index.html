@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v93</span>
+        <span class="version-badge">v94</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7554,10 +7554,23 @@
     }
 
     // Extract parenthesized text from rawProps as a comment; return [cleanedRaw, parenComment]
-    function _extractParenComment(raw) {
+    // If the inner text matches a known property option/alias it is kept in rawProps (without parens).
+    function _extractParenComment(raw, propDefs) {
+      const knownOptions = new Set();
+      for (const prop of (propDefs || [])) {
+        for (const opt of (prop.options || [])) {
+          knownOptions.add(opt.toLowerCase());
+          for (const alias of ((prop.aliases && prop.aliases[opt]) || [])) {
+            if (alias.trim()) knownOptions.add(alias.trim().toLowerCase());
+          }
+        }
+      }
       const comments = [];
       const cleaned = (raw || '').replace(/\(([^)]*)\)/g, (_, inner) => {
-        if (inner.trim()) comments.push(inner.trim());
+        const trimmed = inner.trim();
+        if (!trimmed) return '';
+        if (knownOptions.has(trimmed.toLowerCase())) return ' ' + trimmed + ' ';
+        comments.push(trimmed);
         return '';
       }).replace(/\s+/g, ' ').trim();
       return [cleaned, comments.join(' ')];
@@ -7638,7 +7651,7 @@
 
             for (let slotIdx = 0; slotIdx < entry.slots.length; slotIdx++) {
               const slot = entry.slots[slotIdx];
-              const [cleanSlotRaw, parenCmt] = _extractParenComment(slot.rawProps);
+              const [cleanSlotRaw, parenCmt] = _extractParenComment(slot.rawProps, propDefs);
               const props = _matchProps(cleanSlotRaw, propDefs);
               const unmatchedComment = props._unmatchedComment || '';
               delete props._unmatchedComment;
@@ -7722,7 +7735,7 @@
               }
             }
           } else {
-            const [cleanFloorRaw, floorParenCmt] = _extractParenComment(entry.rawProps);
+            const [cleanFloorRaw, floorParenCmt] = _extractParenComment(entry.rawProps, propDefs);
             const props = _matchProps(cleanFloorRaw, propDefs);
             const unmatchedComment = props._unmatchedComment || '';
             delete props._unmatchedComment;
