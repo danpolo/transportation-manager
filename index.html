@@ -6914,7 +6914,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v81</span>
+        <span class="version-badge">v82</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
@@ -8492,7 +8492,7 @@ const BarcodeScanner = (() => {
       _galImg = img;
       _galDetected = null;
       const W = img.naturalWidth, H = img.naturalHeight;
-      _galRect = { x: Math.round(W*0.1), y: Math.round(H*0.35), w: Math.round(W*0.8), h: Math.round(H*0.30) };
+      _galRect = { x: Math.round(W*0.25), y: Math.round(H*0.40), w: Math.round(W*0.50), h: Math.round(H*0.15) };
       drawGallery();
       // auto-detect
       detectGallery();
@@ -8529,7 +8529,12 @@ const BarcodeScanner = (() => {
     const color = _galDetected ? '#00e878' : '#fff';
     ctx.strokeStyle = color; ctx.lineWidth = 2;
     ctx.strokeRect(rx,ry,rw,rh);
-    [[rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh]].forEach(([x,y]) => {
+    const handles = [
+      [rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh],   // corners
+      [rx+rw/2,ry],[rx+rw/2,ry+rh],                   // top/bottom mid
+      [rx,ry+rh/2],[rx+rw,ry+rh/2],                   // left/right mid
+    ];
+    handles.forEach(([x,y]) => {
       ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
     });
@@ -8557,17 +8562,21 @@ const BarcodeScanner = (() => {
 
   function galHitCorner(px, py) {
     if (!_galRect) return null;
-    const corners = [
-      {id:'tl', x:galToCanvas(_galRect.x),              y:galToCanvas(_galRect.y)},
-      {id:'tr', x:galToCanvas(_galRect.x+_galRect.w),   y:galToCanvas(_galRect.y)},
-      {id:'bl', x:galToCanvas(_galRect.x),              y:galToCanvas(_galRect.y+_galRect.h)},
-      {id:'br', x:galToCanvas(_galRect.x+_galRect.w),   y:galToCanvas(_galRect.y+_galRect.h)},
+    const rx=galToCanvas(_galRect.x), ry=galToCanvas(_galRect.y);
+    const rw=galToCanvas(_galRect.w), rh=galToCanvas(_galRect.h);
+    const handles = [
+      {id:'tl', x:rx,      y:ry},
+      {id:'tr', x:rx+rw,   y:ry},
+      {id:'bl', x:rx,      y:ry+rh},
+      {id:'br', x:rx+rw,   y:ry+rh},
+      {id:'t',  x:rx+rw/2, y:ry},
+      {id:'b',  x:rx+rw/2, y:ry+rh},
+      {id:'l',  x:rx,      y:ry+rh/2},
+      {id:'r',  x:rx+rw,   y:ry+rh/2},
     ];
-    for (const c of corners) {
+    for (const c of handles) {
       if (Math.sqrt((px-c.x)**2+(py-c.y)**2) <= GHANDLE) return c.id;
     }
-    const rx=galToCanvas(_galRect.x),ry=galToCanvas(_galRect.y);
-    const rw=galToCanvas(_galRect.w),rh=galToCanvas(_galRect.h);
     if (px>=rx&&px<=rx+rw&&py>=ry&&py<=ry+rh) return 'body';
     return null;
   }
