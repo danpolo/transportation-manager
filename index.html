@@ -6967,7 +6967,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v102</span>
+        <span class="version-badge">v103</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8578,33 +8578,41 @@ const BarcodeScanner = (() => {
     if (!window.ZXing) throw new Error('ZXing not loaded');
     const hints = new Map();
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    // BrowserMultiFormatReader handles iOS canvas correctly
-    _zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+    _zxingReader = new ZXing.MultiFormatReader();
+    _zxingReader.setHints(hints);
     return _zxingReader;
   }
 
   async function decodeCanvas(cvs) {
+    // BarcodeDetector — use only formats supported by this browser (iOS may not support all)
     if ('BarcodeDetector' in window) {
-      if (!_detector) _detector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'] });
-      return await _detector.detect(cvs);
+      if (!_detector) {
+        try {
+          const want = ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'];
+          const supported = BarcodeDetector.getSupportedFormats
+            ? await BarcodeDetector.getSupportedFormats() : want;
+          const formats = want.filter(f => supported.includes(f));
+          _detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code','code_128','ean_13'] });
+        } catch(e) { _detector = null; }
+      }
+      if (_detector) {
+        try { return await _detector.detect(cvs); } catch(e) { _detector = null; }
+      }
     }
-    // ZXing fallback (iOS)
-    const reader = await _getZXingReader();
+    // ZXing fallback — try HybridBinarizer then GlobalHistogramBinarizer
     try {
-      const res = reader.decodeFromCanvas(cvs);
-      return [{ rawValue: res.getText() }];
-    } catch(e) {
-      // Second attempt with GlobalHistogramBinarizer for uneven lighting
-      try {
-        const ctx = cvs.getContext('2d');
-        const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
-        const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
-        const bmp2 = new ZXing.BinaryBitmap(new ZXing.GlobalHistogramBinarizer(lum));
-        const mr = new ZXing.MultiFormatReader();
-        mr.setHints(new Map([[ZXing.DecodeHintType.TRY_HARDER, true]]));
-        return [{ rawValue: mr.decode(bmp2).getText() }];
-      } catch(e2) { return []; }
-    }
+      const reader = await _getZXingReader();
+      const ctx = cvs.getContext('2d');
+      const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
+      const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
+      for (const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]) {
+        try {
+          const bmp = new ZXing.BinaryBitmap(new Bin(lum));
+          return [{ rawValue: reader.decode(bmp).getText() }];
+        } catch(e) {}
+      }
+    } catch(e) {}
+    return [];
   }
 
   function open(inputEl) {
