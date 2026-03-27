@@ -344,7 +344,7 @@
     #scanner-camera-view.active, #scanner-gallery-view.active { display:flex; }
     #scanner-video { width:100%; flex:1; object-fit:cover; }
     #scanner-canvas { display:none; }
-    #scanner-gallery-canvas { width:100%; flex:1; object-fit:contain; touch-action:none; }
+    #scanner-gallery-canvas { width:100%; flex:1; touch-action:none; display:block; }
     .scanner-overlay { position:absolute; inset:0; pointer-events:none; }
     #scanner-rect-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
     #scanner-result-bar { position:absolute; bottom:80px; left:0; right:0; text-align:center; color:#fff; font-size:1.1rem; font-weight:600; text-shadow:0 1px 3px #000; padding:8px; }
@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v96</span>
+        <span class="version-badge">v97</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8651,17 +8651,19 @@ const BarcodeScanner = (() => {
     _scanRaf = requestAnimationFrame(scanLoop);
   }
 
-  // Gallery mode state
+  // Gallery mode state — pan/zoom model
   let _galImg = null;
-  let _galRect = null; // {x,y,w,h} in image px
-  let _galDrag = null;
+  let _galZoom = 1;       // image display width = canvas.width * _galZoom
+  let _galPanX = 0, _galPanY = 0; // image top-left in canvas px
   let _galDetected = null;
-  const GHANDLE = 44;
+  let _galDrag = null;    // {startX, startY, panX, panY} single-finger pan
+  let _galPinch = null;   // {dist, midX, midY, zoom, panX, panY}
+  let _galLastTap = 0;
 
   function startGallery() {
     choice.style.display = 'none';
     galView.classList.add('active');
-    _galImg = null; _galRect = null; _galDetected = null;
+    _galImg = null; _galDetected = null; _galDrag = null; _galPinch = null;
     fileInp.value = '';
     fileInp.click();
   }
@@ -8674,169 +8676,184 @@ const BarcodeScanner = (() => {
     img.onload = () => {
       _galImg = img;
       _galDetected = null;
-      const W = img.naturalWidth, H = img.naturalHeight;
-      _galRect = { x: Math.round(W*0.25), y: Math.round(H*0.40), w: Math.round(W*0.50), h: Math.round(H*0.15) };
+      _syncGalCanvas();
+      // Fit image to canvas width, centered vertically
+      _galZoom = 1;
+      _galPanX = 0;
+      const displayH = galCanvas.width * img.naturalHeight / img.naturalWidth;
+      _galPanY = Math.round((galCanvas.height - displayH) / 2);
       drawGallery();
-      // auto-detect
       detectGallery();
     };
     img.src = url;
   });
 
-  function galToCanvas(v) {
-    if (!_galImg) return 0;
-    const cssW = galCanvas.clientWidth;
-    return v * (cssW / _galImg.naturalWidth);
+  function _syncGalCanvas() {
+    galCanvas.width  = galCanvas.clientWidth  || window.innerWidth;
+    galCanvas.height = galCanvas.clientHeight || Math.round(window.innerHeight * 0.75);
   }
-  function galToImg(v) {
-    if (!_galImg) return 0;
-    const cssW = galCanvas.clientWidth;
-    return v * (_galImg.naturalWidth / cssW);
+
+  // Fixed rect in canvas coords (centered, independent of pan/zoom)
+  function _galFixedRect() {
+    const cw = galCanvas.width, ch = galCanvas.height;
+    const rw = Math.round(cw * 0.80);
+    const rh = Math.round(ch * 0.28);
+    return { x: Math.round((cw - rw) / 2), y: Math.round((ch - rh) / 2), w: rw, h: rh };
+  }
+
+  function _galClampPan() {
+    if (!_galImg) return;
+    const cw = galCanvas.width, ch = galCanvas.height;
+    const dw = cw * _galZoom;
+    const dh = dw * _galImg.naturalHeight / _galImg.naturalWidth;
+    // Keep at least 15% of canvas covered by the image on each side
+    const mg = 0.15;
+    _galPanX = Math.max(cw * mg - dw, Math.min(cw * (1 - mg), _galPanX));
+    _galPanY = Math.max(ch * mg - dh, Math.min(ch * (1 - mg), _galPanY));
   }
 
   function drawGallery() {
-    if (!_galImg) return;
-    const cssW = galCanvas.clientWidth || window.innerWidth;
-    const ratio = _galImg.naturalHeight / _galImg.naturalWidth;
-    galCanvas.width  = cssW;
-    galCanvas.height = Math.round(cssW * ratio);
+    _syncGalCanvas();
     const ctx = galCanvas.getContext('2d');
-    ctx.drawImage(_galImg, 0, 0, galCanvas.width, galCanvas.height);
-    const rx = galToCanvas(_galRect.x), ry = galToCanvas(_galRect.y);
-    const rw = galToCanvas(_galRect.w), rh = galToCanvas(_galRect.h);
+    const cw = galCanvas.width, ch = galCanvas.height;
+    ctx.clearRect(0, 0, cw, ch);
+    if (!_galImg) return;
+    const dw = cw * _galZoom;
+    const dh = dw * _galImg.naturalHeight / _galImg.naturalWidth;
+    ctx.drawImage(_galImg, _galPanX, _galPanY, dw, dh);
+    const { x: rx, y: ry, w: rw, h: rh } = _galFixedRect();
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(0,0,galCanvas.width,ry);
-    ctx.fillRect(0,ry+rh,galCanvas.width,galCanvas.height-ry-rh);
+    ctx.fillRect(0,0,cw,ry);
+    ctx.fillRect(0,ry+rh,cw,ch-ry-rh);
     ctx.fillRect(0,ry,rx,rh);
-    ctx.fillRect(rx+rw,ry,galCanvas.width-rx-rw,rh);
+    ctx.fillRect(rx+rw,ry,cw-rx-rw,rh);
     const color = _galDetected ? '#00e878' : '#fff';
     ctx.strokeStyle = color; ctx.lineWidth = 2;
     ctx.strokeRect(rx,ry,rw,rh);
-    const handles = [
-      [rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh],   // corners
-      [rx+rw/2,ry],[rx+rw/2,ry+rh],                   // top/bottom mid
-      [rx,ry+rh/2],[rx+rw,ry+rh/2],                   // left/right mid
-    ];
-    handles.forEach(([x,y]) => {
-      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+    // Corner L-markers
+    const len = 18;
+    ctx.lineWidth = 3;
+    [[rx,ry,1,1],[rx+rw,ry,-1,1],[rx,ry+rh,1,-1],[rx+rw,ry+rh,-1,-1]].forEach(([x,y,dx,dy]) => {
+      ctx.beginPath(); ctx.moveTo(x+dx*len,y); ctx.lineTo(x,y); ctx.lineTo(x,y+dy*len); ctx.stroke();
     });
+    const barH = 38;
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    ctx.fillRect(0, ch - barH, cw, barH);
     if (_galDetected) {
-      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,galCanvas.height-60,galCanvas.width,60);
-      ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
-      ctx.fillText(_galDetected, galCanvas.width/2, galCanvas.height-30);
-      ctx.font='12px sans-serif'; ctx.fillStyle='rgba(255,255,255,.7)';
-      ctx.fillText('הקש פעמיים לאישור', galCanvas.width/2, galCanvas.height-12);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(_galDetected, cw/2, ch - barH + 20);
+      ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.7)';
+      ctx.fillText('הקש פעמיים לאישור', cw/2, ch - barH + 34);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('גרור להזזה · צבוט לזום', cw/2, ch - barH + 24);
     }
   }
 
   async function detectGallery() {
-    if (!_galImg || !_galRect) return;
+    if (!_galImg) return;
     _galDetected = null;
     try {
-      const offscreen = document.createElement('canvas');
-      offscreen.width = _galRect.w; offscreen.height = _galRect.h;
-      offscreen.getContext('2d').drawImage(_galImg, _galRect.x, _galRect.y, _galRect.w, _galRect.h, 0, 0, _galRect.w, _galRect.h);
-      const codes = await decodeCanvas(offscreen);
-      if (codes.length) { _galDetected = codes[0].rawValue; }
+      const { x: rx, y: ry, w: rw, h: rh } = _galFixedRect();
+      const cw = galCanvas.width;
+      const scale = (cw * _galZoom) / _galImg.naturalWidth; // canvas px per image px
+      const imgX = Math.max(0, Math.round((rx - _galPanX) / scale));
+      const imgY = Math.max(0, Math.round((ry - _galPanY) / scale));
+      const imgW = Math.min(Math.round(rw / scale), _galImg.naturalWidth  - imgX);
+      const imgH = Math.min(Math.round(rh / scale), _galImg.naturalHeight - imgY);
+      if (imgW > 0 && imgH > 0) {
+        const off = document.createElement('canvas');
+        off.width = imgW; off.height = imgH;
+        off.getContext('2d').drawImage(_galImg, imgX, imgY, imgW, imgH, 0, 0, imgW, imgH);
+        const codes = await decodeCanvas(off);
+        if (codes.length) _galDetected = codes[0].rawValue;
+      }
     } catch(e) {}
     drawGallery();
   }
 
-  function galHitCorner(px, py) {
-    if (!_galRect) return null;
-    const rx=galToCanvas(_galRect.x), ry=galToCanvas(_galRect.y);
-    const rw=galToCanvas(_galRect.w), rh=galToCanvas(_galRect.h);
-    const handles = [
-      {id:'tl', x:rx,      y:ry},
-      {id:'tr', x:rx+rw,   y:ry},
-      {id:'bl', x:rx,      y:ry+rh},
-      {id:'br', x:rx+rw,   y:ry+rh},
-      {id:'t',  x:rx+rw/2, y:ry},
-      {id:'b',  x:rx+rw/2, y:ry+rh},
-      {id:'l',  x:rx,      y:ry+rh/2},
-      {id:'r',  x:rx+rw,   y:ry+rh/2},
-    ];
-    for (const c of handles) {
-      if (Math.sqrt((px-c.x)**2+(py-c.y)**2) <= GHANDLE) return c.id;
-    }
-    if (px>=rx&&px<=rx+rw&&py>=ry&&py<=ry+rh) return 'body';
-    return null;
-  }
-
-  function galGetPos(e) {
-    const r = galCanvas.getBoundingClientRect();
-    const src = e.touches ? e.touches[0] : e;
-    // Normalize CSS coords to canvas pixel coords in case CSS size ≠ canvas pixel size
-    return {
-      x: (src.clientX - r.left) * (galCanvas.width  / r.width),
-      y: (src.clientY - r.top)  * (galCanvas.height / r.height),
-    };
-  }
-
-  let _galLastTap = 0;
   function _isDoubleTap() {
-    const now = Date.now();
-    const dt = now - _galLastTap;
+    const now = Date.now(), dt = now - _galLastTap;
     _galLastTap = now;
     return dt < 350;
   }
 
+  function _galPinchDist(e) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+  function _galPinchMid(e) {
+    const r = galCanvas.getBoundingClientRect();
+    const sx = galCanvas.width / r.width, sy = galCanvas.height / r.height;
+    return {
+      x: ((e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left) * sx,
+      y: ((e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top)  * sy,
+    };
+  }
+
+  // Mouse (desktop)
   galCanvas.addEventListener('mousedown', e => {
-    const p = galGetPos(e);
-    const hit = galHitCorner(p.x, p.y);
-    if (hit) { _galDrag = { handle: hit, startX: p.x, startY: p.y, orig: {..._galRect} }; return; }
-    if (_galDetected && _isDoubleTap()) { confirmGallery(); }
+    if (_galDetected && _isDoubleTap()) { confirmGallery(); return; }
+    _galDrag = { startX: e.clientX, startY: e.clientY, panX: _galPanX, panY: _galPanY };
   });
   galCanvas.addEventListener('mousemove', e => {
     if (!_galDrag) return;
-    const p = galGetPos(e);
-    galMoveDrag(p.x, p.y);
+    const r = galCanvas.getBoundingClientRect();
+    _galPanX = _galDrag.panX + (e.clientX - _galDrag.startX) * (galCanvas.width  / r.width);
+    _galPanY = _galDrag.panY + (e.clientY - _galDrag.startY) * (galCanvas.height / r.height);
+    _galClampPan(); drawGallery();
   });
-  galCanvas.addEventListener('mouseup', () => endGalDrag());
+  galCanvas.addEventListener('mouseup',    () => { if (_galDrag) { _galDrag = null; detectGallery(); } });
+  galCanvas.addEventListener('mouseleave', () => { if (_galDrag) { _galDrag = null; detectGallery(); } });
 
+  // Touch
   galCanvas.addEventListener('touchstart', e => {
     e.preventDefault();
-    const p = galGetPos(e);
-    const hit = galHitCorner(p.x, p.y);
-    if (hit) { _galDrag = { handle: hit, startX: p.x, startY: p.y, orig: {..._galRect} }; return; }
-    if (_galDetected && _isDoubleTap()) { confirmGallery(); }
+    if (e.touches.length === 1) {
+      if (_galDetected && _isDoubleTap()) { confirmGallery(); return; }
+      const t = e.touches[0];
+      _galDrag = { startX: t.clientX, startY: t.clientY, panX: _galPanX, panY: _galPanY };
+      _galPinch = null;
+    } else if (e.touches.length === 2) {
+      _galDrag = null;
+      const mid = _galPinchMid(e);
+      _galPinch = { dist: _galPinchDist(e), midX: mid.x, midY: mid.y, zoom: _galZoom, panX: _galPanX, panY: _galPanY };
+    }
   }, {passive:false});
+
   galCanvas.addEventListener('touchmove', e => {
     e.preventDefault();
-    if (!_galDrag) return;
-    const p = galGetPos(e);
-    galMoveDrag(p.x, p.y);
-  }, {passive:false});
-  galCanvas.addEventListener('touchend', e => { e.preventDefault(); endGalDrag(); }, {passive:false});
-
-  function galMoveDrag(px, py) {
-    if (!_galDrag || !_galImg) return;
-    const dx = galToImg(px - _galDrag.startX);
-    const dy = galToImg(py - _galDrag.startY);
-    const o  = _galDrag.orig;
-    const W = _galImg.naturalWidth, H = _galImg.naturalHeight;
-    const r  = {..._galRect};
-    if (_galDrag.handle === 'body') { r.x = o.x+dx; r.y = o.y+dy; }
-    else {
-      if (_galDrag.handle.includes('l')) { r.x = o.x+dx; r.w = o.w-dx; }
-      if (_galDrag.handle.includes('r')) { r.w = o.w+dx; }
-      if (_galDrag.handle.includes('t')) { r.y = o.y+dy; r.h = o.h-dy; }
-      if (_galDrag.handle.includes('b')) { r.h = o.h+dy; }
+    if (e.touches.length === 1 && _galDrag) {
+      const t = e.touches[0];
+      const r = galCanvas.getBoundingClientRect();
+      _galPanX = _galDrag.panX + (t.clientX - _galDrag.startX) * (galCanvas.width  / r.width);
+      _galPanY = _galDrag.panY + (t.clientY - _galDrag.startY) * (galCanvas.height / r.height);
+      _galClampPan(); drawGallery();
+    } else if (e.touches.length === 2 && _galPinch) {
+      const newDist = _galPinchDist(e);
+      const newZoom = Math.max(1, Math.min(8, _galPinch.zoom * newDist / _galPinch.dist));
+      // Zoom around pinch midpoint
+      _galPanX = _galPinch.midX - (_galPinch.midX - _galPinch.panX) * newZoom / _galPinch.zoom;
+      _galPanY = _galPinch.midY - (_galPinch.midY - _galPinch.panY) * newZoom / _galPinch.zoom;
+      _galZoom = newZoom;
+      _galClampPan(); drawGallery();
     }
-    if (r.w < 20) r.w = 20;
-    if (r.h < 20) r.h = 20;
-    if (r.x < 0) { r.w += r.x; r.x = 0; }
-    if (r.y < 0) { r.h += r.y; r.y = 0; }
-    if (r.x+r.w > W) r.w = W-r.x;
-    if (r.y+r.h > H) r.h = H-r.y;
-    _galRect = r;
-    drawGallery();
-  }
+  }, {passive:false});
 
-  function endGalDrag() {
-    if (_galDrag) { _galDrag = null; detectGallery(); }
-  }
+  galCanvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (e.touches.length === 0) {
+      const wasDragging = _galDrag || _galPinch;
+      _galDrag = null; _galPinch = null;
+      if (wasDragging) detectGallery();
+    } else if (e.touches.length === 1 && _galPinch) {
+      // Transition from pinch back to single-finger pan
+      _galPinch = null;
+      const t = e.touches[0];
+      _galDrag = { startX: t.clientX, startY: t.clientY, panX: _galPanX, panY: _galPanY };
+    }
+  }, {passive:false});
 
   function confirmGallery() {
     if (_galDetected && _targetInput) {
