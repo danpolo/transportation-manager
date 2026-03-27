@@ -5578,7 +5578,7 @@
             <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> ${Lang.T('הצג ריקות בלבד', 'Solo vacías')}
           </label>
           <label class="sr-empty-label">
-            <label class="modern-check"><input type="checkbox" id="sr-external-check"><span class="modern-check-box"></span></label> ${Lang.T('כולל חיצוני', 'Incluir externo')}
+            <label class="modern-check"><input type="checkbox" id="sr-external-check"><span class="modern-check-box"></span></label> <span id="sr-external-label"></span>
           </label>
         </div>
         <div style="padding:4px 0 2px;">
@@ -6918,6 +6918,12 @@
 
     Router.register('search', {
       onShow() {
+        // Update off-map label from settings
+        const extLabel = document.getElementById('sr-external-label');
+        if (extLabel) {
+          const offMapWord = DB.getMetadata().offMapLabel || 'חיצוני';
+          extLabel.textContent = Lang.T(`כולל ${offMapWord}`, `Incluir ${offMapWord}`);
+        }
         buildSuggestionPool();
         renderTypeFilter();
         updateActionsBar();
@@ -6939,7 +6945,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v89</span>
+        <span class="version-badge">v90</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
