@@ -4615,7 +4615,11 @@
       onShow({ cartId, floorItemId } = {}) {
         if (cartId) {
           setMode('cart');
-          setTimeout(() => _cartRef.setValue(cartId), 50);
+          setTimeout(() => {
+            _cartRef.setValue(cartId);
+            const cart = DB.getCart(cartId);
+            if (cart) showSharedFields(cart, 'cart');
+          }, 50);
         } else if (floorItemId) {
           setMode('floor');
           setTimeout(() => {
@@ -6963,7 +6967,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v101</span>
+        <span class="version-badge">v102</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
