@@ -6914,7 +6914,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v80</span>
+        <span class="version-badge">v81</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
@@ -8538,7 +8538,7 @@ const BarcodeScanner = (() => {
       ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
       ctx.fillText(_galDetected, galCanvas.width/2, galCanvas.height-30);
       ctx.font='12px sans-serif'; ctx.fillStyle='rgba(255,255,255,.7)';
-      ctx.fillText('הקש לאישור', galCanvas.width/2, galCanvas.height-12);
+      ctx.fillText('הקש פעמיים לאישור', galCanvas.width/2, galCanvas.height-12);
     }
   }
 
@@ -8578,11 +8578,19 @@ const BarcodeScanner = (() => {
     return { x: src.clientX-r.left, y: src.clientY-r.top };
   }
 
+  let _galLastTap = 0;
+  function _isDoubleTap() {
+    const now = Date.now();
+    const dt = now - _galLastTap;
+    _galLastTap = now;
+    return dt < 350;
+  }
+
   galCanvas.addEventListener('mousedown', e => {
     const p = galGetPos(e);
     const hit = galHitCorner(p.x, p.y);
     if (hit) { _galDrag = { handle: hit, startX: p.x, startY: p.y, orig: {..._galRect} }; return; }
-    if (_galDetected) { confirmGallery(); }
+    if (_galDetected && _isDoubleTap()) { confirmGallery(); }
   });
   galCanvas.addEventListener('mousemove', e => {
     if (!_galDrag) return;
@@ -8595,8 +8603,8 @@ const BarcodeScanner = (() => {
     e.preventDefault();
     const p = galGetPos(e);
     const hit = galHitCorner(p.x, p.y);
-    if (hit) { _galDrag = { handle: hit, startX: p.x, startY: p.y, orig: {..._galRect} }; }
-    else if (_galDetected) { confirmGallery(); }
+    if (hit) { _galDrag = { handle: hit, startX: p.x, startY: p.y, orig: {..._galRect} }; return; }
+    if (_galDetected && _isDoubleTap()) { confirmGallery(); }
   }, {passive:false});
   galCanvas.addEventListener('touchmove', e => {
     e.preventDefault();
