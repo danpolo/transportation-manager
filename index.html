@@ -2626,17 +2626,25 @@
   }
 
   // ── Bottom Nav ──
+  const Lang = (() => {
+    let _l = localStorage.getItem('shinua-lang') || 'he';
+    function T(he, es) { return _l === 'es' ? es : he; }
+    function get() { return _l; }
+    function set(l) { _l = l; localStorage.setItem('shinua-lang', l); }
+    return { T, get, set };
+  })();
+
   const BottomNav = {
-    items: [
-      { screen: 'main',       icon: '📍', label: 'מיפוי' },
-      { screen: 'search',     icon: '🔍', label: 'חיפוש' },
-      { screen: 'transfer',   icon: '🔄', label: 'העברה' },
-      { screen: 'loadunload', icon: '📦', label: 'העמסה' },
-      { screen: 'edit',       icon: '✏️',  label: 'עריכה' },
-    ],
     render() {
       const nav = document.getElementById('bottom-nav');
-      nav.innerHTML = this.items.map(item => `
+      const items = [
+        { screen: 'main',       icon: '📍', label: Lang.T('מיפוי', 'Mapeo') },
+        { screen: 'search',     icon: '🔍', label: Lang.T('חיפוש', 'Búsqueda') },
+        { screen: 'transfer',   icon: '🔄', label: Lang.T('העברה', 'Traslado') },
+        { screen: 'loadunload', icon: '📦', label: Lang.T('העמסה', 'Carga') },
+        { screen: 'edit',       icon: '✏️',  label: Lang.T('עריכה', 'Edición') },
+      ];
+      nav.innerHTML = items.map(item => `
         <button class="nav-item" data-screen="${item.screen}" aria-label="${item.label}">
           <span class="nav-icon">${item.icon}</span>
           <span>${item.label}</span>
@@ -2867,14 +2875,14 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">✏️</span>
-        <h1>עריכת נתונים</h1>
-        <button class="undo-btn" title="בטל פעולה">↩</button>
-        <button class="help-btn" data-screen="edit" title="עזרה">❓</button>
+        <h1>${Lang.T('עריכת נתונים', 'Edición de datos')}</h1>
+        <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
+        <button class="help-btn" data-screen="edit" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
       </div>
       <div class="tabs">
-        <button class="tab-btn active" data-tab="carts">עגלות</button>
-        <button class="tab-btn" data-tab="locations">מיקומים</button>
-        <button class="tab-btn" data-tab="properties">מאפיינים</button>
+        <button class="tab-btn active" data-tab="carts">${Lang.T('עגלות', 'Carretas')}</button>
+        <button class="tab-btn" data-tab="locations">${Lang.T('מיקומים', 'Ubicaciones')}</button>
+        <button class="tab-btn" data-tab="properties">${Lang.T('מאפיינים', 'Atributos')}</button>
       </div>
       <div id="edit-tab-content"></div>
     `;
@@ -4102,9 +4110,9 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">🔄</span>
-        <h1>העברה / פריטים</h1>
-        <button class="undo-btn" title="בטל פעולה">↩</button>
-        <button class="help-btn" data-screen="transfer" title="עזרה">❓</button>
+        <h1>${Lang.T('העברה / פריטים', 'Traslado / Ítems')}</h1>
+        <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
+        <button class="help-btn" data-screen="transfer" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
       </div>
       <div class="p-screen">
         <div class="form-group">
@@ -4646,16 +4654,16 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📦</span>
-        <h1>העמסה / פירוק</h1>
-        <button class="undo-btn" title="בטל פעולה">↩</button>
-        <button class="help-btn" data-screen="loadunload" title="עזרה">❓</button>
+        <h1>${Lang.T('העמסה / פירוק', 'Carga / Descarga')}</h1>
+        <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
+        <button class="help-btn" data-screen="loadunload" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
       </div>
       <div class="p-screen">
         <div class="form-group">
           <div class="pill-toggle" id="lu-op-toggle">
-            <button class="active" data-op="load">העמסה</button>
-            <button data-op="container">משטח על עגלה</button>
-            <button data-op="unload">פירוק</button>
+            <button class="active" data-op="load">${Lang.T('העמסה', 'Carga')}</button>
+            <button data-op="container">${Lang.T('משטח על עגלה', 'Palé en carreta')}</button>
+            <button data-op="unload">${Lang.T('פירוק', 'Descarga')}</button>
           </div>
         </div>
 
@@ -5547,9 +5555,9 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">🔍</span>
-        <h1>חיפוש</h1>
-        <button class="undo-btn" title="בטל פעולה">↩</button>
-        <button class="help-btn" data-screen="search" title="עזרה">❓</button>
+        <h1>${Lang.T('חיפוש', 'Búsqueda')}</h1>
+        <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
+        <button class="help-btn" data-screen="search" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
       </div>
       <div id="sr-collapse-bar" class="sr-collapse-bar" style="display:none">
         <span class="sr-collapse-summary" id="sr-collapse-summary"></span>
@@ -5572,17 +5580,17 @@
         </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0;">
           <label class="sr-empty-label">
-            <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> הצג ריקות בלבד
+            <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> ${Lang.T('הצג ריקות בלבד', 'Solo vacías')}
           </label>
           <label class="sr-empty-label">
-            <label class="modern-check"><input type="checkbox" id="sr-external-check"><span class="modern-check-box"></span></label> כולל חיצוני
+            <label class="modern-check"><input type="checkbox" id="sr-external-check"><span class="modern-check-box"></span></label> ${Lang.T('כולל חיצוני', 'Incluir externo')}
           </label>
         </div>
         <div style="padding:4px 0 2px;">
           <div class="pill-toggle" id="sr-damaged-toggle" style="width:auto;display:inline-flex;">
-            <button class="active" data-dmg="all">הכל</button>
-            <button data-dmg="ok">תקין</button>
-            <button data-dmg="damaged">תקול</button>
+            <button class="active" data-dmg="all">${Lang.T('הכל', 'Todo')}</button>
+            <button data-dmg="ok">${Lang.T('תקין', 'OK')}</button>
+            <button data-dmg="damaged">${Lang.T('תקול', 'Roto')}</button>
           </div>
         </div>
       </div>
@@ -6935,82 +6943,59 @@
     screen.innerHTML = `
       <div class="screen-header">
         <span class="header-icon">📍</span>
-        <h1>מיפוי</h1>
-        <span class="version-badge">v86</span>
-        <button class="undo-btn" title="בטל פעולה">↩</button>
-        <button class="help-btn" data-screen="main" title="עזרה">❓</button>
+        <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
+        <span class="version-badge">v87</span>
+        <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
+        <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
+        <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
       <div class="p-screen">
         <button class="hero-btn" id="main-export">
           <div class="hero-btn-icon" style="background:var(--area-bg);color:var(--brand);">📤</div>
           <div class="hero-btn-body">
-            <div class="hero-btn-title">ייצוא נתונים</div>
-            <div class="hero-btn-sub">העתק גיבוי ללוח</div>
+            <div class="hero-btn-title">${Lang.T('ייצוא נתונים', 'Exportar datos')}</div>
+            <div class="hero-btn-sub">${Lang.T('העתק גיבוי ללוח', 'Copiar respaldo al portapapeles')}</div>
           </div>
         </button>
 
         <button class="hero-btn" id="main-import">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--success) 12%, var(--card));color:var(--success);">📥</div>
           <div class="hero-btn-body">
-            <div class="hero-btn-title">ייבוא נתונים</div>
-            <div class="hero-btn-sub">הדבק טקסט גיבוי</div>
+            <div class="hero-btn-title">${Lang.T('ייבוא נתונים', 'Importar datos')}</div>
+            <div class="hero-btn-sub">${Lang.T('הדבק טקסט גיבוי', 'Pegar texto de respaldo')}</div>
           </div>
         </button>
 
-        <button class="hero-btn" id="main-map">
+        <button class="hero-btn" id="main-map-action">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--focus) 15%, var(--card));color:var(--focus);">🗺️</div>
           <div class="hero-btn-body">
-            <div class="hero-btn-title">יצירת מיפוי</div>
-            <div class="hero-btn-sub">העתק מפת מיקומים ללוח</div>
-          </div>
-        </button>
-
-        <button class="hero-btn" id="main-map-edit">
-          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--focus) 12%, var(--card));color:var(--focus);">📝</div>
-          <div class="hero-btn-body">
-            <div class="hero-btn-title">עריכת מיפוי</div>
-            <div class="hero-btn-sub">ערוך את המיפוי כטקסט ושמור</div>
+            <div class="hero-btn-title">${Lang.T('מיפוי', 'Mapeo')}</div>
+            <div class="hero-btn-sub">${Lang.T('צור, ערוך ושתף מפת מיקומים', 'Crear, editar y compartir mapa')}</div>
           </div>
         </button>
 
         <button class="hero-btn" id="main-map-import">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--brand-2) 15%, var(--card));color:var(--brand-2);">📋</div>
           <div class="hero-btn-body">
-            <div class="hero-btn-title">ייבוא מיפוי</div>
-            <div class="hero-btn-sub">הדבק טקסט מיפוי ומזג לנתונים</div>
+            <div class="hero-btn-title">${Lang.T('ייבוא מיפוי', 'Importar mapa')}</div>
+            <div class="hero-btn-sub">${Lang.T('הדבק טקסט מיפוי ומזג לנתונים', 'Pegar texto del mapa y fusionar')}</div>
           </div>
         </button>
 
         <button class="hero-btn" id="main-movements-update">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--brand-2) 12%, var(--card));color:var(--brand-2);">📲</div>
           <div class="hero-btn-body">
-            <div class="hero-btn-title">עדכון תנועות</div>
-            <div class="hero-btn-sub">עדכן מיקומים מהודעות WhatsApp</div>
+            <div class="hero-btn-title">${Lang.T('עדכון תנועות', 'Actualizar traslados')}</div>
+            <div class="hero-btn-sub">${Lang.T('עדכן מיקומים מהודעות WhatsApp', 'Actualizar ubicaciones de WhatsApp')}</div>
           </div>
         </button>
 
-        <button class="hero-btn" id="main-offmap">
-          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--success) 10%, var(--card));color:var(--success);">🗄️</div>
-          <div class="hero-btn-body">
-            <div class="hero-btn-title" id="main-offmap-title">מיפוי חיצוני</div>
-            <div class="hero-btn-sub">מפת מיקומים שאינם בעמוד המיפוי</div>
-          </div>
-        </button>
-
-        <button class="hero-btn" id="main-clear-items" style="margin-top:24px">
-          <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--warning, #f59e0b) 12%, var(--card));color:var(--warning, #f59e0b);">🧹</div>
-          <div class="hero-btn-body">
-            <div class="hero-btn-title">מחיקת נתוני פריטים</div>
-            <div class="hero-btn-sub">מחיקת פריטים בלבד - ההגדרות נשמרות</div>
-          </div>
-        </button>
-
-        <button class="hero-btn" id="main-delete-all" style="margin-top:8px">
+        <button class="hero-btn" id="main-delete">
           <div class="hero-btn-icon" style="background:color-mix(in srgb, var(--danger) 12%, var(--card));color:var(--danger);">🗑️</div>
           <div class="hero-btn-body">
-            <div class="hero-btn-title">מחיקת כל הנתונים</div>
-            <div class="hero-btn-sub">איפוס מלא של המידע המקומי</div>
+            <div class="hero-btn-title">${Lang.T('מחיקת נתונים', 'Eliminar datos')}</div>
+            <div class="hero-btn-sub">${Lang.T('מחק פריטים או איפוס מלא', 'Eliminar ítems o reinicio completo')}</div>
           </div>
         </button>
 
@@ -7019,7 +7004,16 @@
 
     // set dynamic off-map label
     const _offMapLabel = () => DB.getMetadata().offMapLabel || 'חיצוני';
-    screen.querySelector('#main-offmap-title').textContent = `מיפוי ${_offMapLabel()}`;
+
+    // language toggle
+    const langBtn = screen.querySelector('#lang-toggle');
+    langBtn.textContent = Lang.get() === 'he' ? '🇮🇱' : '🇨🇱';
+    langBtn.addEventListener('click', () => {
+      Lang.set(Lang.get() === 'he' ? 'es' : 'he');
+      initEdit(); initTransfer(); initLoadUnload(); initSearch(); initMain();
+      BottomNav.render();
+      Router.navigate(Router.getCurrent() || 'main');
+    });
 
     // export — copy + WhatsApp
     screen.querySelector('#main-export').addEventListener('click', async () => {
@@ -7072,26 +7066,8 @@
       });
     });
 
-    // map
-    screen.querySelector('#main-map').addEventListener('click', () => {
-      const raw = DB.load();
-      const mapText = Utils.generateMapText(raw);
-      Utils.copyToClipboard(mapText)
-        .then(() => Toast.show('מיפוי הועתק ללוח', 'success'))
-        .catch(() => {
-          // fallback: show in modal
-          Modal.open({
-            title: 'מיפוי',
-            html: `<pre style="font-size:0.82rem;white-space:pre-wrap;word-break:break-word;direction:rtl;text-align:right">${mapText}</pre>`,
-            actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
-          });
-        });
-    });
-
-    // map edit — open map text in editable textarea, save = replace all via map import
-    screen.querySelector('#main-map-edit').addEventListener('click', () => {
-      const raw = DB.load();
-      const mapText = Utils.generateMapText(raw);
+    // map action — choose type then copy + open edit modal
+    function _openMapEditModal(mapText) {
       Modal.open({
         title: 'עריכת מיפוי',
         html: `
@@ -7133,6 +7109,37 @@
           }},
           { id: 'cancel', label: 'ביטול', onClick: Modal.close }
         ]
+      });
+    }
+
+    screen.querySelector('#main-map-action').addEventListener('click', () => {
+      const label = _offMapLabel();
+      Modal.open({
+        title: 'מיפוי — בחר סוג',
+        html: `
+          <div style="display:flex;gap:12px;margin-top:8px;">
+            <button id="map-choice-regular" class="btn btn-primary btn-full" style="font-size:1.1rem;padding:18px 8px;">רגיל</button>
+            <button id="map-choice-offmap" class="btn btn-outline btn-full" style="font-size:1.1rem;padding:18px 8px;">${esc(label)}</button>
+          </div>
+        `,
+        actions: []
+      });
+      const overlay = document.getElementById('modal-overlay');
+      overlay.querySelector('#map-choice-regular').addEventListener('click', () => {
+        Modal.close();
+        const raw = DB.load();
+        const mapText = Utils.generateMapText(raw);
+        Utils.copyToClipboard(mapText).catch(() => {});
+        Toast.show('מיפוי הועתק ללוח', 'success');
+        _openMapEditModal(mapText);
+      });
+      overlay.querySelector('#map-choice-offmap').addEventListener('click', () => {
+        Modal.close();
+        const raw = DB.load();
+        const mapText = Utils.generateOffMapText(raw, label);
+        Utils.copyToClipboard(mapText).catch(() => {});
+        Toast.show(`מיפוי ${label} הועתק ללוח`, 'success');
+        _openMapEditModal(mapText);
       });
     });
 
@@ -7912,37 +7919,62 @@
       }
     }
 
-    // clear items only (keep settings)
-    screen.querySelector('#main-clear-items').addEventListener('click', () => {
+    // consolidated delete button — choose items-only or full reset
+    screen.querySelector('#main-delete').addEventListener('click', () => {
       Modal.open({
-        title: 'מחיקת נתוני פריטים',
-        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל הפריטים.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי עגלות <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
-        actions: [
-          { id: 'confirm-clear-items', label: 'מחק פריטים', cls: 'btn-danger', onClick: () => {
-            DB.clearItemsOnly();
-            Modal.close();
-            Toast.show('נתוני הפריטים נמחקו', 'success');
-            Router.navigate('main');
-          }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
-        ]
+        title: 'מחיקת נתונים',
+        html: `
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+            <button id="del-choice-items" class="btn btn-outline btn-full" style="padding:14px 8px;">🧹 פריטים בלבד<br><small style="color:var(--muted);font-weight:400">מיקומים ומאפיינים נשמרים</small></button>
+            <button id="del-choice-all" class="btn btn-outline btn-full" style="padding:14px 8px;border-color:var(--danger);color:var(--danger);">🗑️ מחק הכל<br><small style="font-weight:400">איפוס מלא — אין שחזור</small></button>
+            <button id="del-choice-cancel" class="btn btn-outline btn-full">ביטול</button>
+          </div>
+        `,
+        actions: []
       });
-    });
-
-    // delete all data
-    screen.querySelector('#main-delete-all').addEventListener('click', () => {
-      Modal.open({
-        title: 'מחיקת כל הנתונים',
-        html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל העגלות, פריטי הרצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
-        actions: [
-          { id: 'confirm-delete', label: 'מחק הכל', cls: 'btn-danger', onClick: () => {
-            DB.clear();
-            Modal.close();
-            Toast.show('כל הנתונים נמחקו', 'success');
-            Router.navigate('main');
-          }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
-        ]
+      const overlay = document.getElementById('modal-overlay');
+      overlay.querySelector('#del-choice-cancel').addEventListener('click', Modal.close);
+      overlay.querySelector('#del-choice-items').addEventListener('click', () => {
+        Modal.close();
+        Modal.open({
+          title: 'מחיקת נתוני פריטים',
+          html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל הפריטים.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי עגלות <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
+          actions: [
+            { id: 'confirm-clear-items', label: 'מחק פריטים', cls: 'btn-danger', onClick: () => {
+              DB.clearItemsOnly();
+              Modal.close();
+              Toast.show('נתוני הפריטים נמחקו', 'success');
+              Router.navigate('main');
+            }},
+            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          ]
+        });
+      });
+      overlay.querySelector('#del-choice-all').addEventListener('click', () => {
+        Modal.close();
+        Modal.open({
+          title: 'מחיקת כל הנתונים',
+          html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל העגלות, פריטי הרצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
+          actions: [
+            { id: 'confirm-delete-all', label: 'מחק הכל — אני בטוח', cls: 'btn-danger', onClick: () => {
+              Modal.close();
+              Modal.open({
+                title: 'אישור סופי',
+                html: '<p style="margin-bottom:8px;color:var(--danger)"><strong>פעולה בלתי הפיכה!</strong><br>כל הנתונים יימחקו לצמיתות.<br>להמשיך?</p>',
+                actions: [
+                  { id: 'final-confirm', label: 'כן, מחק הכל', cls: 'btn-danger', onClick: () => {
+                    DB.clear();
+                    Modal.close();
+                    Toast.show('כל הנתונים נמחקו', 'success');
+                    Router.navigate('main');
+                  }},
+                  { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                ]
+              });
+            }},
+            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          ]
+        });
       });
     });
 
@@ -8118,27 +8150,6 @@
       return results;
     }
 
-    // ── מיפוי חיצוני ────────────────────────────────────────────
-    screen.querySelector('#main-offmap').addEventListener('click', () => {
-      const raw = DB.load();
-      const label = _offMapLabel();
-      const mapText = Utils.generateOffMapText(raw, label);
-      Utils.copyToClipboard(mapText)
-        .then(() => Toast.show(`מיפוי ${label} הועתק ללוח`, 'success'))
-        .catch(() => {
-          Modal.open({
-            title: `מיפוי ${label}`,
-            html: `<pre style="font-size:0.82rem;white-space:pre-wrap;word-break:break-word;direction:rtl;text-align:right">${esc(mapText)}</pre>`,
-            actions: [
-              { id: 'copy-offmap', label: 'העתק', cls: 'btn-outline', onClick: () => {
-                Utils.copyToClipboard(mapText).then(() => Toast.show('הועתק', 'success'));
-              }},
-              { id: 'close', label: 'סגור', onClick: Modal.close }
-            ]
-          });
-        });
-    });
-
     // ── Pull-to-refresh ─────────────────────────────────────────
     const ptrIndicator = document.createElement('div');
     ptrIndicator.className = 'ptr-indicator';
@@ -8249,17 +8260,20 @@
 
   const HelpContent = {
     main: {
-      title: '❓ מסך מיפוי — עזרה',
+      title: '❓ מסך ראשי — עזרה',
       html: `
-        ${_sec('איך משתמשים?', `
-          ${_h('1️⃣', 'כאן רואים את כל העגלות ופריטי הרצפה, מסודרים לפי מיקום.')}
-          ${_h('2️⃣', 'כל כרטיס מציג את תוכן העגלה — כמות פריטים, מאפיינים והערות.')}
-          ${_h('3️⃣', 'לחץ על סמל העיפרון ✏️ בכרטיס כדי לערוך את פרטי העגלה.')}
+        ${_sec('כפתורי המסך הראשי', `
+          ${_h('📤', '<b>ייצוא נתונים</b> — מייצר גיבוי מלא של כל הנתונים ומעתיק ללוח.')}
+          ${_h('📥', '<b>ייבוא נתונים</b> — הדבק טקסט גיבוי שיוצא קודם לכן — הנתונים יתמזגו.')}
+          ${_h('🗺️', '<b>מיפוי</b> — יוצר מפת מיקומים, מעתיק ללוח ופותח עורך טקסט לעריכה ושמירה. בחר "רגיל" לפריטים שבמפה, או "חיצוני" לפריטים שאינם בעמוד המפה. לאחר הבחירה המיפוי מועתק ונפתח לעריכה — שנה ולחץ שמור.')}
+          ${_h('📋', '<b>ייבוא מיפוי</b> — הדבק טקסט מיפוי שהועתק בעבר ומזג לנתונים הקיימים.')}
+          ${_h('📲', '<b>עדכון תנועות</b> — הדבק הודעות WhatsApp שנשלחו מהאפליקציה ועדכן מיקומי עגלות אוטומטית.')}
+          ${_h('🗑️', '<b>מחיקת נתונים</b> — בחר "פריטים בלבד" למחיקת עגלות ופריטי רצפה (מיקומים ומאפיינים נשמרים), או "מחק הכל" לאיפוס מלא עם אישור כפול.')}
         `)}
-        ${_sec('פיצ\'רים', `
-          ${_h('✏️', '<b>עריכת עגלה</b> — עדכן כמות, מספרים סידוריים, מאפיינים או הערה ישירות מהכרטיס.')}
+        ${_sec('כלים נוספים', `
           ${_h('↩', '<b>ביטול פעולה</b> — לחץ ↩ בראש המסך לביטול הפעולה האחרונה.')}
-          ${_h('🌙', '<b>מצב לילה</b> — לחץ על כפתור הירח/שמש לשינוי ערכת הצבעים.')}
+          ${_h('🌙', '<b>מצב לילה</b> — לחץ על הכפתור הימני לשינוי ערכת הצבעים.')}
+          ${_h('🇮🇱/🇨🇱', '<b>שפה</b> — לחץ על דגל השפה לעבור בין עברית וספרדית.')}
         `)}
       `
     },
