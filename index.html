@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v94</span>
+        <span class="version-badge">v95</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7555,13 +7555,23 @@
 
     // Extract parenthesized text from rawProps as a comment; return [cleanedRaw, parenComment]
     // If the inner text matches a known property option/alias it is kept in rawProps (without parens).
+    // Works even when the option itself is defined with surrounding parens, e.g. "(כנף)".
     function _extractParenComment(raw, propDefs) {
-      const knownOptions = new Set();
+      // Map: lowercased inner text → canonical option string to restore in rawProps
+      const innerToCanonical = {};
       for (const prop of (propDefs || [])) {
         for (const opt of (prop.options || [])) {
-          knownOptions.add(opt.toLowerCase());
+          innerToCanonical[opt.toLowerCase()] = opt;
+          // If the option is itself wrapped in parens, also register the bare inner text
+          const bare = opt.replace(/^\((.+)\)$/, '$1').trim().toLowerCase();
+          if (bare && !innerToCanonical[bare]) innerToCanonical[bare] = opt;
           for (const alias of ((prop.aliases && prop.aliases[opt]) || [])) {
-            if (alias.trim()) knownOptions.add(alias.trim().toLowerCase());
+            const a = alias.trim();
+            if (a) {
+              innerToCanonical[a.toLowerCase()] = opt;
+              const aBare = a.replace(/^\((.+)\)$/, '$1').trim().toLowerCase();
+              if (aBare && !innerToCanonical[aBare]) innerToCanonical[aBare] = opt;
+            }
           }
         }
       }
@@ -7569,7 +7579,8 @@
       const cleaned = (raw || '').replace(/\(([^)]*)\)/g, (_, inner) => {
         const trimmed = inner.trim();
         if (!trimmed) return '';
-        if (knownOptions.has(trimmed.toLowerCase())) return ' ' + trimmed + ' ';
+        const canonical = innerToCanonical[trimmed.toLowerCase()];
+        if (canonical !== undefined) return ' ' + canonical + ' ';
         comments.push(trimmed);
         return '';
       }).replace(/\s+/g, ' ').trim();
