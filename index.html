@@ -112,13 +112,8 @@
 
     .screen {
       min-height: 100%; display: flex; flex-direction: column;
-      opacity: 0; transform: translateY(6px);
-      animation: screenIn 0.2s ease forwards;
     }
     .screen[hidden] { display: none !important; }
-    @keyframes screenIn {
-      to { opacity: 1; transform: translateY(0); }
-    }
 
     /* ─── Screen Header ─── */
     .screen-header {
@@ -5606,7 +5601,7 @@
         <button id="sr-laizko" class="btn btn-sm btn-outline">לאיצקו</button>
       </div>
       <div id="sr-summary" hidden></div>
-      <div id="sr-results"></div>
+      <div id="sr-results" style="padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 12px)"></div>
     `;
 
     // ── State ──────────────────────────────────────────────
@@ -6944,7 +6939,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v88</span>
+        <span class="version-badge">v89</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7014,6 +7009,10 @@
       BottomNav.render();
       Router.navigate(Router.getCurrent() || 'main');
     });
+
+    // version badge — re-wire here so it survives language re-init
+    const vBadge = screen.querySelector('.version-badge');
+    if (vBadge) vBadge.addEventListener('click', () => location.reload());
 
     // theme toggle — re-wire here so it survives language re-init
     const themeBtn = screen.querySelector('#theme-toggle');
@@ -8387,9 +8386,7 @@
     initSearch();
     initMain();
 
-    // Version badge: tap to reload (picks up latest version)
-    const vBadge = document.querySelector('.version-badge');
-    if (vBadge) vBadge.addEventListener('click', () => location.reload());
+    // (version badge listener wired inside initMain to survive re-init)
 
     // Global undo button handler
     document.addEventListener('click', e => {
@@ -8422,7 +8419,7 @@
       const screen = btn.dataset.screen;
       const content = HelpContent[screen];
       if (!content) return;
-      Modal.open({ title: content.title, html: content.html, actions: [{ label: 'סגור', onClick: Modal.close }] });
+      Modal.open({ title: content.title, html: content.html, actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }] });
     });
 
     // Navigate to initial screen
