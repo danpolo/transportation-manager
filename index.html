@@ -6092,7 +6092,9 @@
 
     function _isDamaged(item) {
       const props = item.properties || {};
-      return Object.values(props).some(v => v && String(v).includes('❌'));
+      if (Object.values(props).some(v => v && String(v).includes('❌'))) return true;
+      if (item.comment && String(item.comment).includes('❌')) return true;
+      return false;
     }
 
     function itemPasses(item) {
@@ -6912,7 +6914,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v79</span>
+        <span class="version-badge">v80</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
