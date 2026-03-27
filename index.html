@@ -6821,18 +6821,33 @@
               Modal.close();
               const fiEdit = DB.getFloorItem(id);
               if (!fiEdit) return;
+              const propDefs = DB.getMetadata().properties || [];
+              const propFieldsHtml = propDefs.map(p => {
+                const opts = (p.options || []).map(o => `<option value="${esc(o)}"${(fiEdit.properties || {})[p.name] === o ? ' selected' : ''}></option>`).join('');
+                return `<div class="form-group"><label class="form-label">${esc(p.name)}</label><input class="form-input fi-ep" data-prop="${esc(p.name)}" list="fi-dl-${esc(p.name)}" value="${esc((fiEdit.properties || {})[p.name] || '')}" autocomplete="off"><datalist id="fi-dl-${esc(p.name)}">${opts}</datalist></div>`;
+              }).join('');
+              const cnt = fiEdit.itemCount || 0;
+              const ids = fiEdit.itemIds || [];
+              const buildIdRows = (n, existing) => Array.from({length: n}, (_, i) =>
+                `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input fi-eid" placeholder="מספר סידורי" value="${esc(existing[i] || '')}"><button class="scan-btn" title="סרוק ברקוד">📷</button></div>`
+              ).join('');
               Modal.open({
                 title: 'עריכת פריטי רצפה',
                 html: `
-                  <div class="form-group"><label class="form-label">כמות</label><input id="fi-edit-count" class="form-input" type="number" min="0" value="${fiEdit.itemCount || 0}"></div>
+                  <div class="form-group"><label class="form-label">כמות</label><input id="fi-edit-count" class="form-input" type="number" min="0" value="${cnt}"></div>
+                  <div id="fi-edit-id-rows">${buildIdRows(Math.max(cnt, ids.length), ids)}</div>
+                  ${propFieldsHtml}
                   <div class="form-group"><label class="form-label">הערה</label><input id="fi-edit-comment" class="form-input" value="${esc(fiEdit.comment || '')}" placeholder="הערה"></div>
                 `,
                 actions: [
                   { id: 'fi-save', label: 'שמור', cls: 'btn-primary', onClick: () => {
                     const newCount = parseInt(document.getElementById('fi-edit-count').value) || 0;
+                    const newIds = [...document.querySelectorAll('.fi-eid')].map(i => i.value.trim()).filter(Boolean);
+                    const newProps = {};
+                    document.querySelectorAll('.fi-ep').forEach(i => { if (i.value.trim()) newProps[i.dataset.prop] = i.value.trim(); });
                     const newComment = (document.getElementById('fi-edit-comment').value || '').trim();
                     DB.upsertFloorItem({ location: fiEdit.location, subLocation: fiEdit.subLocation,
-                                         properties: fiEdit.properties, itemCount: newCount,
+                                         properties: newProps, itemIds: newIds, itemCount: newCount,
                                          isEmpty: newCount === 0, comment: newComment });
                     Modal.close();
                     renderResults();
@@ -6840,6 +6855,11 @@
                   }},
                   { id: 'fi-cancel', label: 'ביטול', onClick: Modal.close }
                 ]
+              });
+              document.getElementById('fi-edit-count').addEventListener('input', () => {
+                const n = parseInt(document.getElementById('fi-edit-count').value) || 0;
+                const existing = [...document.querySelectorAll('.fi-eid')].map(i => i.value);
+                document.getElementById('fi-edit-id-rows').innerHTML = buildIdRows(n, existing);
               });
             }},
             { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
@@ -6941,7 +6961,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v99</span>
+        <span class="version-badge">v100</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
