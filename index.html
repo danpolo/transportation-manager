@@ -6944,7 +6944,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v87</span>
+        <span class="version-badge">v88</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7014,6 +7014,13 @@
       BottomNav.render();
       Router.navigate(Router.getCurrent() || 'main');
     });
+
+    // theme toggle — re-wire here so it survives language re-init
+    const themeBtn = screen.querySelector('#theme-toggle');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', toggleTheme);
+      setTheme(document.body.getAttribute('data-theme') || 'light');
+    }
 
     // export — copy + WhatsApp
     screen.querySelector('#main-export').addEventListener('click', async () => {
@@ -8379,13 +8386,6 @@
     initLoadUnload();
     initSearch();
     initMain();
-
-    // Wire up theme toggle + sync button label (button didn't exist during initTheme)
-    const themeBtn = document.getElementById('theme-toggle');
-    if (themeBtn) {
-      themeBtn.addEventListener('click', toggleTheme);
-      setTheme(document.body.getAttribute('data-theme') || 'light');
-    }
 
     // Version badge: tap to reload (picks up latest version)
     const vBadge = document.querySelector('.version-badge');
