@@ -2531,6 +2531,15 @@
     return out;
   }
 
+  // WhatsApp location label: for non-inMap locations show only subLoc (not "main / sub")
+  function waMsgLoc(locName, subLoc) {
+    const loc = DB.getMetadata().locations.find(l => l.name === locName);
+    if (!loc) return subLoc || locName || '';
+    if (!loc.inMap && subLoc) return subLoc;
+    if (loc.showSubInWhatsapp && subLoc) return subLoc;
+    return locName || subLoc || '';
+  }
+
   function setupLocationFields(locInput, subGroup, subInput, sub2Group, sub2Input) {
     makeAutocomplete(locInput, locationSuggestions);
     makeAutocomplete(subInput, () => {
@@ -4438,12 +4447,8 @@
           });
           DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
         }
-        const fromLoc = DB.getMetadata().locations.find(l => l.name === _currentData.location);
-        const fromLabel = (fromLoc && fromLoc.showSubInWhatsapp)
-          ? (_currentData.subLocation || _currentData.location || '')
-          : (_currentData.location || '');
-        const toLoc = DB.getMetadata().locations.find(l => l.name === destLoc);
-        const toLabel = (toLoc && toLoc.showSubInWhatsapp) ? (destSubLoc || destLoc) : destLoc;
+        const fromLabel = waMsgLoc(_currentData.location, _currentData.subLocation);
+        const toLabel   = waMsgLoc(destLoc, destSubLoc);
         const _propDefs = DB.getMetadata().properties || [];
         const _ctName = containerName(_currentData);
         const isEmpty = !allSlots.some(s => s.itemCount > 0);
@@ -4469,7 +4474,12 @@
 
           if (hasSpecific) {
             _msgLines.push('היחידות יורדות בנקודות הבאות:');
-            Object.entries(itemDestMap).forEach(([id, dest]) => _msgLines.push(`${id} - ל"${dest}"`));
+            allSlots.filter(s => s.itemCount).forEach(s => {
+              (s.itemIds || []).forEach((id, i) => {
+                const d = (s.itemDests || [])[i] || toLabel || '?';
+                _msgLines.push(`${id} - ל"${d}"`);
+              });
+            });
             _msgLines.push(`${_ctName} נשארת ב"${toLabel || '?'}"`);
           } else {
             if (fromLabel || toLabel) _msgLines.push(`מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`);
@@ -4506,8 +4516,8 @@
                              properties: _currentData.properties, isEmpty: false });
 
         const propStr = Utils.orderedPropValues(_currentData.properties, DB.getMetadata().properties || []);
-        const floorFrom = _currentData.subLocation || _currentData.location || '?';
-        const floorTo   = destSubLoc || destLoc;
+        const floorFrom = waMsgLoc(_currentData.location, _currentData.subLocation);
+        const floorTo   = waMsgLoc(destLoc, destSubLoc);
         const serialStr = serials.length ? '\n' + serials.join('\n') : '';
         msg = `על משטח ${moveCount} ${propStr}\nמ${floorFrom} ל${floorTo}${serialStr}`.trim();
         Toast.show(moveCount + ' פריטי רצפה הועברו', 'success');
@@ -5349,7 +5359,7 @@
           ? '' : screen.querySelector('#lu-load-move-dest-subloc2').value.trim();
         const moveDestSubloc = (_mSub1 && _mSub2) ? `${_mSub1}/${_mSub2}` : _mSub1;
         DB.upsertCart({ cartId: destCartId, location: moveDest, subLocation: moveDestSubloc });
-        msg += '\nמועברת ל' + moveDest;
+        msg += '\nמועברת ל' + waMsgLoc(moveDest, moveDestSubloc);
       }
       screen.querySelector('#lu-dest-cart').value = '';
       screen.querySelector('#lu-load-move-dest').value = '';
@@ -5412,8 +5422,7 @@
                       extraItems: newExtras });
 
       const label = msgCartLabel(_srcCart);
-      const toLoc2 = DB.getMetadata().locations.find(l => l.name === destLoc);
-      const unloadDest = (toLoc2 && toLoc2.showSubInWhatsapp) ? (destSubLoc || destLoc) : destLoc;
+      const unloadDest = waMsgLoc(destLoc, destSubLoc);
       const msg   = [`${containerName(_srcCart)} ${label}`, ...msgParts, `פורקו ל${unloadDest}`].join('\n');
       Toast.show('פריטים פורקו לרצפה', 'success');
 
@@ -6828,7 +6837,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v75</span>
+        <span class="version-badge">v76</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
