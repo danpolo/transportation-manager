@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v95</span>
+        <span class="version-badge">v96</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7277,7 +7277,7 @@
       const rowsHtml = unmatchedItems.map(item =>
         `<div style="margin-bottom:10px;padding:8px;background:var(--surface2,#f0f0f0);border-radius:6px">
           <div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px">${esc(item.label)} — ${item.itemCount} יח׳</div>
-          <input data-fi-id="${esc(item.fiId)}" value="${esc(item.rawProps)}"
+          <input data-fi-id="${esc(item.fiId)}" data-fixed-comment="${esc(item.fixedComment || '')}" value="${esc(item.rawProps)}"
             style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:0.9rem;direction:rtl;box-sizing:border-box" />
         </div>`
       ).join('');
@@ -7297,10 +7297,13 @@
               const fi = importedDb.floorItems[inp.dataset.fiId];
               if (!fi) return;
               const newRaw = inp.value.trim();
-              const newProps = _matchProps(newRaw, propDefs);
-              delete newProps['_unmatched'];
-              if (newRaw && !Object.values(newProps).some(v => v)) newProps['_unmatched'] = newRaw;
+              const [cleanNewRaw, newParenCmt] = _extractParenComment(newRaw, propDefs);
+              const newProps = _matchProps(cleanNewRaw, propDefs);
+              const newUnmatched = newProps._unmatchedComment || '';
+              delete newProps._unmatchedComment;
               fi.properties = newProps;
+              const fixedCmt = inp.dataset.fixedComment || '';
+              fi.comment = [fixedCmt, newParenCmt, newUnmatched].filter(Boolean).join(' ') || undefined;
             });
             Modal.close();
             onProceed();
@@ -7752,14 +7755,13 @@
             delete props._unmatchedComment;
             const hasMatch = Object.values(props).some(v => v);
             const fiId = 'fi_' + (nowMs + fiCounter);
+            const fixedComment = [entry.comment, floorParenCmt].filter(Boolean).join(' ');
             if (cleanFloorRaw && (!hasMatch || unmatchedComment)) {
               const locLabel = locName + (subLoc ? ' / ' + subLoc : '');
-              unmatchedFloorLines.push({ fiId, label: locLabel, rawProps: cleanFloorRaw, itemCount: entry.itemCount });
-              // For fully-unmatched, keep rawProps as discriminator for round-trip
-              if (!hasMatch) props['_unmatched'] = cleanFloorRaw;
+              unmatchedFloorLines.push({ fiId, label: locLabel, rawProps: cleanFloorRaw, itemCount: entry.itemCount, fixedComment });
             }
             fiCounter++;
-            const fiComment = [entry.comment, floorParenCmt, unmatchedComment].filter(Boolean).join(' ') || undefined;
+            const fiComment = [fixedComment, unmatchedComment].filter(Boolean).join(' ') || undefined;
             floorItems[fiId] = {
               id: fiId, location: locName, subLocation: subLoc,
               itemCount: entry.itemCount, itemIds: [],
