@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v98</span>
+        <span class="version-badge">v99</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8501,11 +8501,11 @@
       <defs>
         <mask id="scan-mask">
           <rect width="100" height="100" fill="white"/>
-          <rect id="scan-hole" x="10" y="35" width="80" height="30" rx="2" fill="black"/>
+          <rect id="scan-hole" x="10" y="43" width="80" height="14" rx="2" fill="black"/>
         </mask>
       </defs>
       <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#scan-mask)"/>
-      <rect id="scan-frame" x="10" y="35" width="80" height="30" rx="2" fill="none" stroke="#fff" stroke-width="0.5"/>
+      <rect id="scan-frame" x="10" y="43" width="80" height="14" rx="2" fill="none" stroke="#fff" stroke-width="0.5"/>
     </svg>
     <div id="scanner-result-bar"></div>
     <div id="scanner-tap-hint">הכנס ברקוד לתוך המסגרת</div>
@@ -8626,10 +8626,10 @@ const BarcodeScanner = (() => {
     if (!_stream) return;
     if (video.readyState < 2) { _scanRaf = requestAnimationFrame(scanLoop); return; }
     try {
-      // crop to the scan rectangle area (80% wide, 30% tall centered)
+      // crop to the scan rectangle area (80% wide, 14% tall centered)
       const vw = video.videoWidth, vh = video.videoHeight;
-      const rx = Math.round(vw * 0.10), ry = Math.round(vh * 0.35);
-      const rw = Math.round(vw * 0.80), rh = Math.round(vh * 0.30);
+      const rx = Math.round(vw * 0.10), ry = Math.round(vh * 0.43);
+      const rw = Math.round(vw * 0.80), rh = Math.round(vh * 0.14);
       canvas.width = rw; canvas.height = rh;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
