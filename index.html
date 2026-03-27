@@ -6914,7 +6914,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v83</span>
+        <span class="version-badge">v84</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
@@ -8584,7 +8584,11 @@ const BarcodeScanner = (() => {
   function galGetPos(e) {
     const r = galCanvas.getBoundingClientRect();
     const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX-r.left, y: src.clientY-r.top };
+    // Normalize CSS coords to canvas pixel coords in case CSS size ≠ canvas pixel size
+    return {
+      x: (src.clientX - r.left) * (galCanvas.width  / r.width),
+      y: (src.clientY - r.top)  * (galCanvas.height / r.height),
+    };
   }
 
   let _galLastTap = 0;
