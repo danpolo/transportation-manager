@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v97</span>
+        <span class="version-badge">v98</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8697,7 +8697,7 @@ const BarcodeScanner = (() => {
   function _galFixedRect() {
     const cw = galCanvas.width, ch = galCanvas.height;
     const rw = Math.round(cw * 0.80);
-    const rh = Math.round(ch * 0.28);
+    const rh = Math.round(ch * 0.14);
     return { x: Math.round((cw - rw) / 2), y: Math.round((ch - rh) / 2), w: rw, h: rh };
   }
 
@@ -8736,17 +8736,23 @@ const BarcodeScanner = (() => {
     [[rx,ry,1,1],[rx+rw,ry,-1,1],[rx,ry+rh,1,-1],[rx+rw,ry+rh,-1,-1]].forEach(([x,y,dx,dy]) => {
       ctx.beginPath(); ctx.moveTo(x+dx*len,y); ctx.lineTo(x,y); ctx.lineTo(x,y+dy*len); ctx.stroke();
     });
-    const barH = 38;
+    // Bottom hint bar
+    const barH = 32;
     ctx.fillStyle = 'rgba(0,0,0,.55)';
     ctx.fillRect(0, ch - barH, cw, barH);
+    ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(_galDetected ? 'הקש פעמיים לאישור' : 'גרור להזזה · צבוט לזום', cw/2, ch - barH + 21);
+    // Detected value shown prominently below the rect
     if (_galDetected) {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(_galDetected, cw/2, ch - barH + 20);
-      ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.7)';
-      ctx.fillText('הקש פעמיים לאישור', cw/2, ch - barH + 34);
-    } else {
-      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('גרור להזזה · צבוט לזום', cw/2, ch - barH + 24);
+      const labelY = ry + rh + 10;
+      const labelH = 44;
+      ctx.fillStyle = 'rgba(0,180,80,.92)';
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(rx, labelY, rw, labelH, 8)
+                    : ctx.rect(rx, labelY, rw, labelH);
+      ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(_galDetected, rx + rw/2, labelY + 30);
     }
   }
 
