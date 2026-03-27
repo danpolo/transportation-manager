@@ -3268,17 +3268,6 @@
       tabContent.innerHTML = `
         <div class="p-screen">
           <div class="card">
-            <div class="card-title">הגדרות מיפוי</div>
-            <div class="form-group">
-              <label class="form-label">שם מיפוי חיצוני</label>
-              <div style="display:flex;gap:8px">
-                <input id="el-offmap-label" class="form-input" placeholder="חיצוני" autocomplete="off">
-                <button id="el-offmap-label-save" class="btn btn-primary" style="white-space:nowrap">שמור</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="card mt-12">
             <div class="card-title">הוספת מיקום</div>
             <div class="form-group">
               <label class="form-label">שם מיקום</label>
@@ -3318,6 +3307,17 @@
               <button id="el-sub-add" class="btn btn-outline btn-sm">הוסף</button>
             </div>
           </div>
+
+          <div class="card mt-12">
+            <div class="card-title">הגדרות מיפוי</div>
+            <div class="form-group">
+              <label class="form-label">שם מיפוי חיצוני</label>
+              <div style="display:flex;gap:8px">
+                <input id="el-offmap-label" class="form-input" placeholder="חיצוני" autocomplete="off">
+                <button id="el-offmap-label-save" class="btn btn-primary" style="white-space:nowrap">שמור</button>
+              </div>
+            </div>
+          </div>
         </div>
       `;
 
@@ -3335,11 +3335,7 @@
                 <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}</div>
               </div>
               <div class="list-item-actions">
-                <button class="btn-icon-edit el-alias-btn" data-name="${esc(l.name)}" title="שמות חלופיים">🔤</button>
-                <button class="btn-icon-edit el-rename-btn" data-name="${esc(l.name)}" title="שנה שם">✏️</button>
-                <button class="btn-icon el-toggle-btn" data-name="${esc(l.name)}" title="${l.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי'}">${l.inMap ? '🗺️' : '📍'}</button>
-                <button class="btn-icon el-wa-sub-btn" data-name="${esc(l.name)}" title="${l.showSubInWhatsapp ? 'הסתר תת-מיקום בוואצאפ' : 'הצג תת-מיקום בוואצאפ'}" style="opacity:${l.showSubInWhatsapp ? '1' : '0.35'}">💬</button>
-                <button class="btn-icon el-del-btn" data-name="${esc(l.name)}" title="מחק">🗑️</button>
+                <button class="btn-icon-edit el-menu-btn" data-name="${esc(l.name)}" title="אפשרויות">✏️</button>
               </div>
               <div class="reorder-handle" data-idx="${idx}"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
             </div>
@@ -3481,56 +3477,56 @@
       });
 
       tabContent.querySelector('#el-list').addEventListener('click', e => {
-        const aliasBtn  = e.target.closest('.el-alias-btn');
-        const renameBtn = e.target.closest('.el-rename-btn');
-        const toggleBtn = e.target.closest('.el-toggle-btn');
-        const delBtn    = e.target.closest('.el-del-btn');
-        if (aliasBtn) {
-          const locName = aliasBtn.dataset.name;
-          const loc = DB.getMetadata().locations.find(l => l.name === locName);
-          showAliasModal(locName, (loc && loc.aliases) || [], newAliases => {
-            DB.upsertLocation({ name: locName, aliases: newAliases });
-            renderList();
-          });
-          return;
-        }
-        if (renameBtn) {
-          const oldName = renameBtn.dataset.name;
-          Modal.open({
-            title: 'שינוי שם מיקום',
-            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-loc-input" class="form-input" value="${esc(oldName)}"></div>`,
-            actions: [
-              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
-                const newName = document.getElementById('rename-loc-input').value.trim();
-                if (!newName || newName === oldName) { Modal.close(); return; }
-                DB.renameLocation(oldName, newName);
-                Modal.close();
-                renderList(); refreshSubLocSelect();
-                Toast.show('מיקום שונה', 'success');
-              }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
-            ]
-          });
-          return;
-        }
-        if (toggleBtn) {
-          const name = toggleBtn.dataset.name;
-          const loc  = DB.getMetadata().locations.find(l => l.name === name);
-          if (loc) { DB.upsertLocation({ name, inMap: !loc.inMap }); renderList(); }
-        }
-        const waSubBtn = e.target.closest('.el-wa-sub-btn');
-        if (waSubBtn) {
-          const name = waSubBtn.dataset.name;
-          const loc  = DB.getMetadata().locations.find(l => l.name === name);
-          if (loc) { DB.upsertLocation({ name, showSubInWhatsapp: !loc.showSubInWhatsapp }); renderList(); }
-        }
-        if (delBtn) {
-          DB.deleteLocation(delBtn.dataset.name);
-          Toast.show('מיקום נמחק', 'info');
-          renderList();
-          refreshSubLocSelect();
-          renderSubList(tabContent.querySelector('#el-sub-loc-sel').value);
-        }
+        const menuBtn = e.target.closest('.el-menu-btn');
+        if (!menuBtn) return;
+        const locName = menuBtn.dataset.name;
+        const loc = DB.getMetadata().locations.find(l => l.name === locName);
+        if (!loc) return;
+        Modal.open({
+          title: locName,
+          html: '',
+          actions: [
+            { id: 'rename', label: 'שנה שם', onClick: () => {
+              Modal.close();
+              Modal.open({
+                title: 'שינוי שם מיקום',
+                html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-loc-input" class="form-input" value="${esc(locName)}"></div>`,
+                actions: [
+                  { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                    const newName = document.getElementById('rename-loc-input').value.trim();
+                    if (!newName || newName === locName) { Modal.close(); return; }
+                    DB.renameLocation(locName, newName);
+                    Modal.close();
+                    renderList(); refreshSubLocSelect();
+                    Toast.show('מיקום שונה', 'success');
+                  }},
+                  { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                ]
+              });
+            }},
+            { id: 'alias', label: 'שמות חלופיים', onClick: () => {
+              Modal.close();
+              showAliasModal(locName, (loc && loc.aliases) || [], newAliases => {
+                DB.upsertLocation({ name: locName, aliases: newAliases });
+                renderList();
+              });
+            }},
+            { id: 'toggle', label: loc.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי', onClick: () => {
+              DB.upsertLocation({ name: locName, inMap: !loc.inMap });
+              Modal.close();
+              renderList();
+            }},
+            { id: 'delete', label: 'מחק', cls: 'btn-danger', onClick: () => {
+              DB.deleteLocation(locName);
+              Modal.close();
+              Toast.show('מיקום נמחק', 'info');
+              renderList();
+              refreshSubLocSelect();
+              renderSubList(tabContent.querySelector('#el-sub-loc-sel').value);
+            }},
+            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          ]
+        });
       });
 
       // sublocation select change
@@ -6945,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v90</span>
+        <span class="version-badge">v91</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8299,6 +8295,7 @@
           ${_h('4️⃣', 'לחץ "שמור ושלח" — הנתונים יישמרו ותיפתח הודעת וואטסאפ מוכנה לשליחה.')}
         `)}
         ${_sec('פיצ\'רים', `
+          ${_h('📦', '<b>משטח</b> — בחר "משטח" בתפריט הסוג רק אם למשטח יש מספר מזהה. משטחים ללא מספר אינם נתמכים.')}
           ${_h('📍', '<b>תת-מיקום</b> — במיקומים חיצוניים (לא במפה) יופיע שדה לתת-מיקום (לדוגמה: מספר מעבר). ניתן לבחור שני תת-מיקומים אם העגלה נמצאת בין שניים.')}
           ${_h('+', '<b>יעד ספציפי לפריט</b> — לחץ + ליד מספר סידורי כדי לקבוע יעד שונה לאותו פריט בלבד.')}
           ${_h('📷', '<b>סריקת ברקוד</b> — לחץ 📷 ליד כל שדה מספר סידורי לסריקה דרך מצלמה או גלריה.')}
@@ -8317,6 +8314,7 @@
           ${_h('4️⃣', 'לחץ "שמור" לסיום.')}
         `)}
         ${_sec('פיצ\'רים', `
+          ${_h('📦', '<b>משטח על עגלה</b> — הטאב "משטח על עגלה" רלוונטי רק למשטחים בעלי מספר מזהה. משטחים ללא מספר אינם נתמכים.')}
           ${_h('📷', '<b>סריקת ברקוד</b> — לחץ 📷 ליד כל שדה מספר סידורי לסריקה מהירה.')}
           ${_h('📋', '<b>מאפיינים</b> — תעד מאפיינים לכל חריץ (לדוגמה: גודל, סוג, מצב).')}
           ${_h('➕', '<b>כמה חריצים</b> — לחץ "הוסף חריץ" להוסיף סוגי פריטים שונים באותה פעולה.')}
