@@ -334,6 +334,28 @@
     .item-dest-btn.active { opacity:1; color:var(--brand); }
     .item-dest-row { padding: 0 0 4px 30px; }
     .item-dest-input { font-size:.85rem !important; padding:6px 10px !important; }
+    .scan-btn { font-size:1.1rem; padding:2px 6px; opacity:.6; transition:opacity .15s; line-height:1; background:none; border:none; cursor:pointer; color:inherit; }
+    .scan-btn:hover { opacity:1; }
+
+    /* ─── Barcode Scanner Modal ─── */
+    #scanner-modal { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.92); flex-direction:column; }
+    #scanner-modal.open { display:flex; }
+    #scanner-choice { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; }
+    #scanner-choice h3 { color:#fff; font-size:1.2rem; margin:0; }
+    .scanner-choice-btns { display:flex; gap:20px; }
+    .scanner-choice-btn { background:#fff; border:none; border-radius:16px; padding:20px 28px; font-size:2rem; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px; }
+    .scanner-choice-btn span { font-size:.85rem; color:#333; }
+    #scanner-camera-view, #scanner-gallery-view { display:none; flex:1; flex-direction:column; position:relative; }
+    #scanner-camera-view.active, #scanner-gallery-view.active { display:flex; }
+    #scanner-video { width:100%; flex:1; object-fit:cover; }
+    #scanner-canvas { display:none; }
+    #scanner-gallery-canvas { width:100%; flex:1; object-fit:contain; touch-action:none; }
+    .scanner-overlay { position:absolute; inset:0; pointer-events:none; }
+    #scanner-rect-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+    #scanner-result-bar { position:absolute; bottom:80px; left:0; right:0; text-align:center; color:#fff; font-size:1.1rem; font-weight:600; text-shadow:0 1px 3px #000; padding:8px; }
+    #scanner-tap-hint { position:absolute; bottom:40px; left:0; right:0; text-align:center; color:rgba(255,255,255,.7); font-size:.85rem; }
+    .scanner-close-btn { position:absolute; top:12px; left:12px; background:rgba(0,0,0,.5); color:#fff; border:none; border-radius:50%; width:36px; height:36px; font-size:1.2rem; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; }
+    #scanner-back-btn { position:absolute; top:12px; right:12px; background:rgba(0,0,0,.5); color:#fff; border:none; border-radius:20px; padding:6px 14px; font-size:.85rem; cursor:pointer; z-index:2; }
     .item-row-num {
       font-size: 0.78rem;
       color: var(--muted);
@@ -4189,6 +4211,7 @@
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
             <input class="item-id-input floor-serial-input" placeholder="מספר סידורי" value="${esc(existingIds[i] || '')}">
+            <button class="scan-btn" title="סרוק ברקוד">📷</button>
           </div>
         `);
       }
@@ -4257,6 +4280,7 @@
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
             <input class="item-id-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
+            <button class="scan-btn" title="סרוק ברקוד">📷</button>
             <button class="btn-icon item-dest-btn" title="יעד ספציפי לפריט זה">+</button>
           </div>
           <div class="item-dest-row" hidden>
@@ -4847,6 +4871,7 @@
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
             <input class="item-id-input floor-serial-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
+            <button class="scan-btn" title="סרוק ברקוד">📷</button>
           </div>
         `);
       }
@@ -4942,6 +4967,7 @@
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
             <input class="item-id-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
+            <button class="scan-btn" title="סרוק ברקוד">📷</button>
           </div>
         `);
       }
@@ -5522,9 +5548,21 @@
           <div class="sr-add-filter" id="sr-add-filter" style="flex:1"><a>+ הוסף שדה סינון</a></div>
           <div class="sr-add-filter" id="sr-add-exc-filter" style="flex:1"><a>+ הוסף שדה החרגה</a></div>
         </div>
-        <label class="sr-empty-label" style="padding:6px 0;">
-          <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> הצג ריקות בלבד
-        </label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0;">
+          <label class="sr-empty-label">
+            <label class="modern-check"><input type="checkbox" id="sr-empty-check"><span class="modern-check-box"></span></label> הצג ריקות בלבד
+          </label>
+          <label class="sr-empty-label">
+            <label class="modern-check"><input type="checkbox" id="sr-external-check"><span class="modern-check-box"></span></label> כולל חיצוני
+          </label>
+        </div>
+        <div style="padding:4px 0 2px;">
+          <div class="pill-toggle" id="sr-damaged-toggle" style="width:auto;display:inline-flex;">
+            <button class="active" data-dmg="all">הכל</button>
+            <button data-dmg="ok">תקין</button>
+            <button data-dmg="damaged">תקול</button>
+          </div>
+        </div>
       </div>
       <div id="sr-type-filters" class="recent-filters" style="padding-bottom:2px"></div>
       <div id="sr-recent-filters" class="recent-filters"></div>
@@ -5548,7 +5586,9 @@
       includeCategories: [], // parallel to includeTerms: propName string or null
       excludeCategories: [], // parallel to excludeTerms: propName string or null
       emptyOnly: false,
-      itemTypeFilter: null   // null=all, 'floor', or container type string
+      itemTypeFilter: null,  // null=all, 'floor', or container type string
+      includeExternal: false,
+      damagedFilter: 'all'   // 'all' | 'ok' | 'damaged'
     };
 
     const _selectedItems = new Set(); // 'cart:ID' or 'fi:ID'
@@ -5933,6 +5973,20 @@
       renderRecentFilters();
     });
 
+    screen.querySelector('#sr-external-check').addEventListener('change', e => {
+      state.includeExternal = e.target.checked;
+      renderResults();
+    });
+
+    screen.querySelector('#sr-damaged-toggle').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-dmg]');
+      if (!btn) return;
+      state.damagedFilter = btn.dataset.dmg;
+      screen.querySelectorAll('#sr-damaged-toggle button').forEach(b =>
+        b.classList.toggle('active', b.dataset.dmg === state.damagedFilter));
+      renderResults();
+    });
+
     // ── Actions bar ───────────────────────────────────────────────
     function countActive() {
       return state.includeTerms.length + state.excludeTerms.length + (state.emptyOnly ? 1 : 0);
@@ -6036,8 +6090,21 @@
       });
     }
 
+    function _isDamaged(item) {
+      const props = item.properties || {};
+      return Object.values(props).some(v => v && String(v).includes('❌'));
+    }
+
     function itemPasses(item) {
       if (!item.location) return false; // cleared items (מחק את השאר)
+      // External location filter
+      if (!state.includeExternal) {
+        const locMeta = DB.getMetadata().locations.find(l => l.name === item.location);
+        if (locMeta && !locMeta.inMap) return false;
+      }
+      // Damaged filter
+      if (state.damagedFilter === 'damaged' && !_isDamaged(item)) return false;
+      if (state.damagedFilter === 'ok'      &&  _isDamaged(item)) return false;
       if (state.itemTypeFilter) {
         const isCart = !!item.cartId;
         if (state.itemTypeFilter === 'floor') {
@@ -6779,7 +6846,7 @@
       const count = cart.itemCount || 0;
       const ids = (cart.itemIds || []);
       const idRows = Array.from({length: Math.max(count, ids.length)}, (_, i) =>
-        `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input ec-id" placeholder="מספר סידורי" value="${esc(ids[i] || '')}"></div>`
+        `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input ec-id" placeholder="מספר סידורי" value="${esc(ids[i] || '')}"><button class="scan-btn" title="סרוק ברקוד">📷</button></div>`
       ).join('');
       Modal.open({
         title: `עריכת ${containerName(cart)} ${esc(cartLabel(cart))}`,
@@ -6810,7 +6877,7 @@
         const n = parseInt(document.getElementById('ec-count').value) || 0;
         const existing = [...document.querySelectorAll('.ec-id')].map(i => i.value);
         document.getElementById('ec-id-rows').innerHTML = Array.from({length: n}, (_, i) =>
-          `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input ec-id" placeholder="מספר סידורי" value="${esc(existing[i] || '')}"></div>`
+          `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input ec-id" placeholder="מספר סידורי" value="${esc(existing[i] || '')}"><button class="scan-btn" title="סרוק ברקוד">📷</button></div>`
         ).join('');
       });
       // empty cart button
@@ -6845,7 +6912,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v77</span>
+        <span class="version-badge">v78</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
@@ -8230,5 +8297,355 @@
     }
   });
   </script>
+
+<!-- ─── Barcode Scanner Modal ─── -->
+<div id="scanner-modal">
+  <div id="scanner-choice">
+    <h3>סריקת ברקוד</h3>
+    <div class="scanner-choice-btns">
+      <button class="scanner-choice-btn" id="sc-camera-btn">📷<span>מצלמה</span></button>
+      <button class="scanner-choice-btn" id="sc-gallery-btn">🖼️<span>גלריה</span></button>
+    </div>
+  </div>
+
+  <div id="scanner-camera-view">
+    <button class="scanner-close-btn" id="sc-cam-close">✕</button>
+    <video id="scanner-video" autoplay playsinline muted></video>
+    <canvas id="scanner-canvas"></canvas>
+    <svg id="scanner-rect-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <defs>
+        <mask id="scan-mask">
+          <rect width="100" height="100" fill="white"/>
+          <rect id="scan-hole" x="10" y="35" width="80" height="30" rx="2" fill="black"/>
+        </mask>
+      </defs>
+      <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#scan-mask)"/>
+      <rect id="scan-frame" x="10" y="35" width="80" height="30" rx="2" fill="none" stroke="#fff" stroke-width="0.5"/>
+    </svg>
+    <div id="scanner-result-bar"></div>
+    <div id="scanner-tap-hint">הכנס ברקוד לתוך המסגרת</div>
+  </div>
+
+  <div id="scanner-gallery-view">
+    <button class="scanner-close-btn" id="sc-gal-close">✕</button>
+    <button id="scanner-back-btn">חזרה</button>
+    <input type="file" id="sc-file-input" accept="image/*" style="display:none">
+    <canvas id="scanner-gallery-canvas"></canvas>
+    <div id="scanner-result-bar" style="display:none"></div>
+    <div id="scanner-tap-hint" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ─── BarcodeScanner module ───────────────────────────────────────────────
+const BarcodeScanner = (() => {
+  let _targetInput = null;
+  let _stream = null;
+  let _scanRaf = null;
+  let _lastResult = null;
+
+  const modal    = document.getElementById('scanner-modal');
+  const choice   = document.getElementById('scanner-choice');
+  const camView  = document.getElementById('scanner-camera-view');
+  const galView  = document.getElementById('scanner-gallery-view');
+  const video    = document.getElementById('scanner-video');
+  const canvas   = document.getElementById('scanner-canvas');
+  const galCanvas= document.getElementById('scanner-gallery-canvas');
+  const fileInp  = document.getElementById('sc-file-input');
+  const scanFrame= document.getElementById('scan-frame');
+  const scanHole = document.getElementById('scan-hole');
+  const resultBar= camView.querySelector('#scanner-result-bar');
+  const tapHint  = camView.querySelector('#scanner-tap-hint');
+
+  let _detector = null;
+  async function getDetector() {
+    if (_detector) return _detector;
+    if (!('BarcodeDetector' in window)) throw new Error('BarcodeDetector not supported');
+    _detector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'] });
+    return _detector;
+  }
+
+  function open(inputEl) {
+    _targetInput = inputEl;
+    _lastResult = null;
+    showChoice();
+    modal.classList.add('open');
+  }
+
+  function close() {
+    modal.classList.remove('open');
+    stopCamera();
+    camView.classList.remove('active');
+    galView.classList.remove('active');
+    choice.style.display = '';
+    _lastResult = null;
+  }
+
+  function showChoice() {
+    choice.style.display = '';
+    camView.classList.remove('active');
+    galView.classList.remove('active');
+    stopCamera();
+  }
+
+  async function startCamera() {
+    choice.style.display = 'none';
+    camView.classList.add('active');
+    resultBar.textContent = '';
+    tapHint.textContent = 'הכנס ברקוד לתוך המסגרת';
+    scanFrame.setAttribute('stroke', '#fff');
+    scanHole.setAttribute('fill', 'black');
+    _lastResult = null;
+    try {
+      _stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      video.srcObject = _stream;
+      await video.play();
+      _scanRaf = requestAnimationFrame(scanLoop);
+    } catch(e) {
+      Toast.show('לא ניתן לגשת למצלמה', 'error');
+      showChoice();
+    }
+  }
+
+  function stopCamera() {
+    if (_scanRaf) { cancelAnimationFrame(_scanRaf); _scanRaf = null; }
+    if (_stream) { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
+    video.srcObject = null;
+  }
+
+  async function scanLoop() {
+    if (!_stream) return;
+    if (video.readyState < 2) { _scanRaf = requestAnimationFrame(scanLoop); return; }
+    try {
+      const det = await getDetector();
+      // crop to the scan rectangle area (80% wide, 30% tall centered)
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const rx = Math.round(vw * 0.10), ry = Math.round(vh * 0.35);
+      const rw = Math.round(vw * 0.80), rh = Math.round(vh * 0.30);
+      canvas.width = rw; canvas.height = rh;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+      const codes = await det.detect(canvas);
+      if (codes.length) {
+        const val = codes[0].rawValue;
+        if (val !== _lastResult) {
+          _lastResult = val;
+          resultBar.textContent = val;
+          tapHint.textContent = 'הקש כדי לאשר';
+          scanFrame.setAttribute('stroke', '#00e878');
+          scanHole.setAttribute('fill', '#00e87822');
+        }
+      } else if (_lastResult === null) {
+        scanFrame.setAttribute('stroke', '#fff');
+        scanHole.setAttribute('fill', 'black');
+      }
+    } catch(e) { /* ignore single frame errors */ }
+    _scanRaf = requestAnimationFrame(scanLoop);
+  }
+
+  // Gallery mode state
+  let _galImg = null;
+  let _galRect = null; // {x,y,w,h} in image px
+  let _galDrag = null;
+  let _galDetected = null;
+  const GHANDLE = 22;
+
+  function startGallery() {
+    choice.style.display = 'none';
+    galView.classList.add('active');
+    _galImg = null; _galRect = null; _galDetected = null;
+    fileInp.value = '';
+    fileInp.click();
+  }
+
+  fileInp.addEventListener('change', () => {
+    const file = fileInp.files[0];
+    if (!file) { showChoice(); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      _galImg = img;
+      _galDetected = null;
+      const W = img.naturalWidth, H = img.naturalHeight;
+      _galRect = { x: Math.round(W*0.1), y: Math.round(H*0.35), w: Math.round(W*0.8), h: Math.round(H*0.30) };
+      drawGallery();
+      // auto-detect
+      detectGallery();
+    };
+    img.src = url;
+  });
+
+  function galToCanvas(v) {
+    if (!_galImg) return 0;
+    const cssW = galCanvas.clientWidth;
+    return v * (cssW / _galImg.naturalWidth);
+  }
+  function galToImg(v) {
+    if (!_galImg) return 0;
+    const cssW = galCanvas.clientWidth;
+    return v * (_galImg.naturalWidth / cssW);
+  }
+
+  function drawGallery() {
+    if (!_galImg) return;
+    const cssW = galCanvas.clientWidth || window.innerWidth;
+    const ratio = _galImg.naturalHeight / _galImg.naturalWidth;
+    galCanvas.width  = cssW;
+    galCanvas.height = Math.round(cssW * ratio);
+    const ctx = galCanvas.getContext('2d');
+    ctx.drawImage(_galImg, 0, 0, galCanvas.width, galCanvas.height);
+    const rx = galToCanvas(_galRect.x), ry = galToCanvas(_galRect.y);
+    const rw = galToCanvas(_galRect.w), rh = galToCanvas(_galRect.h);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0,0,galCanvas.width,ry);
+    ctx.fillRect(0,ry+rh,galCanvas.width,galCanvas.height-ry-rh);
+    ctx.fillRect(0,ry,rx,rh);
+    ctx.fillRect(rx+rw,ry,galCanvas.width-rx-rw,rh);
+    const color = _galDetected ? '#00e878' : '#fff';
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.strokeRect(rx,ry,rw,rh);
+    [[rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh]].forEach(([x,y]) => {
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+    });
+    if (_galDetected) {
+      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,galCanvas.height-60,galCanvas.width,60);
+      ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(_galDetected, galCanvas.width/2, galCanvas.height-30);
+      ctx.font='12px sans-serif'; ctx.fillStyle='rgba(255,255,255,.7)';
+      ctx.fillText('הקש לאישור', galCanvas.width/2, galCanvas.height-12);
+    }
+  }
+
+  async function detectGallery() {
+    if (!_galImg || !_galRect) return;
+    _galDetected = null;
+    try {
+      const det = await getDetector();
+      const offscreen = document.createElement('canvas');
+      offscreen.width = _galRect.w; offscreen.height = _galRect.h;
+      offscreen.getContext('2d').drawImage(_galImg, _galRect.x, _galRect.y, _galRect.w, _galRect.h, 0, 0, _galRect.w, _galRect.h);
+      const codes = await det.detect(offscreen);
+      if (codes.length) { _galDetected = codes[0].rawValue; }
+    } catch(e) {}
+    drawGallery();
+  }
+
+  function galHitCorner(px, py) {
+    if (!_galRect) return null;
+    const corners = [
+      {id:'tl', x:galToCanvas(_galRect.x),              y:galToCanvas(_galRect.y)},
+      {id:'tr', x:galToCanvas(_galRect.x+_galRect.w),   y:galToCanvas(_galRect.y)},
+      {id:'bl', x:galToCanvas(_galRect.x),              y:galToCanvas(_galRect.y+_galRect.h)},
+      {id:'br', x:galToCanvas(_galRect.x+_galRect.w),   y:galToCanvas(_galRect.y+_galRect.h)},
+    ];
+    for (const c of corners) {
+      if (Math.sqrt((px-c.x)**2+(py-c.y)**2) <= GHANDLE) return c.id;
+    }
+    const rx=galToCanvas(_galRect.x),ry=galToCanvas(_galRect.y);
+    const rw=galToCanvas(_galRect.w),rh=galToCanvas(_galRect.h);
+    if (px>=rx&&px<=rx+rw&&py>=ry&&py<=ry+rh) return 'body';
+    return null;
+  }
+
+  function galGetPos(e) {
+    const r = galCanvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX-r.left, y: src.clientY-r.top };
+  }
+
+  galCanvas.addEventListener('mousedown', e => {
+    const p = galGetPos(e);
+    const hit = galHitCorner(p.x, p.y);
+    if (hit) { _galDrag = { handle: hit, startX: p.x, startY: p.y, orig: {..._galRect} }; return; }
+    if (_galDetected) { confirmGallery(); }
+  });
+  galCanvas.addEventListener('mousemove', e => {
+    if (!_galDrag) return;
+    const p = galGetPos(e);
+    galMoveDrag(p.x, p.y);
+  });
+  galCanvas.addEventListener('mouseup', () => endGalDrag());
+
+  galCanvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const p = galGetPos(e);
+    const hit = galHitCorner(p.x, p.y);
+    if (hit) { _galDrag = { handle: hit, startX: p.x, startY: p.y, orig: {..._galRect} }; }
+    else if (_galDetected) { confirmGallery(); }
+  }, {passive:false});
+  galCanvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!_galDrag) return;
+    const p = galGetPos(e);
+    galMoveDrag(p.x, p.y);
+  }, {passive:false});
+  galCanvas.addEventListener('touchend', e => { e.preventDefault(); endGalDrag(); }, {passive:false});
+
+  function galMoveDrag(px, py) {
+    if (!_galDrag || !_galImg) return;
+    const dx = galToImg(px - _galDrag.startX);
+    const dy = galToImg(py - _galDrag.startY);
+    const o  = _galDrag.orig;
+    const W = _galImg.naturalWidth, H = _galImg.naturalHeight;
+    const r  = {..._galRect};
+    if (_galDrag.handle === 'body') { r.x = o.x+dx; r.y = o.y+dy; }
+    else {
+      if (_galDrag.handle.includes('l')) { r.x = o.x+dx; r.w = o.w-dx; }
+      if (_galDrag.handle.includes('r')) { r.w = o.w+dx; }
+      if (_galDrag.handle.includes('t')) { r.y = o.y+dy; r.h = o.h-dy; }
+      if (_galDrag.handle.includes('b')) { r.h = o.h+dy; }
+    }
+    if (r.w < 20) r.w = 20;
+    if (r.h < 20) r.h = 20;
+    if (r.x < 0) { r.w += r.x; r.x = 0; }
+    if (r.y < 0) { r.h += r.y; r.y = 0; }
+    if (r.x+r.w > W) r.w = W-r.x;
+    if (r.y+r.h > H) r.h = H-r.y;
+    _galRect = r;
+    drawGallery();
+  }
+
+  function endGalDrag() {
+    if (_galDrag) { _galDrag = null; detectGallery(); }
+  }
+
+  function confirmGallery() {
+    if (_galDetected && _targetInput) {
+      _targetInput.value = _galDetected;
+      _targetInput.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+    close();
+  }
+
+  // camera confirm on tap
+  camView.addEventListener('click', () => {
+    if (_lastResult && _targetInput) {
+      _targetInput.value = _lastResult;
+      _targetInput.dispatchEvent(new Event('change', {bubbles:true}));
+      close();
+    }
+  });
+
+  // button wiring
+  document.getElementById('sc-camera-btn').addEventListener('click', startCamera);
+  document.getElementById('sc-gallery-btn').addEventListener('click', startGallery);
+  document.getElementById('sc-cam-close').addEventListener('click', e => { e.stopPropagation(); close(); });
+  document.getElementById('sc-gal-close').addEventListener('click', close);
+  document.getElementById('scanner-back-btn').addEventListener('click', showChoice);
+
+  return { open };
+})();
+
+// ─── Global scan-btn handler ─────────────────────────────────────────────
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.scan-btn');
+  if (!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  const row  = btn.closest('.item-row');
+  const inp  = row && row.querySelector('.item-id-input');
+  if (inp) BarcodeScanner.open(inp);
+});
+</script>
 </body>
 </html>
