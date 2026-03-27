@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v91</span>
+        <span class="version-badge">v92</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7431,9 +7431,10 @@
             entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment,
               slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
           } else {
-            let [count, rawProps] = _parseCountProps(content);
-            if (count === 0 && / - \d+$/.test(content)) { [count, rawProps] = _parsePropsDashCount(content); }
-            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה', comment: entryComment,
+            let [count, rawProps, trailingCmt] = _parseCountProps(content);
+            if (count === 0 && / - \d+(\s.*)?$/.test(content)) { [count, rawProps, trailingCmt] = _parsePropsDashCount(content); }
+            const cmt1 = [entryComment, trailingCmt].filter(Boolean).join(' ');
+            entries.push({ type: 'cart', cartId, cartType, containerType: 'עגלה', comment: cmt1,
               slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
           }
           continue;
@@ -7495,9 +7496,10 @@
               entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
                 slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] });
             } else {
-              let [count, rawProps] = _parseCountProps(after);
-              if (count === 0 && / - \d+$/.test(after)) { [count, rawProps] = _parsePropsDashCount(after); }
-              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
+              let [count, rawProps, trailingCmt2] = _parseCountProps(after);
+              if (count === 0 && / - \d+(\s.*)?$/.test(after)) { [count, rawProps, trailingCmt2] = _parsePropsDashCount(after); }
+              const cmt2 = [genComment, trailingCmt2].filter(Boolean).join(' ');
+              entries.push({ type: 'cart', cartId: cId, cartType: '', containerType, comment: cmt2,
                 slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
             }
           } else {
@@ -7512,11 +7514,11 @@
           continue;
         }
 
-        // floor item: identified purely by format "props - count" (digit after last ' - ')
+        // floor item: identified purely by format "props - count [trailing]" (digit after last ' - ')
         lastWasAnonLine = false;
-        if (/ - \d+$/.test(line)) {
-          const [count, rawProps] = _parsePropsDashCount(line);
-          entries.push({ type: 'floor', itemCount: count, isEmpty: count === 0, rawProps });
+        if (/ - \d+(\s.*)?$/.test(line)) {
+          const [count, rawProps, trailingComment] = _parsePropsDashCount(line);
+          entries.push({ type: 'floor', itemCount: count, isEmpty: count === 0, rawProps, comment: trailingComment || undefined });
           continue;
         }
       }
@@ -7535,18 +7537,20 @@
       const parts = text.split(/\s+/);
       const count = parts.length && /^\d+$/.test(parts[0]) ? parseInt(parts[0]) : 0;
       const rawProps = /^\d+$/.test(parts[0]) ? parts.slice(1).join(' ') : text;
-      return [count, rawProps.trim()];
+      return [count, rawProps.trim(), ''];
     }
 
     function _parsePropsDashCount(text) {
       const idx = text.lastIndexOf(' - ');
       if (idx >= 0) {
         const props = text.slice(0, idx).trim();
-        const countStr = text.slice(idx + 3).trim();
-        const count = /^\d+$/.test(countStr) ? parseInt(countStr) : 0;
-        return [count, props];
+        const rest = text.slice(idx + 3).trim();
+        const mCount = /^(\d+)(?:\s+(.+))?$/.exec(rest);
+        if (mCount) {
+          return [parseInt(mCount[1]), props, (mCount[2] || '').trim()];
+        }
       }
-      return [0, text.trim()];
+      return [0, text.trim(), ''];
     }
 
     function _matchProps(raw, propDefs) {
@@ -7720,11 +7724,12 @@
               if (!hasMatch) props['_unmatched'] = entry.rawProps;
             }
             fiCounter++;
+            const fiComment = [entry.comment, unmatchedComment].filter(Boolean).join(' ') || undefined;
             floorItems[fiId] = {
               id: fiId, location: locName, subLocation: subLoc,
               itemCount: entry.itemCount, itemIds: [],
               properties: props, isEmpty: entry.isEmpty, lastUpdated: nowMs,
-              comment: unmatchedComment || undefined
+              comment: fiComment
             };
           }
         }
