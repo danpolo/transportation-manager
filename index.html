@@ -6912,7 +6912,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v78</span>
+        <span class="version-badge">v79</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
@@ -8336,6 +8336,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 // ─── BarcodeScanner module ───────────────────────────────────────────────
 const BarcodeScanner = (() => {
@@ -8357,12 +8358,35 @@ const BarcodeScanner = (() => {
   const resultBar= camView.querySelector('#scanner-result-bar');
   const tapHint  = camView.querySelector('#scanner-tap-hint');
 
+  // Native BarcodeDetector (Android Chrome) or ZXing fallback (iOS Safari, Firefox)
   let _detector = null;
-  async function getDetector() {
-    if (_detector) return _detector;
-    if (!('BarcodeDetector' in window)) throw new Error('BarcodeDetector not supported');
-    _detector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'] });
-    return _detector;
+  let _zxingReader = null;
+
+  async function _getZXingReader() {
+    if (_zxingReader) return _zxingReader;
+    if (!window.ZXing) throw new Error('ZXing not loaded');
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    _zxingReader = new ZXing.MultiFormatReader();
+    _zxingReader.setHints(hints);
+    return _zxingReader;
+  }
+
+  async function decodeCanvas(cvs) {
+    if ('BarcodeDetector' in window) {
+      if (!_detector) _detector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'] });
+      return await _detector.detect(cvs);
+    }
+    // ZXing fallback
+    const reader = await _getZXingReader();
+    const ctx = cvs.getContext('2d');
+    const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
+    const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
+    const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+    try {
+      const res = reader.decode(bmp);
+      return [{ rawValue: res.getText() }];
+    } catch(e) { return []; }
   }
 
   function open(inputEl) {
@@ -8417,7 +8441,6 @@ const BarcodeScanner = (() => {
     if (!_stream) return;
     if (video.readyState < 2) { _scanRaf = requestAnimationFrame(scanLoop); return; }
     try {
-      const det = await getDetector();
       // crop to the scan rectangle area (80% wide, 30% tall centered)
       const vw = video.videoWidth, vh = video.videoHeight;
       const rx = Math.round(vw * 0.10), ry = Math.round(vh * 0.35);
@@ -8425,7 +8448,7 @@ const BarcodeScanner = (() => {
       canvas.width = rw; canvas.height = rh;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
-      const codes = await det.detect(canvas);
+      const codes = await decodeCanvas(canvas);
       if (codes.length) {
         const val = codes[0].rawValue;
         if (val !== _lastResult) {
@@ -8521,11 +8544,10 @@ const BarcodeScanner = (() => {
     if (!_galImg || !_galRect) return;
     _galDetected = null;
     try {
-      const det = await getDetector();
       const offscreen = document.createElement('canvas');
       offscreen.width = _galRect.w; offscreen.height = _galRect.h;
       offscreen.getContext('2d').drawImage(_galImg, _galRect.x, _galRect.y, _galRect.w, _galRect.h, 0, 0, _galRect.w, _galRect.h);
-      const codes = await det.detect(offscreen);
+      const codes = await decodeCanvas(offscreen);
       if (codes.length) { _galDetected = codes[0].rawValue; }
     } catch(e) {}
     drawGallery();
