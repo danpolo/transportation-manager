@@ -2519,18 +2519,20 @@
   // ── Location + conditional sublocation ──
   // For non-map locations: autocomplete also offers "loc / subloc" combined entries.
   // Selecting a combined entry auto-fills both fields.
-  function setupLocationFields(locInput, subGroup, subInput, sub2Group, sub2Input) {
-    makeAutocomplete(locInput, () => {
-      const locs = DB.getMetadata().locations;
-      const suggestions = [];
-      for (const l of locs) {
-        suggestions.push(l.name);
-        if (!l.inMap && l.subLocations && l.subLocations.length) {
-          for (const sub of l.subLocations) suggestions.push(`${l.name} / ${sub}`);
-        }
+  function locationSuggestions() {
+    const locs = DB.getMetadata().locations;
+    const out = [];
+    for (const l of locs) {
+      out.push(l.name);
+      if (!l.inMap && l.subLocations && l.subLocations.length) {
+        for (const sub of l.subLocations) out.push(`${l.name} / ${sub}`);
       }
-      return suggestions;
-    });
+    }
+    return out;
+  }
+
+  function setupLocationFields(locInput, subGroup, subInput, sub2Group, sub2Input) {
+    makeAutocomplete(locInput, locationSuggestions);
     makeAutocomplete(subInput, () => {
       const loc = DB.getMetadata().locations.find(l => l.name === locInput.value.trim());
       return (loc && loc.subLocations) || [];
@@ -4255,7 +4257,7 @@
           btn.classList.toggle('active', open);
           if (open) {
             const inp = destRow.querySelector('.item-dest-input');
-            makeAutocomplete(inp, () => DB.getMetadata().locations.map(l => l.name));
+            makeAutocomplete(inp, locationSuggestions);
             inp.focus();
           }
         });
@@ -5054,7 +5056,7 @@
     }
     makeAutocomplete(ctIdInput, () => _containerCarts().map(c => cartLabel(c)));
     makeAutocomplete(screen.querySelector('#lu-ct-parent-cart'), () => DB.getAllCarts().filter(c => !c.containerType || c.containerType === DEFAULT_CONTAINER).map(c => cartLabel(c)));
-    makeAutocomplete(screen.querySelector('#lu-ct-move-dest'), () => DB.getMetadata().locations.map(l => l.name));
+    makeAutocomplete(screen.querySelector('#lu-ct-move-dest'), locationSuggestions);
 
     function initCtSlots() {
       ctSlotsContainer.innerHTML = '';
@@ -6826,7 +6828,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v74</span>
+        <span class="version-badge">v75</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
