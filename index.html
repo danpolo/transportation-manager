@@ -330,6 +330,10 @@
       align-items: center;
       gap: 8px;
     }
+    .item-dest-btn { font-size:.85rem; padding:2px 7px; opacity:.5; transition:opacity .15s,color .15s; }
+    .item-dest-btn.active { opacity:1; color:var(--brand); }
+    .item-dest-row { padding: 0 0 4px 30px; }
+    .item-dest-input { font-size:.85rem !important; padding:6px 10px !important; }
     .item-row-num {
       font-size: 0.78rem;
       color: var(--muted);
@@ -4231,9 +4235,31 @@
     function _trRenderItemRows(container, n, existing) {
       const rows = [];
       for (let i = 0; i < n; i++) {
-        rows.push(`<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}"></div>`);
+        rows.push(`
+          <div class="item-row">
+            <span class="item-row-num">${i+1}</span>
+            <input class="item-id-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
+            <button class="btn-icon item-dest-btn" title="יעד ספציפי לפריט זה">+</button>
+          </div>
+          <div class="item-dest-row" hidden>
+            <input class="item-dest-input form-input" placeholder="יעד ספציפי..." autocomplete="off">
+          </div>
+        `);
       }
       container.innerHTML = rows.join('');
+      container.querySelectorAll('.item-dest-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const destRow = btn.closest('.item-row').nextElementSibling;
+          const open = destRow.hidden;
+          destRow.hidden = !open;
+          btn.classList.toggle('active', open);
+          if (open) {
+            const inp = destRow.querySelector('.item-dest-input');
+            makeAutocomplete(inp, () => DB.getMetadata().locations.map(l => l.name));
+            inp.focus();
+          }
+        });
+      });
     }
     function _trMakeSlotEl(idx, slot) {
       const div = document.createElement('div');
@@ -4279,11 +4305,21 @@
       });
     }
     function _trReadAllSlots() {
-      return [...screen.querySelectorAll('#tr-slots-container .item-slot-card')].map(el => ({
-        properties: readPropertyFields(el.querySelector('.slot-props')),
-        itemCount:  parseInt(el.querySelector('.slot-count-input').value) || 0,
-        itemIds:    [...el.querySelectorAll('.item-id-input')].map(i => i.value.trim()).filter(Boolean)
-      }));
+      return [...screen.querySelectorAll('#tr-slots-container .item-slot-card')].map(el => {
+        const idInputs = [...el.querySelectorAll('.item-id-input')];
+        const itemIds  = idInputs.map(i => i.value.trim()).filter(Boolean);
+        const itemDests = idInputs.map(inp => {
+          const destRow = inp.closest('.item-row').nextElementSibling;
+          if (!destRow || destRow.hidden) return '';
+          return destRow.querySelector('.item-dest-input')?.value.trim() || '';
+        });
+        return {
+          properties: readPropertyFields(el.querySelector('.slot-props')),
+          itemCount:  parseInt(el.querySelector('.slot-count-input').value) || 0,
+          itemIds,
+          itemDests,
+        };
+      });
     }
     function _trPopulateSlots(cart) {
       const container = screen.querySelector('#tr-slots-container');
@@ -4412,13 +4448,30 @@
         if (isEmpty) {
           msg = `${_ctName} ${msgCartLabel(_currentData)} ריקה מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`;
         } else {
+          // Collect per-item specific destinations
+          const itemDestMap = {}; // id → destLabel
+          allSlots.forEach(s => {
+            (s.itemIds || []).forEach((id, i) => {
+              const d = (s.itemDests || [])[i];
+              if (id && d) itemDestMap[id] = d;
+            });
+          });
+          const hasSpecific = Object.keys(itemDestMap).length > 0;
+
           const _msgLines = [_ctName + ' ' + msgCartLabel(_currentData)];
           allSlots.filter(s => s.itemCount).forEach(s => {
             const ps = Utils.orderedPropValues(s.properties, _propDefs);
             _msgLines.push(`${s.itemCount}${ps ? ' ' + ps : ''}`);
-            (s.itemIds || []).forEach(id => _msgLines.push(id));
+            if (!hasSpecific) (s.itemIds || []).forEach(id => _msgLines.push(id));
           });
-          if (fromLabel || toLabel) _msgLines.push(`מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`);
+
+          if (hasSpecific) {
+            _msgLines.push('היחידות יורדות בנקודות הבאות:');
+            Object.entries(itemDestMap).forEach(([id, dest]) => _msgLines.push(`${id} - ל"${dest}"`));
+            _msgLines.push(`${_ctName} נשארת ב"${toLabel || '?'}"`);
+          } else {
+            if (fromLabel || toLabel) _msgLines.push(`מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`);
+          }
           msg = _msgLines.join('\n');
         }
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
@@ -6773,7 +6826,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v73</span>
+        <span class="version-badge">v74</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
