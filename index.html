@@ -6941,7 +6941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v92</span>
+        <span class="version-badge">v93</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7553,6 +7553,16 @@
       return [0, text.trim(), ''];
     }
 
+    // Extract parenthesized text from rawProps as a comment; return [cleanedRaw, parenComment]
+    function _extractParenComment(raw) {
+      const comments = [];
+      const cleaned = (raw || '').replace(/\(([^)]*)\)/g, (_, inner) => {
+        if (inner.trim()) comments.push(inner.trim());
+        return '';
+      }).replace(/\s+/g, ' ').trim();
+      return [cleaned, comments.join(' ')];
+    }
+
     function _matchProps(raw, propDefs) {
       if (!propDefs || !propDefs.length) return {};
       const tokens = raw ? raw.split(/\s+/) : [];
@@ -7628,17 +7638,17 @@
 
             for (let slotIdx = 0; slotIdx < entry.slots.length; slotIdx++) {
               const slot = entry.slots[slotIdx];
-              const props = _matchProps(slot.rawProps, propDefs);
+              const [cleanSlotRaw, parenCmt] = _extractParenComment(slot.rawProps);
+              const props = _matchProps(cleanSlotRaw, propDefs);
               const unmatchedComment = props._unmatchedComment || '';
               delete props._unmatchedComment;
-              // Unmatched tokens → comment field
-              let slotComment = entry.comment || '';
-              if (unmatchedComment) slotComment = slotComment ? slotComment + ' ' + unmatchedComment : unmatchedComment;
+              // Unmatched tokens + parenthesized text → comment field
+              let slotComment = [entry.comment, parenCmt, unmatchedComment].filter(Boolean).join(' ');
               let slotCount = slot.itemCount;
               let slotEmpty = slot.isEmpty;
               // If single slot and ALL props empty: free-text comment, mark as empty
-              if (entry.slots.length === 1 && slot.rawProps &&
-                  Object.values(props).every(v => !v) && !/^\d/.test(slot.rawProps)) {
+              if (entry.slots.length === 1 && cleanSlotRaw &&
+                  Object.values(props).every(v => !v) && !/^\d/.test(cleanSlotRaw)) {
                 slotCount = 0; slotEmpty = true;
               }
               const slotData = {
@@ -7712,19 +7722,20 @@
               }
             }
           } else {
-            const props = _matchProps(entry.rawProps, propDefs);
+            const [cleanFloorRaw, floorParenCmt] = _extractParenComment(entry.rawProps);
+            const props = _matchProps(cleanFloorRaw, propDefs);
             const unmatchedComment = props._unmatchedComment || '';
             delete props._unmatchedComment;
             const hasMatch = Object.values(props).some(v => v);
             const fiId = 'fi_' + (nowMs + fiCounter);
-            if (entry.rawProps && (!hasMatch || unmatchedComment)) {
+            if (cleanFloorRaw && (!hasMatch || unmatchedComment)) {
               const locLabel = locName + (subLoc ? ' / ' + subLoc : '');
-              unmatchedFloorLines.push({ fiId, label: locLabel, rawProps: entry.rawProps, itemCount: entry.itemCount });
+              unmatchedFloorLines.push({ fiId, label: locLabel, rawProps: cleanFloorRaw, itemCount: entry.itemCount });
               // For fully-unmatched, keep rawProps as discriminator for round-trip
-              if (!hasMatch) props['_unmatched'] = entry.rawProps;
+              if (!hasMatch) props['_unmatched'] = cleanFloorRaw;
             }
             fiCounter++;
-            const fiComment = [entry.comment, unmatchedComment].filter(Boolean).join(' ') || undefined;
+            const fiComment = [entry.comment, floorParenCmt, unmatchedComment].filter(Boolean).join(' ') || undefined;
             floorItems[fiId] = {
               id: fiId, location: locName, subLocation: subLoc,
               itemCount: entry.itemCount, itemIds: [],
