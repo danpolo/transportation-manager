@@ -2539,6 +2539,13 @@
     if (loc.showSubInWhatsapp && subLoc) return subLoc;
     return locName || subLoc || '';
   }
+  // Handle raw "loc / sub" strings from free-text inputs (e.g. per-item dest)
+  function waMsgLocRaw(raw) {
+    if (!raw) return '';
+    const sep = raw.indexOf(' / ');
+    if (sep !== -1) return waMsgLoc(raw.slice(0, sep).trim(), raw.slice(sep + 3).trim());
+    return waMsgLoc(raw, '');
+  }
 
   function setupLocationFields(locInput, subGroup, subInput, sub2Group, sub2Input) {
     makeAutocomplete(locInput, locationSuggestions);
@@ -4476,11 +4483,12 @@
             _msgLines.push('היחידות יורדות בנקודות הבאות:');
             allSlots.filter(s => s.itemCount).forEach(s => {
               (s.itemIds || []).forEach((id, i) => {
-                const d = (s.itemDests || [])[i] || toLabel || '?';
-                _msgLines.push(`${id} - ל"${d}"`);
+                const rawD = (s.itemDests || [])[i];
+                const d = rawD ? waMsgLocRaw(rawD) : (toLabel || '?');
+                _msgLines.push(`${id} - ל${d}`);
               });
             });
-            _msgLines.push(`${_ctName} נשארת ב"${toLabel || '?'}"`);
+            _msgLines.push(`${_ctName} נשארת ב${toLabel || '?'}`);
           } else {
             if (fromLabel || toLabel) _msgLines.push(`מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`);
           }
@@ -6837,7 +6845,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>מיפוי</h1>
-        <span class="version-badge">v76</span>
+        <span class="version-badge">v77</span>
         <button class="undo-btn" title="בטל פעולה">↩</button>
         <button id="theme-toggle" class="theme-toggle-btn"></button>
       </div>
