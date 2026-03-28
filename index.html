@@ -7109,7 +7109,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v111</span>
+        <span class="version-badge">v112</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8841,7 +8841,7 @@ const BarcodeScanner = (() => {
     const bd = 'BarcodeDetector' in window;
     const bdFmt = bd ? (() => { try { return BarcodeDetector.getSupportedFormats ? '(async)' : 'ok'; } catch(e){ return 'err'; } })() : 'N/A';
     _debugStatus.textContent =
-      `BD: ${bd} ${bdFmt} | bdFail: ${_detectorFailed} | ZXing: ${!!window.ZXing}\nUA: ${navigator.userAgent.slice(30,80)}`;
+      `BD: ${bd} ${bdFmt} | bdFail: ${_detectorFailed} | ZXing: ${!!window.ZXing} | vid: ${video.videoWidth||0}x${video.videoHeight||0}\nUA: ${navigator.userAgent.slice(30,80)}`;
   }
 
   function _toggleDebug() {
@@ -8996,7 +8996,23 @@ const BarcodeScanner = (() => {
       canvas.width = rw; canvas.height = rh;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
-      const codes = await decodeCanvas(canvas);
+      let codes = await decodeCanvas(canvas);
+      // Full-frame fallback when strip fails on ZXing path (iOS: no BarcodeDetector)
+      if (!codes.length && !('BarcodeDetector' in window && !_detectorFailed)) {
+        canvas.width = vw; canvas.height = vh;
+        if (typeof createImageBitmap === 'function') {
+          try {
+            const bmp = await createImageBitmap(video);
+            ctx.drawImage(bmp, 0, 0);
+            bmp.close();
+            _dbg(`full-frame bmp ${vw}x${vh}`);
+          } catch(e) { ctx.drawImage(video, 0, 0, vw, vh); _dbg(`full-frame ctx ${vw}x${vh}`); }
+        } else {
+          ctx.drawImage(video, 0, 0, vw, vh);
+          _dbg(`full-frame ctx ${vw}x${vh}`);
+        }
+        codes = await decodeCanvas(canvas);
+      }
       if (codes.length) {
         const val = codes[0].rawValue;
         if (val !== _lastResult) {
