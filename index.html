@@ -2097,7 +2097,7 @@
 
       let out = `מיפוי\n${now}\n`;
       for (const loc of locs) {
-        out += `${loc.name}:\n`;
+        out += `\n${loc.name}:\n`;
         const subs = loc.subLocations || [];
         // Items with no sub-location
         const noSubCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && !c.subLocation);
@@ -2108,7 +2108,7 @@
           const subCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && c.subLocation === sub);
           const subFIs = Object.values(fis).filter(fi => fi.location === loc.name && fi.subLocation === sub);
           if (!subCarts.length && !subFIs.length) continue;
-          out += `${sub}:\n`;
+          out += `\n${sub}:\n`;
           out += emitGrouped(subCarts, subFIs);
         }
         out += '===\n';
@@ -2236,7 +2236,7 @@
 
       let out = `${title}\n${now}\n`;
       for (const loc of locs) {
-        out += `${loc.name}:\n`;
+        out += `\n${loc.name}:\n`;
         const subs = loc.subLocations || [];
         const noSubCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && !c.subLocation);
         const noSubFIs   = Object.values(fis).filter(fi => fi.location === loc.name && !fi.subLocation);
@@ -2245,7 +2245,7 @@
           const subCarts = Object.values(carts).filter(c => c.location === loc.name && !c.parentCartId && c.subLocation === sub);
           const subFIs   = Object.values(fis).filter(fi => fi.location === loc.name && fi.subLocation === sub);
           if (!subCarts.length && !subFIs.length) continue;
-          out += `${sub}:\n`;
+          out += `\n${sub}:\n`;
           out += emitGrouped(subCarts, subFIs);
         }
         out += '===\n';
@@ -6967,7 +6967,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v105</span>
+        <span class="version-badge">v106</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
