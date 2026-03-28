@@ -2750,23 +2750,41 @@
   // Returns a warning string if cart slots violate homogeneity rule, else null.
   // Rule: at most 2 distinct property-value sets across all non-empty slots,
   // and those 2 sets must differ in at most 1 property.
+  // Returns an array of warning strings (one per issue) for slot homogeneity violations,
+  // each including full property details of every affected slot.
   function validateCartSlotsHomogeneity(cartData) {
     const propDefs = (typeof DB !== 'undefined' ? DB.getMetadata().properties : null) || [];
-    const slots = [
-      { count: cartData.itemCount || 0, props: cartData.properties || {} },
-      ...(cartData.extraItems || []).map(s => ({ count: s.itemCount || 0, props: s.properties || {} }))
+    const allSlots = [
+      { count: cartData.itemCount || 0, props: cartData.properties || {}, idx: 1 },
+      ...(cartData.extraItems || []).map((s, i) => ({ count: s.itemCount || 0, props: s.properties || {}, idx: i + 2 }))
     ].filter(s => s.count > 0);
-    if (slots.length < 2) return null;
+    if (allSlots.length < 2) return null;
+
+    function slotDesc(s) {
+      const propStr = propDefs
+        .map(p => s.props[p.name] ? `${p.name}: ${s.props[p.name]}` : null)
+        .filter(Boolean).join(', ');
+      return `סלוט ${s.idx}: ${s.count} פריטים${propStr ? ' | ' + propStr : ' | (ללא מאפיינים)'}`;
+    }
+
     const fingerprint = s => JSON.stringify(Object.fromEntries(Object.entries(s).filter(([,v]) => v).sort()));
-    const uniqueSets = [...new Map(slots.map(s => [fingerprint(s.props), s.props])).values()];
+    const uniqueSets = [...new Map(allSlots.map(s => [fingerprint(s.props), s.props])).values()];
     if (uniqueSets.length <= 1) return null;
-    if (uniqueSets.length > 2) return `ישנם ${uniqueSets.length} סוגי פריטים שונים — מותר עד 2`;
+
+    const slotDescs = allSlots.map(slotDesc).join('\n');
+    if (uniqueSets.length > 2) {
+      return `ישנם ${uniqueSets.length} סוגי פריטים שונים (מותר עד 2):\n${slotDescs}`;
+    }
     const [a, b] = uniqueSets;
     const allKeys = new Set([...Object.keys(a), ...Object.keys(b)]);
     const diffs = [...allKeys].filter(k => (a[k] || '') !== (b[k] || ''));
     if (diffs.length > 1) {
-      const names = diffs.map(k => (propDefs.find(p => p.name === k) || {}).name || k);
-      return `2 סוגי הפריטים שונים ב-${diffs.length} מאפיינים (${names.join(', ')}) — מותר הבדל במאפיין אחד בלבד`;
+      const diffNames = diffs.map(k => {
+        const def = propDefs.find(p => p.name === k);
+        const name = (def || {}).name || k;
+        return `${name}: "${a[k] || '-'}" vs "${b[k] || '-'}"`;
+      });
+      return `2 סוגי הפריטים שונים ב-${diffs.length} מאפיינים (מותר הבדל במאפיין אחד בלבד):\n${diffNames.join('\n')}\n\nפרטי הסלוטים:\n${slotDescs}`;
     }
     return null;
   }
@@ -2790,7 +2808,7 @@
       title: title || Lang.T('אזהרת נתונים', 'Advertencia de datos'),
       html: `<div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠ ${Lang.T('נמצאו בעיות:', '¡Se encontraron problemas!')}</div>
         <ul style="margin:0;padding-right:20px;color:var(--danger);line-height:1.8">
-          ${issues.map(i => `<li>${esc(i)}</li>`).join('')}
+          ${issues.map(i => `<li style="white-space:pre-wrap">${esc(i)}</li>`).join('')}
         </ul>`,
       actions: [
         { id: 'vw-ok', label: Lang.T('אשר בכל זאת', 'Confirmar de todas formas'), cls: 'btn-danger', onClick: () => { Modal.close(); onConfirm(); } },
@@ -7091,7 +7109,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v108</span>
+        <span class="version-badge">v109</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8801,44 +8819,51 @@ const BarcodeScanner = (() => {
   const resultBar= camView.querySelector('#scanner-result-bar');
   const tapHint  = camView.querySelector('#scanner-tap-hint');
 
-  // Native BarcodeDetector (Android Chrome) or ZXing fallback (iOS Safari, Firefox)
+  // Native BarcodeDetector (Android Chrome / iOS 17+) or ZXing fallback
   let _detector = null;
-  let _zxingReader = null;
-
-  async function _getZXingReader() {
-    if (_zxingReader) return _zxingReader;
-    if (!window.ZXing) throw new Error('ZXing not loaded');
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    _zxingReader = new ZXing.MultiFormatReader();
-    _zxingReader.setHints(hints);
-    return _zxingReader;
-  }
+  let _detectorFailed = false;  // permanently skip BarcodeDetector if it keeps failing
 
   async function decodeCanvas(cvs) {
-    // BarcodeDetector — use only formats supported by this browser (iOS may not support all)
-    if ('BarcodeDetector' in window) {
+    if (!cvs || !cvs.width || !cvs.height) return [];
+
+    // BarcodeDetector path
+    if ('BarcodeDetector' in window && !_detectorFailed) {
       if (!_detector) {
         try {
           const want = ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'];
-          const supported = BarcodeDetector.getSupportedFormats
+          const supported = (typeof BarcodeDetector.getSupportedFormats === 'function')
             ? await BarcodeDetector.getSupportedFormats() : want;
           const formats = want.filter(f => supported.includes(f));
           _detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code','code_128','ean_13'] });
-        } catch(e) { _detector = null; }
+        } catch(e) { _detectorFailed = true; }
       }
-      if (_detector) {
-        try { return await _detector.detect(cvs); } catch(e) { _detector = null; }
+      if (_detector && !_detectorFailed) {
+        try {
+          // Use ImageBitmap for better iOS Safari compatibility
+          const src = (typeof createImageBitmap === 'function') ? await createImageBitmap(cvs) : cvs;
+          const result = await _detector.detect(src);
+          if (src !== cvs && src.close) src.close();
+          return result;
+        } catch(e) {
+          _detector = null;
+          _detectorFailed = true;
+        }
       }
     }
-    // ZXing fallback — try HybridBinarizer then GlobalHistogramBinarizer
+
+    // ZXing fallback — fresh reader each attempt to avoid stale state
+    if (!window.ZXing) return [];
     try {
-      const reader = await _getZXingReader();
       const ctx = cvs.getContext('2d');
+      if (!ctx) return [];
       const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
+      if (!id || !id.data || !id.data.length) return [];
       const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
+      const hints = new Map([[ZXing.DecodeHintType.TRY_HARDER, true]]);
       for (const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]) {
         try {
+          const reader = new ZXing.MultiFormatReader();
+          reader.setHints(hints);
           const bmp = new ZXing.BinaryBitmap(new Bin(lum));
           return [{ rawValue: reader.decode(bmp).getText() }];
         } catch(e) {}
@@ -8897,7 +8922,7 @@ const BarcodeScanner = (() => {
 
   async function scanLoop() {
     if (!_stream) return;
-    if (video.readyState < 2) { _scanRaf = requestAnimationFrame(scanLoop); return; }
+    if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) { _scanRaf = requestAnimationFrame(scanLoop); return; }
     try {
       // crop to the scan rectangle area (80% wide, 14% tall centered)
       const vw = video.videoWidth, vh = video.videoHeight;
