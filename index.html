@@ -2111,7 +2111,7 @@
           out += `\n${sub}:\n`;
           out += emitGrouped(subCarts, subFIs);
         }
-        out += '===\n';
+        out += '==============================\n';
       }
       return out.trim();
     }
@@ -2248,7 +2248,7 @@
           out += `\n${sub}:\n`;
           out += emitGrouped(subCarts, subFIs);
         }
-        out += '===\n';
+        out += '==============================\n';
       }
       return out.trim();
     }
@@ -6663,7 +6663,7 @@
           const propDefs = meta.properties || [];
           let mapStr = `מיפוי\n${loc}:\n`;
           if (sub) mapStr += `${sub}:\n`;
-          mapStr += text + '\n===\n';
+          mapStr += text + '\n==============================\n';
           try {
             const normalized = window._normalizeAliases(mapStr, propDefs);
             const blocks = window._parseMap(normalized);
@@ -7109,7 +7109,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v113</span>
+        <span class="version-badge">v114</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
