@@ -6967,7 +6967,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v103</span>
+        <span class="version-badge">v104</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8071,15 +8071,45 @@
             if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
             // Strip WhatsApp/iOS directional marks
             text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
-            const results = _parseAndApplyMovements(text);
+            const { results, unknowns } = _parseAndApplyMovements(text);
             const ok = results.filter(r => r.ok);
-            const fail = results.filter(r => !r.ok);
+            const fail = results.filter(r => !r.ok && !r.unknown);
             const resEl = document.getElementById('movements-results');
             resEl.style.display = '';
             const okHtml = ok.length ? `<div style="color:var(--success);margin-bottom:4px">✓ עודכנו ${ok.length} תנועות:<br>${ok.map(r => esc(r.msg)).join('<br>')}</div>` : '';
-            const failHtml = fail.length ? `<div style="color:var(--danger)">✗ לא זוהו ${fail.length}:<br>${fail.map(r => esc(r.msg)).join('<br>')}</div>` : '';
-            resEl.innerHTML = okHtml + failHtml;
+            const failHtml = fail.length ? `<div style="color:var(--danger);margin-bottom:4px">✗ לא זוהו ${fail.length}:<br>${fail.map(r => esc(r.msg)).join('<br>')}</div>` : '';
+            let unknownsHtml = '';
+            if (unknowns.length) {
+              const rows = unknowns.map((u, i) => {
+                const typeLabel = (u.containerType && u.containerType !== DEFAULT_CONTAINER) ? u.containerType + ' ' : '';
+                const destLabel = u.location + (u.subLocation ? '/' + u.subLocation : '');
+                return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer"><input type="checkbox" checked data-idx="${i}"><span>${esc(typeLabel + u.cartId)} → ${esc(destLabel)}</span></label>`;
+              }).join('');
+              unknownsHtml = `<div id="movements-unknowns-section" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#d97706;font-weight:600;margin-bottom:6px">⚠ לא נמצאו במערכת — אשר להוסיף:</div><div id="movements-unknowns-list">${rows}</div><button id="movements-add-unknowns" class="btn btn-outline" style="margin-top:8px;width:100%">הוסף נבחרים למערכת</button></div>`;
+            }
+            resEl.innerHTML = okHtml + failHtml + unknownsHtml;
             if (ok.length) Toast.show(`עודכנו ${ok.length} תנועות`, 'success');
+            if (unknowns.length) {
+              setTimeout(() => {
+                const addBtn = document.getElementById('movements-add-unknowns');
+                if (!addBtn) return;
+                addBtn.addEventListener('click', () => {
+                  const checks = document.querySelectorAll('#movements-unknowns-list input[type=checkbox]');
+                  let addedCount = 0;
+                  checks.forEach(cb => {
+                    if (cb.checked) {
+                      const u = unknowns[parseInt(cb.dataset.idx)];
+                      DB.upsertCart({ cartId: u.cartId, containerType: u.containerType, location: u.location, subLocation: u.subLocation, isEmpty: true });
+                      addedCount++;
+                    }
+                  });
+                  if (addedCount) {
+                    Toast.show(`נוספו ${addedCount} פריטים למערכת`, 'success');
+                    document.getElementById('movements-unknowns-section').remove();
+                  }
+                });
+              }, 0);
+            }
           }},
           { id: 'cancel-movements', label: 'סגור', onClick: Modal.close }
         ]
@@ -8092,6 +8122,7 @@
       const allLocs     = meta.locations || [];
       const ctypes      = (meta.containerTypes || []).concat(['עגלה']);
       const results     = [];
+      const unknowns    = []; // { cartId, containerType, location, subLocation }
 
       function resolveLocLabel(label) {
         label = (label || '').trim();
@@ -8105,13 +8136,15 @@
         return { location: label, subLocation: '' };
       }
 
-      function extractCartId(line) {
+      function extractCartInfo(line) {
         let stripped = (line || '').trim();
+        let detectedType = DEFAULT_CONTAINER;
         for (const ct of ctypes) {
-          if (stripped.startsWith(ct + ' ')) { stripped = stripped.slice(ct.length + 1).trim(); break; }
+          if (stripped.startsWith(ct + ' ')) { detectedType = ct; stripped = stripped.slice(ct.length + 1).trim(); break; }
         }
         const cartId = stripped.replace(/\([^)]+\)\s*$/, '').trim();
-        return allCarts.find(c => c.cartId === cartId) ? cartId : null;
+        const known = !!allCarts.find(c => c.cartId === cartId);
+        return { cartId, containerType: detectedType, known };
       }
 
       // Detect and parse WhatsApp multi-message format: [M/D, HH:MM] Name: content
@@ -8146,15 +8179,14 @@
         const emptyM = lines[0].match(/ריקה\s+מועברת\s+מ(.+?)\s+ל(.+)$/);
         if (!handled && emptyM && lines.length === 1) {
           const beforeRika = lines[0].replace(/\s+ריקה.*$/, '').trim();
-          let stripped = beforeRika;
-          for (const ct of ctypes) {
-            if (stripped.startsWith(ct + ' ')) { stripped = stripped.slice(ct.length + 1).trim(); break; }
-          }
-          const cartId = stripped.replace(/\([^)]+\)\s*$/, '').trim();
-          if (allCarts.find(c => c.cartId === cartId)) {
-            const { location, subLocation } = resolveLocLabel(emptyM[2]);
+          const { cartId, containerType, known } = extractCartInfo(beforeRika);
+          const { location, subLocation } = resolveLocLabel(emptyM[2]);
+          if (known) {
             DB.upsertCart({ cartId, location, subLocation });
             results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+          } else if (cartId) {
+            unknowns.push({ cartId, containerType, location, subLocation });
+            results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
           } else {
             results.push({ ok: false, msg: `${timePrefix}עגלה לא נמצאה: ${beforeRika}` });
           }
@@ -8167,11 +8199,16 @@
           if (tLine) {
             const m = tLine.match(/מועברת\s+מ(.+?)\s+ל(.+)$/);
             if (m) {
-              const cartId = extractCartId(lines[0]);
+              const { cartId, containerType, known } = extractCartInfo(lines[0]);
               if (cartId) {
                 const { location, subLocation } = resolveLocLabel(m[2]);
-                DB.upsertCart({ cartId, location, subLocation });
-                results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                if (known) {
+                  DB.upsertCart({ cartId, location, subLocation });
+                  results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                } else {
+                  unknowns.push({ cartId, containerType, location, subLocation });
+                  results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
+                }
               } else {
                 results.push({ ok: false, msg: `${timePrefix}עגלה לא נמצאה: ${lines[0]}` });
               }
@@ -8186,11 +8223,16 @@
           if (lLine) {
             const m = lLine.match(/מועמסת\s+ב(.+)$/);
             if (m) {
-              const cartId = extractCartId(lines[0]);
+              const { cartId, containerType, known } = extractCartInfo(lines[0]);
               if (cartId) {
                 const { location, subLocation } = resolveLocLabel(m[1]);
-                DB.upsertCart({ cartId, location, subLocation });
-                results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                if (known) {
+                  DB.upsertCart({ cartId, location, subLocation });
+                  results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                } else {
+                  unknowns.push({ cartId, containerType, location, subLocation });
+                  results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
+                }
               } else {
                 results.push({ ok: false, msg: `${timePrefix}עגלה לא נמצאה: ${lines[0]}` });
               }
@@ -8223,7 +8265,7 @@
           results.push({ ok: false, msg: `${timePrefix}לא זוהה: "${lines[0].slice(0, 40)}"` });
         }
       }
-      return results;
+      return { results, unknowns };
     }
 
     // ── Pull-to-refresh ─────────────────────────────────────────
