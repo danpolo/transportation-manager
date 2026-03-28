@@ -2785,16 +2785,35 @@
   }
 
   // Shows a modal listing validation issues with Cancel / Confirm-anyway actions.
-  function showValidationWarning(issues, onConfirm, onCancel) {
+  function showValidationWarning(issues, onConfirm, onCancel, title) {
     Modal.open({
-      title: 'אזהרת נתונים',
-      html: `<div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠ נמצאו בעיות:</div>
+      title: title || Lang.T('אזהרת נתונים', 'Advertencia de datos'),
+      html: `<div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠ ${Lang.T('נמצאו בעיות:', '¡Se encontraron problemas!')}</div>
         <ul style="margin:0;padding-right:20px;color:var(--danger);line-height:1.8">
           ${issues.map(i => `<li>${esc(i)}</li>`).join('')}
         </ul>`,
       actions: [
-        { id: 'vw-ok', label: 'אשר בכל זאת', cls: 'btn-danger', onClick: () => { Modal.close(); onConfirm(); } },
-        { id: 'vw-cancel', label: 'ביטול', cls: 'btn-outline', onClick: () => { Modal.close(); if (onCancel) onCancel(); } }
+        { id: 'vw-ok', label: Lang.T('אשר בכל זאת', 'Confirmar de todas formas'), cls: 'btn-danger', onClick: () => { Modal.close(); onConfirm(); } },
+        { id: 'vw-cancel', label: Lang.T('ביטול', 'Cancelar'), cls: 'btn-outline', onClick: () => { Modal.close(); if (onCancel) onCancel(); } }
+      ]
+    });
+  }
+
+  // Shows the "already exists" duplicate cart warning with a strongly-worded message.
+  function showDuplicateCartWarning(cartType, cartId, existingCart, onConfirm, onCancel) {
+    const details = Lang.T(
+      `${cartType} מספר "${cartId}" כבר קיים${existingCart && existingCart.location ? ` במיקום ${existingCart.location}` : ''}`,
+      `${cartType} número "${cartId}" ya existe${existingCart && existingCart.location ? ` en ${existingCart.location}` : ''}`
+    );
+    Modal.open({
+      title: Lang.T('🤦 שגיאה', '🤦 Error'),
+      html: `<div style="font-size:1.1rem;font-weight:700;color:var(--danger);margin-bottom:10px">
+        ${Lang.T('אתה מטומטם? יש כבר עגלה כזאת', '¡¿¡¿¡QUE!?!?!\nEres pendejo, ya existe este carrito!!!')}
+      </div>
+      <div style="color:var(--danger)">${esc(details)}</div>`,
+      actions: [
+        { id: 'dup-ok', label: Lang.T('אשר בכל זאת', 'Confirmar de todas formas'), cls: 'btn-danger', onClick: () => { Modal.close(); onConfirm(); } },
+        { id: 'dup-cancel', label: Lang.T('ביטול', 'Cancelar'), cls: 'btn-outline', onClick: () => { Modal.close(); if (onCancel) onCancel(); } }
       ]
     });
   }
@@ -3170,8 +3189,14 @@
           tabContent.querySelector('#ec-subloc').value = '';
           tabContent.querySelector('#ec-parent').value = '';
         };
-        const tc = checkCartTypeConflict(cartId, containerType);
-        if (tc) { showValidationWarning([tc], doCreate); } else { doCreate(); }
+        const existing = DB.getCart(cartId);
+        const existingType = existing ? (existing.containerType || DEFAULT_CONTAINER) : null;
+        if (existing && existingType === (containerType || DEFAULT_CONTAINER)) {
+          showDuplicateCartWarning(containerType || DEFAULT_CONTAINER, cartId, existing, doCreate);
+        } else {
+          const tc = checkCartTypeConflict(cartId, containerType);
+          if (tc) { showValidationWarning([tc], doCreate); } else { doCreate(); }
+        }
       });
 
       // edit / delete delegation
@@ -7066,7 +7091,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v107</span>
+        <span class="version-badge">v108</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
