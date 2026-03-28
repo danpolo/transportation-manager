@@ -7109,7 +7109,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v112</span>
+        <span class="version-badge">v113</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8798,6 +8798,7 @@
 </div>
 
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script>
 // ─── BarcodeScanner module ───────────────────────────────────────────────
 const BarcodeScanner = (() => {
@@ -8841,7 +8842,7 @@ const BarcodeScanner = (() => {
     const bd = 'BarcodeDetector' in window;
     const bdFmt = bd ? (() => { try { return BarcodeDetector.getSupportedFormats ? '(async)' : 'ok'; } catch(e){ return 'err'; } })() : 'N/A';
     _debugStatus.textContent =
-      `BD: ${bd} ${bdFmt} | bdFail: ${_detectorFailed} | ZXing: ${!!window.ZXing} | vid: ${video.videoWidth||0}x${video.videoHeight||0}\nUA: ${navigator.userAgent.slice(30,80)}`;
+      `BD: ${bd} ${bdFmt} | bdFail: ${_detectorFailed} | ZXing: ${!!window.ZXing} | Quagga: ${!!(window.Quagga||window.Quagga2)} | vid: ${video.videoWidth||0}x${video.videoHeight||0}\nUA: ${navigator.userAgent.slice(30,80)}`;
   }
 
   function _toggleDebug() {
@@ -8931,7 +8932,40 @@ const BarcodeScanner = (() => {
         } catch(e) { _dbg('miss(' + (Bin.name||'?') + '): ' + (e.name||e.message||e)); }
       }
     } catch(e) { _dbg('ZXing err: ' + e.message); }
+
+    // Quagga2 fallback (proven on iOS Safari for 1D barcodes)
+    const _Quagga = window.Quagga2 || window.Quagga;
+    if (_Quagga && !_quaggaBusy) {
+      return _decodeQuagga(_Quagga, cvs);
+    }
     return [];
+  }
+
+  let _quaggaBusy = false;
+  function _decodeQuagga(Q, cvs) {
+    _quaggaBusy = true;
+    return new Promise(resolve => {
+      try {
+        Q.decodeSingle({
+          decoder: { readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader'] },
+          locate: true,
+          src: cvs.toDataURL('image/jpeg', 0.92)
+        }, result => {
+          _quaggaBusy = false;
+          if (result && result.codeResult) {
+            _dbg('Quagga hit: ' + result.codeResult.code);
+            resolve([{ rawValue: result.codeResult.code }]);
+          } else {
+            _dbg('Quagga miss');
+            resolve([]);
+          }
+        });
+      } catch(e) {
+        _quaggaBusy = false;
+        _dbg('Quagga err: ' + e.message);
+        resolve([]);
+      }
+    });
   }
 
   function open(inputEl) {
