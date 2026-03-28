@@ -1377,13 +1377,22 @@
 
     function getMetadata() { return load().metadata; }
 
-    function getCart(id) { return load().carts[id] || null; }
+    function _cartDbKey(cartId, cartType) {
+      return cartType ? cartId + '(' + cartType + ')' : cartId;
+    }
+
+    // getCart: try compound key first (e.g. '2-5(11)'), then plain cartId field search
+    function getCart(id) {
+      const db = load();
+      return db.carts[id] || Object.values(db.carts).find(c => c.cartId === id) || null;
+    }
 
     function getAllCarts() { return Object.values(load().carts); }
 
     function upsertCart(data) {
       const db = load();
-      const existing = db.carts[data.cartId] || {};
+      const key = _cartDbKey(data.cartId, data.cartType);
+      const existing = db.carts[key] || db.carts[data.cartId] || {};
       const merged = Object.assign({}, existing, data, { lastUpdated: Date.now() });
       if (!merged.extraItems) merged.extraItems = [];
       if (merged.parentCartId === undefined) merged.parentCartId = null;
@@ -1396,23 +1405,28 @@
       merged.extraItems = merged.extraItems.map(s =>
         (s.itemCount || 0) === 0 ? Object.assign({}, s, { properties: {} }) : s
       );
-      db.carts[data.cartId] = merged;
-      // ensure cartId is in metadata.carts list
-      if (!db.metadata.carts.includes(data.cartId)) {
-        db.metadata.carts.push(data.cartId);
+      // migrate: remove old plain-key entry if it exists and we now use compound key
+      if (key !== data.cartId && db.carts[data.cartId]) {
+        delete db.carts[data.cartId];
+        db.metadata.carts = db.metadata.carts.filter(c => c !== data.cartId);
       }
+      db.carts[key] = merged;
+      if (!db.metadata.carts.includes(key)) db.metadata.carts.push(key);
       save();
-      return db.carts[data.cartId];
+      return db.carts[key];
     }
 
     function deleteCart(id) {
       const db = load();
-      // orphan children before deleting
+      // resolve actual DB key (may be compound like '2-5(11)' or plain)
+      const key = db.carts[id] ? id : (Object.keys(db.carts).find(k => db.carts[k].cartId === id) || id);
+      const baseId = db.carts[key] ? db.carts[key].cartId : id;
+      // orphan children (parentCartId stored as base cartId)
       Object.values(db.carts).forEach(c => {
-        if (c.parentCartId === id) c.parentCartId = null;
+        if (c.parentCartId === baseId || c.parentCartId === key) c.parentCartId = null;
       });
-      delete db.carts[id];
-      db.metadata.carts = db.metadata.carts.filter(c => c !== id);
+      delete db.carts[key];
+      db.metadata.carts = db.metadata.carts.filter(c => c !== key && c !== id);
       save();
     }
 
@@ -3134,8 +3148,8 @@
               <div class="list-item-sub">${parts.join(' · ')}</div>
             </div>
             <div class="list-item-actions">
-              <button class="btn-icon ec-edit-btn" data-id="${esc(c.cartId)}" title="ערוך">✏️</button>
-              <button class="btn-icon ec-del-btn"  data-id="${esc(c.cartId)}" title="מחק">🗑️</button>
+              <button class="btn-icon ec-edit-btn" data-id="${esc(c.cartId + (c.cartType ? '(' + c.cartType + ')' : ''))}" title="ערוך">✏️</button>
+              <button class="btn-icon ec-del-btn"  data-id="${esc(c.cartId + (c.cartType ? '(' + c.cartType + ')' : ''))}" title="מחק">🗑️</button>
             </div>
           </div>
         `}).join('');
@@ -7106,7 +7120,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v115</span>
+        <span class="version-badge">v116</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7847,7 +7861,8 @@
 
         for (const entry of entries) {
           if (entry.type === 'cart') {
-            const cid = entry.cartId;
+            // compound key: '2-5(11)' distinguishes from '2-5(14)' even if base cartId is same
+            const cid = entry.cartId + (entry.cartType ? '(' + entry.cartType + ')' : '');
             const ct = entry.containerType || 'עגלה';
             containerTypesSet.add(ct);
 
@@ -7894,7 +7909,7 @@
                   if (entry.cartType) carts[cid].cartType = entry.cartType;
                 } else {
                   carts[cid] = {
-                    cartId: cid, cartType: entry.cartType || '',
+                    cartId: entry.cartId, cartType: entry.cartType || '',
                     containerType: ct, location: locName, subLocation: subLoc,
                     parentCartId: null, itemCount: slotCount, itemIds: [],
                     properties: props, isEmpty: slotEmpty, comment: slotComment,
@@ -7913,7 +7928,7 @@
                       if (!carts[chId]) {
                         carts[chId] = {
                           cartId: chId, cartType: '', containerType: chCt,
-                          location: locName, subLocation: subLoc, parentCartId: cid,
+                          location: locName, subLocation: subLoc, parentCartId: entry.cartId,
                           itemCount: chSlot.itemCount, itemIds: [],
                           properties: chProps, isEmpty: chSlot.isEmpty, comment: child.comment || '',
                           extraItems: [], lastUpdated: nowMs
@@ -7921,7 +7936,7 @@
                         cartIdList.push(chId);
                       } else {
                         carts[chId].extraItems.push(chSlotData);
-                        carts[chId].parentCartId = cid;
+                        carts[chId].parentCartId = entry.cartId;
                         const ch0E = !carts[chId].itemCount;
                         const chExE = carts[chId].extraItems.every(s => !s.itemCount);
                         carts[chId].isEmpty = ch0E && chExE;
