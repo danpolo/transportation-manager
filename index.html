@@ -6967,7 +6967,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v104</span>
+        <span class="version-badge">v105</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8255,6 +8255,49 @@
                 results.push({ ok: true, msg: `${timePrefix}רצפה ${srcLoc} → ${destLoc}${destSub ? '/' + destSub : ''}` });
               } else {
                 results.push({ ok: false, msg: `${timePrefix}לא נמצאו פריטי רצפה ב${srcLoc}` });
+              }
+              handled = true;
+            }
+          }
+        }
+
+        // 5. Pallet/container loaded on cart: "משטח [ID]\n...\nמועמס על <ctName> <cartId>\n[מועבר ל<dest>]"
+        if (!handled) {
+          const loadLine = lines.find(l => /^מועמס על /.test(l));
+          if (loadLine) {
+            const lm = loadLine.match(/^מועמס על (.+)$/);
+            if (lm) {
+              const parentInfo = extractCartInfo(lm[1]);
+              const palletInfo = extractCartInfo(lines[0]);
+              // pallet has a real ID only if a container-type prefix was stripped
+              const palletHasId = palletInfo.containerType !== DEFAULT_CONTAINER && palletInfo.cartId;
+              const destLine = lines.find(l => /^מועבר ל/.test(l));
+              if (destLine) {
+                const dm = destLine.match(/^מועבר ל(.+)$/);
+                if (dm) {
+                  const { location, subLocation } = resolveLocLabel(dm[1]);
+                  if (parentInfo.cartId) {
+                    if (parentInfo.known) {
+                      DB.upsertCart({ cartId: parentInfo.cartId, location, subLocation });
+                      results.push({ ok: true, msg: `${timePrefix}${parentInfo.cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                    } else {
+                      unknowns.push({ cartId: parentInfo.cartId, containerType: parentInfo.containerType, location, subLocation });
+                      results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${parentInfo.cartId}` });
+                    }
+                  }
+                  if (palletHasId) {
+                    if (palletInfo.known) {
+                      DB.upsertCart({ cartId: palletInfo.cartId, location, subLocation });
+                    } else {
+                      unknowns.push({ cartId: palletInfo.cartId, containerType: palletInfo.containerType, location, subLocation });
+                      results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${palletInfo.cartId}` });
+                    }
+                  }
+                }
+              } else {
+                // No destination change — just note the load
+                const palletLabel = palletHasId ? `${palletInfo.containerType} ${palletInfo.cartId}` : lines[0];
+                results.push({ ok: true, msg: `${timePrefix}${palletLabel} מועמס על ${lm[1]}` });
               }
               handled = true;
             }
