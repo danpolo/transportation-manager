@@ -7109,7 +7109,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v110</span>
+        <span class="version-badge">v111</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8834,16 +8834,29 @@ const BarcodeScanner = (() => {
     if (_debugLog) _debugLog.textContent = _debugLines.join('\n');
     console.log('[Scanner]', msg);
   }
+  const _debugStatus = document.createElement('div');
+  _debugStatus.style.cssText = 'display:none;position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,.82);color:#ff0;font:10px monospace;padding:4px 8px;white-space:pre-wrap;z-index:11';
+
+  function _updateDebugStatus() {
+    const bd = 'BarcodeDetector' in window;
+    const bdFmt = bd ? (() => { try { return BarcodeDetector.getSupportedFormats ? '(async)' : 'ok'; } catch(e){ return 'err'; } })() : 'N/A';
+    _debugStatus.textContent =
+      `BD: ${bd} ${bdFmt} | bdFail: ${_detectorFailed} | ZXing: ${!!window.ZXing}\nUA: ${navigator.userAgent.slice(30,80)}`;
+  }
+
   function _toggleDebug() {
     _debugMode = !_debugMode;
-    if (_debugLog) _debugLog.style.display = _debugMode ? 'block' : 'none';
-    if (!_debugMode) { _debugLines.length = 0; }
-    else {
-      const ua = navigator.userAgent;
-      _dbg('UA: ' + ua.slice(0, 60));
-      _dbg('BarcodeDetector: ' + ('BarcodeDetector' in window));
-      _dbg('ZXing: ' + (!!window.ZXing));
-      _dbg('detectorFailed: ' + _detectorFailed);
+    if (!_debugMode) {
+      if (_debugLog) _debugLog.style.display = 'none';
+      _debugStatus.style.display = 'none';
+      _debugLines.length = 0;
+    } else {
+      // inject status bar into camera view if not already there
+      const cv = document.getElementById('scanner-camera-view');
+      if (cv && !cv.contains(_debugStatus)) cv.appendChild(_debugStatus);
+      _debugStatus.style.display = 'block';
+      if (_debugLog) _debugLog.style.display = 'block';
+      _updateDebugStatus();
     }
   }
 
@@ -8893,13 +8906,18 @@ const BarcodeScanner = (() => {
     }
 
     // ZXing fallback
-    _dbg('ZXing attempt ' + cvs.width + 'x' + cvs.height);
     if (!window.ZXing) { _dbg('ZXing not loaded'); return []; }
     try {
       const ctx = cvs.getContext('2d');
       if (!ctx) { _dbg('no ctx'); return []; }
       const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
       if (!id || !id.data || !id.data.length) { _dbg('no imagedata'); return []; }
+      // Sample brightness (avg of every 40th pixel) for diagnostics
+      let bright = 0;
+      for (let i = 0; i < id.data.length; i += 160) bright += (id.data[i] + id.data[i+1] + id.data[i+2]) / 3;
+      const avgBright = Math.round(bright / (id.data.length / 160));
+      _dbg(`ZXing ${cvs.width}x${cvs.height} avg=${avgBright}`);
+      if (_debugMode) _updateDebugStatus();
       const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
       const hints = new Map([[ZXing.DecodeHintType.TRY_HARDER, true]]);
       for (const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]) {
@@ -8908,11 +8926,11 @@ const BarcodeScanner = (() => {
           reader.setHints(hints);
           const bmp = new ZXing.BinaryBitmap(new Bin(lum));
           const val = reader.decode(bmp).getText();
-          _dbg('ZXing hit (' + Bin.name + '): ' + val);
+          _dbg('ZXing hit: ' + val);
           return [{ rawValue: val }];
-        } catch(e) { _dbg('ZXing ' + (Bin.name||'?') + ' miss: ' + (e.name||e.message||e)); }
+        } catch(e) { _dbg('miss(' + (Bin.name||'?') + '): ' + (e.name||e.message||e)); }
       }
-    } catch(e) { _dbg('ZXing outer err: ' + e.message); }
+    } catch(e) { _dbg('ZXing err: ' + e.message); }
     return [];
   }
 
