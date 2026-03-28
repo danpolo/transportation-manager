@@ -2746,6 +2746,71 @@
     return slot0 + extras;
   }
 
+  // ── Cart validation helpers ──
+  // Returns a warning string if cart slots violate homogeneity rule, else null.
+  // Rule: at most 2 distinct property-value sets across all non-empty slots,
+  // and those 2 sets must differ in at most 1 property.
+  function validateCartSlotsHomogeneity(cartData) {
+    const propDefs = (typeof DB !== 'undefined' ? DB.getMetadata().properties : null) || [];
+    const slots = [
+      { count: cartData.itemCount || 0, props: cartData.properties || {} },
+      ...(cartData.extraItems || []).map(s => ({ count: s.itemCount || 0, props: s.properties || {} }))
+    ].filter(s => s.count > 0);
+    if (slots.length < 2) return null;
+    const fingerprint = s => JSON.stringify(Object.fromEntries(Object.entries(s).filter(([,v]) => v).sort()));
+    const uniqueSets = [...new Map(slots.map(s => [fingerprint(s.props), s.props])).values()];
+    if (uniqueSets.length <= 1) return null;
+    if (uniqueSets.length > 2) return `ישנם ${uniqueSets.length} סוגי פריטים שונים — מותר עד 2`;
+    const [a, b] = uniqueSets;
+    const allKeys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    const diffs = [...allKeys].filter(k => (a[k] || '') !== (b[k] || ''));
+    if (diffs.length > 1) {
+      const names = diffs.map(k => (propDefs.find(p => p.name === k) || {}).name || k);
+      return `2 סוגי הפריטים שונים ב-${diffs.length} מאפיינים (${names.join(', ')}) — מותר הבדל במאפיין אחד בלבד`;
+    }
+    return null;
+  }
+
+  // Returns a warning string if cartId already exists in DB with a different containerType.
+  function checkCartTypeConflict(cartId, newContainerType) {
+    if (!cartId) return null;
+    const existing = DB.getCart(cartId);
+    if (!existing) return null;
+    const oldType = existing.containerType || DEFAULT_CONTAINER;
+    const newType = newContainerType || DEFAULT_CONTAINER;
+    if (oldType !== newType) {
+      return `קיים כבר ${oldType} עם מספר "${cartId}" — לא ניתן להוסיף ${newType} עם אותו מספר`;
+    }
+    return null;
+  }
+
+  // Shows a modal listing validation issues with Cancel / Confirm-anyway actions.
+  function showValidationWarning(issues, onConfirm, onCancel) {
+    Modal.open({
+      title: 'אזהרת נתונים',
+      html: `<div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠ נמצאו בעיות:</div>
+        <ul style="margin:0;padding-right:20px;color:var(--danger);line-height:1.8">
+          ${issues.map(i => `<li>${esc(i)}</li>`).join('')}
+        </ul>`,
+      actions: [
+        { id: 'vw-ok', label: 'אשר בכל זאת', cls: 'btn-danger', onClick: () => { Modal.close(); onConfirm(); } },
+        { id: 'vw-cancel', label: 'ביטול', cls: 'btn-outline', onClick: () => { Modal.close(); if (onCancel) onCancel(); } }
+      ]
+    });
+  }
+
+  // Validate all carts in an importedDb object against existing DB. Returns array of issue strings.
+  function collectImportValidationIssues(importedDb) {
+    const issues = [];
+    for (const [cartId, cart] of Object.entries(importedDb.carts || {})) {
+      const tc = checkCartTypeConflict(cartId, cart.containerType);
+      if (tc) issues.push(tc);
+      const sh = validateCartSlotsHomogeneity(cart);
+      if (sh) issues.push(`${containerName(cart)} ${cartId}: ${sh}`);
+    }
+    return issues;
+  }
+
   // ── CartForm ──
   // Creates a cart ID input with autocomplete datalist inside `container`
   let _cartFormSeq = 0;
@@ -3092,17 +3157,21 @@
         const subLoc   = tabContent.querySelector('#ec-subloc-group').hidden
           ? '' : tabContent.querySelector('#ec-subloc').value.trim();
         const parentCartId = tabContent.querySelector('#ec-parent').value || null;
-        DB.upsertCart({ cartId, cartType, containerType, location: loc, subLocation: subLoc,
-                        parentCartId,
-                        isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
-        Toast.show(containerType + ' נשמרה', 'success');
-        renderList();
-        renderParentOptions(null);
-        tabContent.querySelector('#ec-cartid').value = '';
-        tabContent.querySelector('#ec-carttype').value = '';
-        tabContent.querySelector('#ec-loc').value = '';
-        tabContent.querySelector('#ec-subloc').value = '';
-        tabContent.querySelector('#ec-parent').value = '';
+        const doCreate = () => {
+          DB.upsertCart({ cartId, cartType, containerType, location: loc, subLocation: subLoc,
+                          parentCartId,
+                          isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
+          Toast.show(containerType + ' נשמרה', 'success');
+          renderList();
+          renderParentOptions(null);
+          tabContent.querySelector('#ec-cartid').value = '';
+          tabContent.querySelector('#ec-carttype').value = '';
+          tabContent.querySelector('#ec-loc').value = '';
+          tabContent.querySelector('#ec-subloc').value = '';
+          tabContent.querySelector('#ec-parent').value = '';
+        };
+        const tc = checkCartTypeConflict(cartId, containerType);
+        if (tc) { showValidationWarning([tc], doCreate); } else { doCreate(); }
       });
 
       // edit / delete delegation
@@ -4589,16 +4658,27 @@
       return msg;
     }
 
-    // save + send
-    screen.querySelector('#tr-save-btn').addEventListener('click', () => {
+    // save + send / save only — both run slot-homogeneity validation first
+    function _trSaveWithValidation(andSend) {
+      if (_currentData && _currentType === 'cart') {
+        const allSlots = _trReadAllSlots();
+        const slot0 = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
+        const issue = validateCartSlotsHomogeneity({
+          itemCount: slot0.itemCount, properties: slot0.properties, extraItems: allSlots.slice(1)
+        });
+        if (issue) {
+          showValidationWarning([`${_currentData.cartId}: ${issue}`], () => {
+            const msg = doTransferSave();
+            if (andSend && msg) Utils.shareOrCopy(msg);
+          });
+          return;
+        }
+      }
       const msg = doTransferSave();
-      if (msg) Utils.shareOrCopy(msg);
-    });
-
-    // save only (no WhatsApp)
-    screen.querySelector('#tr-save-only-btn').addEventListener('click', () => {
-      doTransferSave();
-    });
+      if (andSend && msg) Utils.shareOrCopy(msg);
+    }
+    screen.querySelector('#tr-save-btn').addEventListener('click', () => _trSaveWithValidation(true));
+    screen.querySelector('#tr-save-only-btn').addEventListener('click', () => _trSaveWithValidation(false));
 
     // empty cart / container
     screen.querySelector('#tr-empty-cart').addEventListener('click', () => {
@@ -5165,7 +5245,7 @@
     ctIdInput.addEventListener('change', loadContainerCart);
 
     // Container save logic
-    async function doContainerSave() {
+    async function doContainerSave(skipValidation = false) {
       const rawCtId = ctIdInput.value.trim();
       const ctId = rawCtId.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
 
@@ -5181,6 +5261,14 @@
       // Determine container type
       const existingCt = ctId ? DB.getCart(ctId) : null;
       const ctType = existingCt ? (existingCt.containerType || 'משטח') : 'משטח';
+
+      // Validate before saving
+      if (!skipValidation && ctId) {
+        const issues = [];
+        const sh = validateCartSlotsHomogeneity({ itemCount: slot0.itemCount, properties: slot0.properties, extraItems: extras });
+        if (sh) issues.push(`${ctType} ${ctId}: ${sh}`);
+        if (issues.length) { showValidationWarning(issues, () => doContainerSave(true)); return null; }
+      }
       const ctLocation = existingCt ? (existingCt.location || '') : '';
 
       // Upsert the container cart with items and parent (only if an ID was given)
@@ -5290,7 +5378,7 @@
       });
     }
 
-    async function doLoadSave() {
+    async function doLoadSave(skipValidation = false) {
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
       const destCartId = rawDest.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!destCartId) { Toast.show('יש להזין יעד להעמסה', 'error'); return null; }
@@ -5302,6 +5390,12 @@
         const allSlots = readAllSlots(slotsContainer);
         const slot0    = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
         const extras   = allSlots.slice(1);
+        if (!skipValidation) {
+          const issues = [];
+          const sh = validateCartSlotsHomogeneity({ itemCount: slot0.itemCount, properties: slot0.properties, extraItems: extras });
+          if (sh) issues.push(`${destCartId}: ${sh}`);
+          if (issues.length) { showValidationWarning(issues, () => doLoadSave(true)); return null; }
+        }
         DB.upsertCart({
           cartId: destCartId,
           itemCount: slot0.itemCount, itemIds: slot0.itemIds, properties: slot0.properties,
@@ -6531,10 +6625,15 @@
             const normalized = window._normalizeAliases(mapStr, propDefs);
             const blocks = window._parseMap(normalized);
             const { db: importedDb } = window._buildMapDB(blocks, propDefs);
-            DB.importJSON(JSON.stringify(importedDb), 'merge');
-            form.hidden = true;
-            form.querySelector('textarea').value = '';
-            renderResults();
+            const doMiniImport = () => {
+              DB.importJSON(JSON.stringify(importedDb), 'merge');
+              form.hidden = true;
+              form.querySelector('textarea').value = '';
+              renderResults();
+            };
+            const miniIssues = collectImportValidationIssues(importedDb);
+            if (miniIssues.length) { showValidationWarning(miniIssues, doMiniImport); return; }
+            doMiniImport();
           } catch (err) {
             alert('שגיאה בייבוא: ' + err.message);
           }
@@ -6967,7 +7066,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v106</span>
+        <span class="version-badge">v107</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7087,9 +7186,22 @@
             try {
               const jsonStr = await Utils.parseImportText(text);
               Progress.update(60);
-              DB.importJSON(jsonStr, 'merge');
-              Progress.update(100);
-              setTimeout(() => { Progress.hide(); Toast.show('נתונים יובאו בהצלחה', 'success'); }, 300);
+              let parsedImport;
+              try { parsedImport = JSON.parse(jsonStr); } catch(e) { parsedImport = null; }
+              const doImport = () => {
+                DB.importJSON(jsonStr, 'merge');
+                Progress.update(100);
+                setTimeout(() => { Progress.hide(); Toast.show('נתונים יובאו בהצלחה', 'success'); }, 300);
+              };
+              if (parsedImport) {
+                const issues = collectImportValidationIssues(parsedImport);
+                if (issues.length) {
+                  Progress.hide();
+                  showValidationWarning(issues, doImport);
+                  return;
+                }
+              }
+              doImport();
             } catch(err) {
               Progress.hide();
               Toast.show('שגיאה: ' + err.message, 'error');
@@ -7121,11 +7233,16 @@
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
               const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
-              const doActualImport = () => {
+              const doActualImportCore = () => {
                 DB.importJSON(JSON.stringify(importedDb), 'merge');
                 _applyMapOrdering(blocks, propDefs);
                 Modal.close();
                 Toast.show('מיפוי נשמר בהצלחה', 'success');
+              };
+              const doActualImport = () => {
+                const issues = collectImportValidationIssues(importedDb);
+                if (issues.length) { showValidationWarning(issues, doActualImportCore); return; }
+                doActualImportCore();
               };
               const doImport = () => {
                 if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, importedDb, propDefs, doActualImport); return; }
@@ -7198,13 +7315,18 @@
               if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
               const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
-              const doActualImport = () => {
+              const doActualImportCore = () => {
                 DB.importJSON(JSON.stringify(importedDb), 'merge');
                 _applyMapOrdering(blocks, propDefs);
                 const cartCount = Object.keys(importedDb.carts).length;
                 const floorCount = Object.keys(importedDb.floorItems).length;
                 Modal.close();
                 Toast.show(`יובאו ${cartCount + floorCount} פריטים`, 'success');
+              };
+              const doActualImport = () => {
+                const issues = collectImportValidationIssues(importedDb);
+                if (issues.length) { showValidationWarning(issues, doActualImportCore); return; }
+                doActualImportCore();
               };
               const doImport = () => {
                 if (unmatchedFloorLines.length) { _showUnmatchedFloorModal(unmatchedFloorLines, importedDb, propDefs, doActualImport); return; }
