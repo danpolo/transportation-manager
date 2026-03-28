@@ -2840,8 +2840,6 @@
   function collectImportValidationIssues(importedDb) {
     const issues = [];
     for (const [cartId, cart] of Object.entries(importedDb.carts || {})) {
-      const tc = checkCartTypeConflict(cartId, cart.containerType);
-      if (tc) issues.push(tc);
       const sh = validateCartSlotsHomogeneity(cart);
       if (sh) issues.push(`${containerName(cart)} ${cartId}: ${sh}`);
     }
@@ -3212,8 +3210,7 @@
         if (existing && existingType === (containerType || DEFAULT_CONTAINER)) {
           showDuplicateCartWarning(containerType || DEFAULT_CONTAINER, cartId, existing, doCreate);
         } else {
-          const tc = checkCartTypeConflict(cartId, containerType);
-          if (tc) { showValidationWarning([tc], doCreate); } else { doCreate(); }
+          doCreate();
         }
       });
 
@@ -7109,7 +7106,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v114</span>
+        <span class="version-badge">v115</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
