@@ -7109,7 +7109,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v109</span>
+        <span class="version-badge">v110</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8771,6 +8771,7 @@
 
   <div id="scanner-camera-view">
     <button class="scanner-close-btn" id="sc-cam-close">✕</button>
+    <button id="sc-debug-btn" style="position:absolute;top:10px;left:10px;z-index:20;background:rgba(0,0,0,.5);color:#0f0;border:1px solid #0f0;border-radius:4px;padding:2px 7px;font:11px monospace">DBG</button>
     <video id="scanner-video" autoplay playsinline muted></video>
     <canvas id="scanner-canvas"></canvas>
     <svg id="scanner-rect-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -8785,6 +8786,7 @@
     </svg>
     <div id="scanner-result-bar"></div>
     <div id="scanner-tap-hint">הכנס ברקוד לתוך המסגרת</div>
+    <div id="scanner-debug-log" style="display:none;position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.82);color:#0f0;font:11px monospace;padding:6px 8px;white-space:pre-wrap;max-height:160px;overflow-y:auto;z-index:10"></div>
   </div>
 
   <div id="scanner-gallery-view">
@@ -8792,8 +8794,6 @@
     <button id="scanner-back-btn">חזרה</button>
     <input type="file" id="sc-file-input" accept="image/*" style="display:none">
     <canvas id="scanner-gallery-canvas"></canvas>
-    <div id="scanner-result-bar" style="display:none"></div>
-    <div id="scanner-tap-hint" style="display:none"></div>
   </div>
 </div>
 
@@ -8821,10 +8821,37 @@ const BarcodeScanner = (() => {
 
   // Native BarcodeDetector (Android Chrome / iOS 17+) or ZXing fallback
   let _detector = null;
-  let _detectorFailed = false;  // permanently skip BarcodeDetector if it keeps failing
+  let _detectorFailed = false;
+
+  // ── Debug overlay ──────────────────────────────────────────────────────────
+  let _debugMode = false;
+  const _debugLog = document.getElementById('scanner-debug-log');
+  const _debugLines = [];
+  function _dbg(msg) {
+    if (!_debugMode) return;
+    _debugLines.unshift(msg);
+    if (_debugLines.length > 12) _debugLines.pop();
+    if (_debugLog) _debugLog.textContent = _debugLines.join('\n');
+    console.log('[Scanner]', msg);
+  }
+  function _toggleDebug() {
+    _debugMode = !_debugMode;
+    if (_debugLog) _debugLog.style.display = _debugMode ? 'block' : 'none';
+    if (!_debugMode) { _debugLines.length = 0; }
+    else {
+      const ua = navigator.userAgent;
+      _dbg('UA: ' + ua.slice(0, 60));
+      _dbg('BarcodeDetector: ' + ('BarcodeDetector' in window));
+      _dbg('ZXing: ' + (!!window.ZXing));
+      _dbg('detectorFailed: ' + _detectorFailed);
+    }
+  }
 
   async function decodeCanvas(cvs) {
-    if (!cvs || !cvs.width || !cvs.height) return [];
+    if (!cvs || !cvs.width || !cvs.height) {
+      _dbg('skip: 0x0 canvas');
+      return [];
+    }
 
     // BarcodeDetector path
     if ('BarcodeDetector' in window && !_detectorFailed) {
@@ -8834,30 +8861,45 @@ const BarcodeScanner = (() => {
           const supported = (typeof BarcodeDetector.getSupportedFormats === 'function')
             ? await BarcodeDetector.getSupportedFormats() : want;
           const formats = want.filter(f => supported.includes(f));
+          _dbg('BD formats: ' + formats.join(','));
           _detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code','code_128','ean_13'] });
-        } catch(e) { _detectorFailed = true; }
+          _dbg('BD created OK');
+        } catch(e) { _detectorFailed = true; _dbg('BD create err: ' + e.message); }
       }
       if (_detector && !_detectorFailed) {
+        // Try canvas directly first (Android Chrome), fall back to ImageBitmap (iOS)
         try {
-          // Use ImageBitmap for better iOS Safari compatibility
-          const src = (typeof createImageBitmap === 'function') ? await createImageBitmap(cvs) : cvs;
-          const result = await _detector.detect(src);
-          if (src !== cvs && src.close) src.close();
+          const result = await _detector.detect(cvs);
+          if (result.length) _dbg('BD canvas hit: ' + result[0].rawValue);
           return result;
-        } catch(e) {
-          _detector = null;
-          _detectorFailed = true;
+        } catch(e1) {
+          _dbg('BD canvas err: ' + e1.message + ' — trying ImageBitmap');
+          if (typeof createImageBitmap === 'function') {
+            try {
+              const bmp = await createImageBitmap(cvs);
+              const result = await _detector.detect(bmp);
+              bmp.close();
+              if (result.length) _dbg('BD bmp hit: ' + result[0].rawValue);
+              return result;
+            } catch(e2) {
+              _dbg('BD bmp err: ' + e2.message);
+              _detector = null; _detectorFailed = true;
+            }
+          } else {
+            _detector = null; _detectorFailed = true;
+          }
         }
       }
     }
 
-    // ZXing fallback — fresh reader each attempt to avoid stale state
-    if (!window.ZXing) return [];
+    // ZXing fallback
+    _dbg('ZXing attempt ' + cvs.width + 'x' + cvs.height);
+    if (!window.ZXing) { _dbg('ZXing not loaded'); return []; }
     try {
       const ctx = cvs.getContext('2d');
-      if (!ctx) return [];
+      if (!ctx) { _dbg('no ctx'); return []; }
       const id = ctx.getImageData(0, 0, cvs.width, cvs.height);
-      if (!id || !id.data || !id.data.length) return [];
+      if (!id || !id.data || !id.data.length) { _dbg('no imagedata'); return []; }
       const lum = new ZXing.RGBLuminanceSource(id.data, cvs.width, cvs.height);
       const hints = new Map([[ZXing.DecodeHintType.TRY_HARDER, true]]);
       for (const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]) {
@@ -8865,10 +8907,12 @@ const BarcodeScanner = (() => {
           const reader = new ZXing.MultiFormatReader();
           reader.setHints(hints);
           const bmp = new ZXing.BinaryBitmap(new Bin(lum));
-          return [{ rawValue: reader.decode(bmp).getText() }];
-        } catch(e) {}
+          const val = reader.decode(bmp).getText();
+          _dbg('ZXing hit (' + Bin.name + '): ' + val);
+          return [{ rawValue: val }];
+        } catch(e) { _dbg('ZXing ' + (Bin.name||'?') + ' miss: ' + (e.name||e.message||e)); }
       }
-    } catch(e) {}
+    } catch(e) { _dbg('ZXing outer err: ' + e.message); }
     return [];
   }
 
@@ -8903,6 +8947,7 @@ const BarcodeScanner = (() => {
     scanFrame.setAttribute('stroke', '#fff');
     scanHole.setAttribute('fill', 'black');
     _lastResult = null;
+    _scanLoopLogged = false;
     try {
       _stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
       video.srcObject = _stream;
@@ -8920,12 +8965,14 @@ const BarcodeScanner = (() => {
     video.srcObject = null;
   }
 
+  let _scanLoopLogged = false;
   async function scanLoop() {
     if (!_stream) return;
     if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) { _scanRaf = requestAnimationFrame(scanLoop); return; }
     try {
       // crop to the scan rectangle area (80% wide, 14% tall centered)
       const vw = video.videoWidth, vh = video.videoHeight;
+      if (!_scanLoopLogged) { _scanLoopLogged = true; _dbg(`video ${vw}x${vh} rs=${video.readyState}`); }
       const rx = Math.round(vw * 0.10), ry = Math.round(vh * 0.43);
       const rw = Math.round(vw * 0.80), rh = Math.round(vh * 0.14);
       canvas.width = rw; canvas.height = rh;
@@ -9182,6 +9229,7 @@ const BarcodeScanner = (() => {
   document.getElementById('sc-cam-close').addEventListener('click', e => { e.stopPropagation(); close(); });
   document.getElementById('sc-gal-close').addEventListener('click', close);
   document.getElementById('scanner-back-btn').addEventListener('click', showChoice);
+  document.getElementById('sc-debug-btn').addEventListener('click', e => { e.stopPropagation(); _toggleDebug(); });
 
   return { open };
 })();
