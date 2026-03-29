@@ -1381,13 +1381,32 @@
       return cartType ? cartId + '(' + cartType + ')' : cartId;
     }
 
+    // Strip trailing letters from cart type to get the numeric identity key.
+    // e.g. '35n' → '35', '34x' → '34', '13x' → '13', '35' → '35', '' → ''
+    function _cartTypeNumeric(cartType) {
+      return (cartType || '').replace(/[a-zA-Z]+$/, '');
+    }
+
     // getCart: try compound key first (e.g. '2-5(11)'), then plain cartId field search
     function getCart(id) {
       const db = load();
       return db.carts[id] || Object.values(db.carts).find(c => c.cartId === id) || null;
     }
 
-    function getAllCarts() { return Object.values(load().carts); }
+    function getAllCarts() {
+      const all = Object.values(load().carts);
+      // Deduplicate: if two carts share the same cartId + numeric type, keep the newer one.
+      // This handles legacy DB entries like '19(35)' and '19(35n)' coexisting.
+      const seen = new Map();
+      for (const cart of all) {
+        const nk = (cart.cartId || '') + '|' + _cartTypeNumeric(cart.cartType);
+        const prev = seen.get(nk);
+        if (!prev || (cart.lastUpdated || 0) >= (prev.lastUpdated || 0)) {
+          seen.set(nk, cart);
+        }
+      }
+      return [...seen.values()];
+    }
 
     function upsertCart(data) {
       const db = load();
@@ -1741,12 +1760,29 @@
       const db = load();
 
       if (mode === 'merge') {
-        // Carts: keep higher lastUpdated
+        // Carts: keep higher lastUpdated; also replace any existing cart with
+        // the same cartId + same numeric type (trailing letters stripped) so that
+        // e.g. '19(35n)' replaces '19(35)' when imported.
         const inCarts = incoming.carts || {};
         for (const [id, cart] of Object.entries(inCarts)) {
+          const inNumeric = _cartTypeNumeric(cart.cartType);
+          // Find any existing cart with same cartId + same numeric type but different key
+          let numericMatchKey = null;
+          for (const [ek, ec] of Object.entries(db.carts)) {
+            if (ek !== id && ec.cartId === cart.cartId && _cartTypeNumeric(ec.cartType) === inNumeric) {
+              numericMatchKey = ek;
+              break;
+            }
+          }
           const existing = db.carts[id];
-          if (!existing || (cart.lastUpdated || 0) > (existing.lastUpdated || 0)) {
+          const compareAgainst = existing || (numericMatchKey ? db.carts[numericMatchKey] : null);
+          if (!compareAgainst || (cart.lastUpdated || 0) > (compareAgainst.lastUpdated || 0)) {
             if (!cart.containerType) cart.containerType = 'עגלה';
+            // Remove old numeric-type variant under a different key
+            if (numericMatchKey) {
+              delete db.carts[numericMatchKey];
+              db.metadata.carts = db.metadata.carts.filter(c => c !== numericMatchKey);
+            }
             db.carts[id] = cart;
             if (!db.metadata.carts.includes(id)) db.metadata.carts.push(id);
           }
@@ -6587,12 +6623,12 @@
                     });
                   }
                 });
-                if (grandTotal) subParts.push(grandTotal + ' פריטים');
+                if (ownTotal) subParts.push(ownTotal + ' פריטים');
                 if (commonParts.length) subParts.push(commonParts.join(' '));
                 if (diffParts.length) subParts.push('(' + diffParts.join(', ') + ')');
               } else {
                 const ps = propSummary(data.properties);
-                if (grandTotal) subParts.push(grandTotal + ' פריטים');
+                if (ownTotal) subParts.push(ownTotal + ' פריטים');
                 if (ps) subParts.push(ps);
               }
               if (data.parentCartId) {
@@ -7120,7 +7156,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v116</span>
+        <span class="version-badge">v117</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
