@@ -1520,6 +1520,28 @@
     function deleteCartType(type) {
       const db = load();
       db.metadata.cartTypes = db.metadata.cartTypes.filter(t => t !== type);
+      if (db.metadata.cartTypeMeta) delete db.metadata.cartTypeMeta[type];
+      save();
+    }
+
+    function getCartTypeMax(cartType) {
+      if (!cartType) return null;
+      const db = load();
+      const meta = db.metadata.cartTypeMeta || {};
+      // use numeric type (strip trailing letters) to find the limit
+      const key = _cartTypeNumeric(cartType);
+      return (meta[key] && meta[key].maxItems) || null;
+    }
+
+    function setCartTypeMax(cartType, maxItems) {
+      const db = load();
+      if (!db.metadata.cartTypeMeta) db.metadata.cartTypeMeta = {};
+      const key = _cartTypeNumeric(cartType);
+      if (!maxItems) {
+        delete db.metadata.cartTypeMeta[key];
+      } else {
+        db.metadata.cartTypeMeta[key] = { maxItems: Number(maxItems) };
+      }
       save();
     }
 
@@ -1656,6 +1678,11 @@
       Object.values(db.carts).forEach(c => {
         if (c.cartType === oldName) c.cartType = newName;
       });
+      // migrate cartTypeMeta key
+      if (db.metadata.cartTypeMeta && db.metadata.cartTypeMeta[oldName]) {
+        db.metadata.cartTypeMeta[newName] = db.metadata.cartTypeMeta[oldName];
+        delete db.metadata.cartTypeMeta[oldName];
+      }
       save();
     }
 
@@ -1863,6 +1890,14 @@
         };
         Object.values(inCarts).forEach(c => _ensureSub(c.location, c.subLocation));
         Object.values(inFI).forEach(fi => _ensureSub(fi.location, fi.subLocation));
+        // cartTypeMeta (maxItems, etc.)
+        if (inMeta.cartTypeMeta) {
+          if (!db.metadata.cartTypeMeta) db.metadata.cartTypeMeta = {};
+          Object.entries(inMeta.cartTypeMeta).forEach(([type, meta]) => {
+            if (!db.metadata.cartTypeMeta[type]) db.metadata.cartTypeMeta[type] = {};
+            if (meta.maxItems) db.metadata.cartTypeMeta[type].maxItems = meta.maxItems;
+          });
+        }
         // properties by name, options union + aliases merge
         (inMeta.properties || []).forEach(prop => {
           const existing = db.metadata.properties.find(p => p.name.toLowerCase() === prop.name.toLowerCase());
@@ -1912,7 +1947,8 @@
       load, save, getMetadata, getCart, getAllCarts, upsertCart, deleteCart,
       getChildCarts, cascadeLocationUpdate,
       getFloorItem, getAllFloorItems, findFloorItem, upsertFloorItem, deleteFloorItem, setFloorItemLocation,
-      addCartType, deleteCartType, addContainerType, deleteContainerType,
+      addCartType, deleteCartType, getCartTypeMax, setCartTypeMax,
+      addContainerType, deleteContainerType,
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
       addPropertyOption, removePropertyOption, setOptionAliases, getOptionAliases,
       getMixingPairs, addMixingPair, removeMixingPair,
@@ -3011,7 +3047,22 @@
         }
       }
 
-      // 4. Child-parent location mismatch
+      // 4. Max item count exceeded
+      if (cart.cartType) {
+        const maxItems = DB.getCartTypeMax(cart.cartType);
+        if (maxItems !== null) {
+          const total = cartTotalCount(cart);
+          if (total > maxItems) {
+            issues.push({
+              type: 'over-max', icon: '🔢', groupLabel: 'חריגה ממקסימום פריטים',
+              label: lbl, description: `${total} פריטים (מקסימום: ${maxItems})`,
+              autoFix: null, editKey: cart.cartId,
+            });
+          }
+        }
+      }
+
+      // 5. Child-parent location mismatch
       if (cart.parentCartId) {
         const parent = DB.getCart(cart.parentCartId);
         if (parent && (parent.location !== cart.location || (parent.subLocation || '') !== (cart.subLocation || ''))) {
@@ -3360,15 +3411,31 @@
         const container = tabContent.querySelector('#ec-type-list');
         const types = DB.getMetadata().cartTypes || [];
         if (!types.length) { container.innerHTML = '<p class="card-meta">אין סוגים מוגדרים</p>'; return; }
-        container.innerHTML = types.map(t => `
-          <div class="list-item">
+        container.innerHTML = types.map(t => {
+          const maxItems = DB.getCartTypeMax(t);
+          return `
+          <div class="list-item" style="flex-wrap:wrap">
             <div class="list-item-body"><div class="list-item-title">${esc(t)}</div></div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:0.8rem;color:var(--muted)">
+              <span>מקס׳:</span>
+              <input class="form-input ec-maxitems-input" type="number" min="1" placeholder="—"
+                     data-type="${esc(t)}" value="${maxItems || ''}"
+                     style="width:56px;padding:3px 6px;font-size:0.82rem;text-align:center">
+            </div>
             <div class="list-item-actions">
               <button class="btn-icon-edit ec-renametype-btn" data-type="${esc(t)}" title="שנה שם">✏️</button>
               <button class="btn-icon ec-deltype-btn" data-type="${esc(t)}" title="מחק">🗑️</button>
             </div>
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
+        // wire max-items inputs
+        container.querySelectorAll('.ec-maxitems-input').forEach(inp => {
+          inp.addEventListener('change', () => {
+            const val = parseInt(inp.value) || 0;
+            DB.setCartTypeMax(inp.dataset.type, val || null);
+            Toast.show('מקסימום עודכן', 'success');
+          });
+        });
       }
 
       function renderContainerTypeOptions() {
@@ -4943,6 +5010,17 @@
         const allSlots = _trReadAllSlots();
         const slot0    = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
         const extras   = allSlots.slice(1);
+        // Enforce max items per cart type
+        if (_currentData.cartType) {
+          const maxItems = DB.getCartTypeMax(_currentData.cartType);
+          if (maxItems !== null) {
+            const totalItems = allSlots.reduce((s, sl) => s + (sl.itemCount || 0), 0);
+            if (totalItems > maxItems) {
+              Toast.show(`חריגה ממקסימום: ${totalItems} / ${maxItems} פריטים`, 'error');
+              return null;
+            }
+          }
+        }
         if (_currentData.cartId) {
           DB.upsertCart({
             cartId:      _currentData.cartId,
@@ -7456,7 +7534,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v119</span>
+        <span class="version-badge">v120</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
