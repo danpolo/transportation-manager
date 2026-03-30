@@ -4014,6 +4014,88 @@
                 ]
               });
             }},
+            { id: 'sublocs', label: `תתי-מיקומים (${(loc.subLocations || []).length})`, onClick: () => {
+              Modal.close();
+              function openSubModal() {
+                function rowsHtml() {
+                  const locObj = DB.getMetadata().locations.find(l => l.name === locName);
+                  const ss = (locObj && locObj.subLocations) || [];
+                  if (!ss.length) return '<p class="card-meta" style="margin:6px 0 10px;text-align:center">אין תתי-מיקומים</p>';
+                  return ss.map(s => `
+                    <div class="prop-option-row" style="align-items:center">
+                      <span style="flex:1">• ${esc(s)}</span>
+                      <div style="display:flex;gap:4px">
+                        <button class="btn-icon-edit sl-rename" data-sub="${esc(s)}" title="שנה שם">✏️</button>
+                        <button class="btn-icon sl-del" data-sub="${esc(s)}" title="מחק">✕</button>
+                      </div>
+                    </div>`).join('');
+                }
+                Modal.open({
+                  title: `תתי-מיקומים — ${locName}`,
+                  html: `<div id="sl-rows">${rowsHtml()}</div>
+                         <div class="prop-add-row" style="margin-top:10px">
+                           <input id="sl-new-input" class="form-input btn-sm" placeholder="שם תת-מיקום חדש">
+                           <button id="sl-add-btn" class="btn btn-outline btn-sm">הוסף</button>
+                         </div>`,
+                  actions: [{ id: 'sl-close', label: 'סגור', cls: 'btn-outline', onClick: () => {
+                    Modal.close();
+                    renderList();
+                    const selVal = tabContent.querySelector('#el-sub-loc-sel').value;
+                    refreshSubLocSelect();
+                    renderSubList(selVal);
+                  }}]
+                });
+                const overlay = document.getElementById('modal-overlay');
+                function refreshRows() {
+                  overlay.querySelector('#sl-rows').innerHTML = rowsHtml();
+                }
+                overlay.querySelector('#sl-add-btn').addEventListener('click', () => {
+                  const inp = overlay.querySelector('#sl-new-input');
+                  const val = inp.value.trim();
+                  if (!val) return;
+                  const locObj = DB.getMetadata().locations.find(l => l.name === locName);
+                  const subs = [...((locObj && locObj.subLocations) || [])];
+                  if (!subs.includes(val)) {
+                    subs.push(val);
+                    DB.upsertLocation({ name: locName, subLocations: subs });
+                  }
+                  inp.value = '';
+                  refreshRows();
+                });
+                overlay.querySelector('#sl-new-input').addEventListener('keydown', e => {
+                  if (e.key === 'Enter') overlay.querySelector('#sl-add-btn').click();
+                });
+                overlay.querySelector('#sl-rows').addEventListener('click', e => {
+                  const renBtn = e.target.closest('.sl-rename');
+                  if (renBtn) {
+                    const oldSub = renBtn.dataset.sub;
+                    Modal.open({
+                      title: 'שינוי שם תת-מיקום',
+                      html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="sl-ren-input" class="form-input" value="${esc(oldSub)}"></div>`,
+                      actions: [
+                        { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                          const newSub = document.getElementById('sl-ren-input').value.trim();
+                          if (newSub && newSub !== oldSub) DB.renameSubLocation(locName, oldSub, newSub);
+                          Modal.close();
+                          openSubModal();
+                        }},
+                        { id: 'cancel', label: 'ביטול', onClick: () => { Modal.close(); openSubModal(); } }
+                      ]
+                    });
+                    return;
+                  }
+                  const delBtn = e.target.closest('.sl-del');
+                  if (delBtn) {
+                    const sub = delBtn.dataset.sub;
+                    const locObj = DB.getMetadata().locations.find(l => l.name === locName);
+                    const subs = ((locObj && locObj.subLocations) || []).filter(s => s !== sub);
+                    DB.upsertLocation({ name: locName, subLocations: subs });
+                    refreshRows();
+                  }
+                });
+              }
+              openSubModal();
+            }},
             { id: 'alias', label: 'שמות חלופיים', onClick: () => {
               Modal.close();
               showAliasModal(locName, (loc && loc.aliases) || [], newAliases => {
@@ -7594,7 +7676,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v122</span>
+        <span class="version-badge">v123</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
