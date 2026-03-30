@@ -2896,6 +2896,195 @@
     return issues;
   }
 
+  // ── Map Health Check ─────────────────────────────────────────────────────────
+  // Scans the whole DB after a map save and returns an array of issue objects.
+  function scanMapIssues() {
+    const issues = [];
+    const meta = DB.getMetadata();
+    const propDefs = meta.properties || [];
+    const allCarts = DB.getAllCarts();
+
+    // Build valid option sets per property (case-insensitive)
+    const validOptions = {};
+    propDefs.forEach(p => {
+      if (p.options && p.options.length) {
+        validOptions[p.name] = new Set(p.options.map(o => String(o).toLowerCase()));
+      }
+    });
+
+    allCarts.forEach(cart => {
+      const lbl = cartLabel(cart);
+
+      // 1. Slot homogeneity
+      const sh = validateCartSlotsHomogeneity(cart);
+      if (sh) {
+        issues.push({
+          type: 'homogeneity', icon: '⚠️', groupLabel: 'חוסר אחידות בין משבצות',
+          label: lbl, description: sh.split('\n')[0],
+          autoFix: null, editKey: cart.cartId,
+        });
+      }
+
+      // 2. Invalid property values (only for props with defined option lists)
+      const slots = [
+        { props: cart.properties || {}, slot: 'משבצת 1' },
+        ...(cart.extraItems || []).map((e, i) => ({ props: e.properties || {}, slot: `משבצת ${i + 2}` }))
+      ];
+      slots.forEach(({ props, slot }) => {
+        propDefs.forEach(p => {
+          if (!validOptions[p.name]) return;
+          const val = (props[p.name] || '').trim();
+          if (!val) return;
+          if (!validOptions[p.name].has(val.toLowerCase())) {
+            issues.push({
+              type: 'invalid-prop', icon: '❓', groupLabel: 'ערך מאפיין לא מוכר',
+              label: lbl, description: `${slot}: "${p.name}" — "${val}"`,
+              autoFix: null, editKey: cart.cartId,
+            });
+          }
+        });
+      });
+
+      // 3. Orphaned child (parentCartId → non-existent cart)
+      if (cart.parentCartId) {
+        const parent = DB.getCart(cart.parentCartId);
+        if (!parent) {
+          const snap = Object.assign({}, cart);
+          issues.push({
+            type: 'orphaned-child', icon: '🔗', groupLabel: 'טעונה על הורה שאינו קיים',
+            label: lbl, description: `מוגדרת כטעונה על "${cart.parentCartId}"`,
+            autoFix: () => DB.upsertCart(Object.assign({}, snap, { parentCartId: null })),
+            autoFixLabel: 'נקה הורה',
+            editKey: null,
+          });
+        }
+      }
+
+      // 4. Child-parent location mismatch
+      if (cart.parentCartId) {
+        const parent = DB.getCart(cart.parentCartId);
+        if (parent && (parent.location !== cart.location || (parent.subLocation || '') !== (cart.subLocation || ''))) {
+          const snap = Object.assign({}, cart);
+          const parentLoc = parent.location + (parent.subLocation ? ' / ' + parent.subLocation : '');
+          const childLoc = cart.location + (cart.subLocation ? ' / ' + cart.subLocation : '');
+          issues.push({
+            type: 'loc-mismatch', icon: '📍', groupLabel: 'מיקום שונה מהורה',
+            label: lbl, description: `${childLoc} ← צפוי: ${parentLoc}`,
+            autoFix: () => DB.upsertCart(Object.assign({}, snap, { location: parent.location, subLocation: parent.subLocation || '' })),
+            autoFixLabel: 'יישר',
+            editKey: null,
+          });
+        }
+      }
+    });
+
+    return issues;
+  }
+
+  // Shows the map review modal. Rescans DB on each auto-fix.
+  function showMapReviewModal() {
+    let issues = scanMapIssues();
+
+    if (!issues.length) {
+      Toast.show('המיפוי תקין — לא נמצאו בעיות 👍', 'success');
+      return;
+    }
+
+    function buildHtml(list) {
+      if (!list.length) {
+        return `<div style="text-align:center;padding:24px 16px;color:var(--success,#16a34a);font-size:1rem;font-weight:600">✅ הכל תוקן!</div>`;
+      }
+      const groups = {};
+      list.forEach((iss, i) => {
+        if (!groups[iss.type]) groups[iss.type] = { icon: iss.icon, label: iss.groupLabel, items: [] };
+        groups[iss.type].items.push({ ...iss, _i: i });
+      });
+      let h = `<div style="max-height:62vh;overflow-y:auto;padding-bottom:4px">`;
+      Object.values(groups).forEach(g => {
+        h += `<div style="margin-bottom:14px">
+          <div style="font-weight:700;font-size:0.78rem;letter-spacing:.03em;color:var(--muted);padding:4px 0 5px;border-bottom:1px solid var(--border)">${esc(g.icon + '\u2002' + g.label)} · ${g.items.length}</div>`;
+        g.items.forEach(iss => {
+          const btn = iss.autoFix
+            ? `<button class="btn btn-sm mrv-fix" data-i="${iss._i}" style="background:var(--brand);color:#fff;white-space:nowrap;flex-shrink:0">${esc(iss.autoFixLabel)} ✓</button>`
+            : iss.editKey
+              ? `<button class="btn btn-sm mrv-goto" data-key="${esc(iss.editKey)}" style="white-space:nowrap;flex-shrink:0">ערוך ›</button>`
+              : '';
+          h += `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f3f4f6">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:0.88rem">${esc(iss.label)}</div>
+              <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">${esc(iss.description)}</div>
+            </div>
+            ${btn}
+          </div>`;
+        });
+        h += `</div>`;
+      });
+      h += `</div>`;
+      return h;
+    }
+
+    function open() {
+      Modal.open({
+        title: `סקירת מיפוי — ${issues.length} בעיות`,
+        html: buildHtml(issues),
+        actions: [{ id: 'mrv-close', label: 'סגור', cls: 'btn-outline', onClick: Modal.close }]
+      });
+      const overlay = document.getElementById('modal-overlay');
+      overlay.querySelectorAll('.mrv-fix').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const i = parseInt(btn.dataset.i, 10);
+          if (issues[i] && issues[i].autoFix) {
+            issues[i].autoFix();
+            issues = scanMapIssues(); // rescan after fix
+            if (!issues.length) { Modal.close(); Toast.show('כל הבעיות תוקנו ✅', 'success'); return; }
+            Modal.open({
+              title: `סקירת מיפוי — ${issues.length} בעיות`,
+              html: buildHtml(issues),
+              actions: [{ id: 'mrv-close', label: 'סגור', cls: 'btn-outline', onClick: Modal.close }]
+            });
+            wireButtons();
+          }
+        });
+      });
+      overlay.querySelectorAll('.mrv-goto').forEach(btn => {
+        btn.addEventListener('click', () => {
+          Modal.close();
+          Router.navigate('edit', { cartId: btn.dataset.key });
+          history.replaceState(null, '', '#edit');
+        });
+      });
+    }
+
+    function wireButtons() {
+      const overlay = document.getElementById('modal-overlay');
+      overlay.querySelectorAll('.mrv-fix').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const i = parseInt(btn.dataset.i, 10);
+          if (issues[i] && issues[i].autoFix) {
+            issues[i].autoFix();
+            issues = scanMapIssues();
+            if (!issues.length) { Modal.close(); Toast.show('כל הבעיות תוקנו ✅', 'success'); return; }
+            Modal.open({
+              title: `סקירת מיפוי — ${issues.length} בעיות`,
+              html: buildHtml(issues),
+              actions: [{ id: 'mrv-close', label: 'סגור', cls: 'btn-outline', onClick: Modal.close }]
+            });
+            wireButtons();
+          }
+        });
+      });
+      overlay.querySelectorAll('.mrv-goto').forEach(btn => {
+        btn.addEventListener('click', () => {
+          Modal.close();
+          Router.navigate('edit', { cartId: btn.dataset.key });
+          history.replaceState(null, '', '#edit');
+        });
+      });
+    }
+
+    open();
+  }
+
   // ── CartForm ──
   // Creates a cart ID input with autocomplete datalist inside `container`
   let _cartFormSeq = 0;
@@ -7156,7 +7345,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v117</span>
+        <span class="version-badge">v118</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7328,6 +7517,7 @@
                 _applyMapOrdering(blocks, propDefs);
                 Modal.close();
                 Toast.show('מיפוי נשמר בהצלחה', 'success');
+                showMapReviewModal();
               };
               const doActualImport = () => {
                 const issues = collectImportValidationIssues(importedDb);
