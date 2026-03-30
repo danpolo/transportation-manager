@@ -1593,6 +1593,8 @@
         prop.options = prop.options.filter(o => o !== option);
         // also remove aliases for this option
         if (prop.aliases) delete prop.aliases[option];
+        // also remove mixing pairs that reference this option
+        if (prop.mixingPairs) prop.mixingPairs = prop.mixingPairs.filter(([a, b]) => a !== option && b !== option);
         save();
       }
     }
@@ -1616,6 +1618,34 @@
       const prop = db.metadata.properties.find(p => p.name === propName);
       if (!prop || !prop.aliases) return [];
       return prop.aliases[option] || [];
+    }
+
+    function getMixingPairs(propName) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      return (prop && prop.mixingPairs) ? [...prop.mixingPairs] : [];
+    }
+
+    function addMixingPair(propName, optA, optB) {
+      if (optA === optB) return;
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      if (!prop) return;
+      if (!prop.mixingPairs) prop.mixingPairs = [];
+      const norm = (a, b) => [a, b].sort().join('\x00');
+      if (!prop.mixingPairs.some(([a, b]) => norm(a, b) === norm(optA, optB))) {
+        prop.mixingPairs.push([optA, optB]);
+      }
+      save();
+    }
+
+    function removeMixingPair(propName, optA, optB) {
+      const db = load();
+      const prop = db.metadata.properties.find(p => p.name === propName);
+      if (!prop || !prop.mixingPairs) return;
+      const norm = (a, b) => [a, b].sort().join('\x00');
+      prop.mixingPairs = prop.mixingPairs.filter(([a, b]) => norm(a, b) !== norm(optA, optB));
+      save();
     }
 
     function renameCartType(oldName, newName) {
@@ -1714,6 +1744,10 @@
       if (prop.aliases && prop.aliases[oldOpt]) {
         prop.aliases[newOpt] = prop.aliases[oldOpt];
         delete prop.aliases[oldOpt];
+      }
+      // update mixing pairs
+      if (prop.mixingPairs) {
+        prop.mixingPairs = prop.mixingPairs.map(([a, b]) => [a === oldOpt ? newOpt : a, b === oldOpt ? newOpt : b]);
       }
       // update condition values
       db.metadata.properties.forEach(p => {
@@ -1881,6 +1915,7 @@
       addCartType, deleteCartType, addContainerType, deleteContainerType,
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
       addPropertyOption, removePropertyOption, setOptionAliases, getOptionAliases,
+      getMixingPairs, addMixingPair, removeMixingPair,
       addMetaCart, removeMetaCart,
       renameCartType, renameContainerType, renameLocation, renameSubLocation,
       renameProperty, renamePropertyOption,
@@ -2817,8 +2852,23 @@
       return `סלוט ${s.idx}: ${s.count} פריטים${propStr ? ' | ' + propStr : ' | (ללא מאפיינים)'}`;
     }
 
-    const fingerprint = s => JSON.stringify(Object.fromEntries(Object.entries(s).filter(([,v]) => v).sort()));
-    const uniqueSets = [...new Map(allSlots.map(s => [fingerprint(s.props), s.props])).values()];
+    // Collapse mixing-pair values to a canonical form so they fingerprint identically
+    function normVal(propName, val) {
+      if (!val) return '';
+      const pd = propDefs.find(p => p.name === propName);
+      if (pd && pd.mixingPairs) {
+        for (const [a, b] of pd.mixingPairs) {
+          if (val === a || val === b) return '\x00' + [a, b].sort().join('\x01') + '\x00';
+        }
+      }
+      return val;
+    }
+    const fingerprint = props => JSON.stringify(
+      Object.fromEntries(Object.entries(props).filter(([,v]) => v).map(([k,v]) => [k, normVal(k,v)]).sort())
+    );
+    const byFp = new Map();
+    allSlots.forEach(s => { if (!byFp.has(fingerprint(s.props))) byFp.set(fingerprint(s.props), s.props); });
+    const uniqueSets = [...byFp.values()]; // original props, one per normalized group
     if (uniqueSets.length <= 1) return null;
 
     const slotDescs = allSlots.map(slotDesc).join('\n');
@@ -2827,7 +2877,8 @@
     }
     const [a, b] = uniqueSets;
     const allKeys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    const diffs = [...allKeys].filter(k => (a[k] || '') !== (b[k] || ''));
+    // Only count diffs where normalized values also differ (mixing pairs are transparent)
+    const diffs = [...allKeys].filter(k => normVal(k, a[k] || '') !== normVal(k, b[k] || ''));
     if (diffs.length > 1) {
       const diffNames = diffs.map(k => {
         const def = propDefs.find(p => p.name === k);
@@ -4018,9 +4069,10 @@
               <div class="reorder-handle" data-idx="${idx}"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
             </div>
             <div class="prop-options">
-              <div style="margin-bottom:8px">
+              <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">
                 <button class="btn btn-outline btn-sm ep-condition-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px">${conds ? 'ערוך תנאי' : 'הוסף תנאי'}</button>
-                ${conds ? `<button class="btn btn-outline btn-sm ep-condition-clear" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px;color:var(--danger);border-color:var(--danger);margin-inline-start:4px">הסר תנאי</button>` : ''}
+                ${conds ? `<button class="btn btn-outline btn-sm ep-condition-clear" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px;color:var(--danger);border-color:var(--danger)">הסר תנאי</button>` : ''}
+                ${p.options.length >= 2 ? `<button class="btn btn-outline btn-sm ep-mixing-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px${p.mixingPairs && p.mixingPairs.length ? ';color:var(--brand);border-color:var(--brand)' : ''}">ערבוב${p.mixingPairs && p.mixingPairs.length ? ' (' + p.mixingPairs.length + ')' : ''}</button>` : ''}
               </div>
               ${p.options.map(o => {
                 const optAliases = aliases[o] || [];
@@ -4086,6 +4138,62 @@
           renderList();
         }
       });
+
+      function openMixingPairsModal(propName) {
+        const propDef = DB.getMetadata().properties.find(p => p.name === propName);
+        if (!propDef) return;
+        const options = propDef.options || [];
+        const pairs = DB.getMixingPairs(propName);
+        const pairsHtml = pairs.length
+          ? pairs.map(([a, b], pi) => `
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f3f4f6">
+                <span style="flex:1;font-weight:500">${esc(a)} ↔ ${esc(b)}</span>
+                <button class="btn btn-outline btn-sm ep-mix-rm" data-a="${esc(a)}" data-b="${esc(b)}" style="color:var(--danger);border-color:var(--danger);padding:2px 10px">✕</button>
+              </div>`).join('')
+          : `<p class="card-meta" style="padding:6px 0">אין זוגות ערבוב מוגדרים</p>`;
+        const addRow = options.length >= 2
+          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:10px">
+               <select id="mix-sel-a" class="form-input" style="flex:1;font-size:0.88rem">
+                 ${options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+               </select>
+               <span style="font-size:0.9rem;color:var(--muted)">↔</span>
+               <select id="mix-sel-b" class="form-input" style="flex:1;font-size:0.88rem">
+                 ${options.map((o, i) => `<option value="${esc(o)}"${i === 1 ? ' selected' : ''}>${esc(o)}</option>`).join('')}
+               </select>
+               <button id="ep-mix-add" class="btn btn-outline btn-sm" style="white-space:nowrap">הוסף</button>
+             </div>`
+          : '';
+        Modal.open({
+          title: `ערבוב ערכים — ${esc(propName)}`,
+          html: `<p class="card-meta" style="margin-bottom:10px">זוגות ערכים שניתן לשלב באותה עגלה ללא שייחשב כהבדל בין משבצות.</p>
+                 <div id="mix-pairs-list">${pairsHtml}</div>${addRow}`,
+          actions: [{ id: 'mix-close', label: 'סגור', onClick: () => {
+            Modal.close();
+            renderList();
+            const g = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
+            if (g) g.classList.add('expanded');
+          }}]
+        });
+        setTimeout(() => {
+          const addBtn = document.getElementById('ep-mix-add');
+          if (addBtn) {
+            addBtn.addEventListener('click', () => {
+              const selA = document.getElementById('mix-sel-a');
+              const selB = document.getElementById('mix-sel-b');
+              if (!selA || !selB || selA.value === selB.value) { Toast.show('בחר שני ערכים שונים', 'error'); return; }
+              DB.addMixingPair(propName, selA.value, selB.value);
+              openMixingPairsModal(propName);
+            });
+          }
+          const list = document.getElementById('mix-pairs-list');
+          if (list) {
+            list.addEventListener('click', ev => {
+              const rm = ev.target.closest('.ep-mix-rm');
+              if (rm) { DB.removeMixingPair(propName, rm.dataset.a, rm.dataset.b); openMixingPairsModal(propName); }
+            });
+          }
+        }, 50);
+      }
 
       tabContent.querySelector('#ep-list').addEventListener('click', e => {
         // expand/collapse
@@ -4213,6 +4321,9 @@
           }, 50);
           return;
         }
+        // mixing pairs button
+        const mixBtn = e.target.closest('.ep-mixing-btn');
+        if (mixBtn) { openMixingPairsModal(mixBtn.dataset.prop); return; }
         // add option
         const addOpt = e.target.closest('.ep-add-opt');
         if (addOpt) {
@@ -7345,7 +7456,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v118</span>
+        <span class="version-badge">v119</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
