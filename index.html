@@ -3080,6 +3080,25 @@
       }
     });
 
+    // 5. Location over-capacity (count of top-level carts > location.maxPlaces)
+    const locMeta = meta.locations || [];
+    const locOccupied = {};
+    allCarts.forEach(c => {
+      if (c.location && !c.parentCartId) locOccupied[c.location] = (locOccupied[c.location] || 0) + 1;
+    });
+    locMeta.forEach(loc => {
+      if (!loc.maxPlaces) return;
+      const occ = locOccupied[loc.name] || 0;
+      if (occ > loc.maxPlaces) {
+        issues.push({
+          type: 'loc-overcapacity', icon: '🏠', groupLabel: 'מיקום מעל קיבולת',
+          label: loc.name,
+          description: `${occ} עגלות (מקסימום: ${loc.maxPlaces})`,
+          autoFix: null, editKey: null,
+        });
+      }
+    });
+
     return issues;
   }
 
@@ -3798,7 +3817,7 @@
             <div class="list-item reorder-item" data-loc-idx="${idx}">
               <div class="list-item-body" style="flex:1">
                 <div class="list-item-title">${l.name}</div>
-                <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}</div>
+                <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}${l.maxPlaces ? (l.inMap || subStr ? ' · ' : '') + 'מקס׳ ' + l.maxPlaces + ' מקומות' : ''}</div>
               </div>
               <div class="list-item-actions">
                 <button class="btn-icon-edit el-menu-btn" data-name="${esc(l.name)}" title="אפשרויות">✏️</button>
@@ -3965,6 +3984,24 @@
                     Modal.close();
                     renderList(); refreshSubLocSelect();
                     Toast.show('מיקום שונה', 'success');
+                  }},
+                  { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                ]
+              });
+            }},
+            { id: 'maxplaces', label: loc.maxPlaces ? `מקסימום: ${loc.maxPlaces} (ערוך)` : 'הגדר מקסימום מקומות', onClick: () => {
+              Modal.close();
+              Modal.open({
+                title: 'מקסימום מקומות — ' + locName,
+                html: `<p class="card-meta" style="margin-bottom:8px">המספר המקסימלי של עגלות שיכולות להיות במיקום זה.</p>
+                       <div class="form-group"><label class="form-label">מקסימום מקומות</label><input id="maxplaces-input" class="form-input" type="number" min="0" placeholder="ללא הגבלה" value="${loc.maxPlaces || ''}"></div>`,
+                actions: [
+                  { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                    const val = parseInt(document.getElementById('maxplaces-input').value) || 0;
+                    DB.upsertLocation({ name: locName, maxPlaces: val || null });
+                    Modal.close();
+                    renderList();
+                    Toast.show('מקסימום עודכן', 'success');
                   }},
                   { id: 'cancel', label: 'ביטול', onClick: Modal.close }
                 ]
@@ -6942,6 +6979,12 @@
         return aSubIdx - bSubIdx || a.sub.localeCompare(b.sub);
       });
 
+      // Precompute occupied cart counts per location for capacity display
+      const _locOccupied = {};
+      DB.getAllCarts().forEach(c => {
+        if (c.location && !c.parentCartId) _locOccupied[c.location] = (_locOccupied[c.location] || 0) + 1;
+      });
+
       const clearSelBar = _selectedItems.size
         ? `<div style="padding:8px 12px;display:flex;justify-content:flex-start">
              <button id="sr-clear-sel" class="btn btn-sm btn-outline">נקה בחירות (${_selectedItems.size})</button>
@@ -6950,10 +6993,20 @@
       results.innerHTML = clearSelBar + sortedGroups.map(g => {
         const gKey = g.loc + '||' + g.sub;
         const isPinned = _pinnedGroups.has(gKey);
+        const _locMeta = metaLocs.find(l => l.name === g.loc);
+        let capHtml = '';
+        if (_locMeta && _locMeta.maxPlaces) {
+          const occupied = _locOccupied[g.loc] || 0;
+          const avail = _locMeta.maxPlaces - occupied;
+          const full = avail <= 0;
+          const low = !full && avail <= 3;
+          const clr = full ? 'var(--danger)' : low ? '#f59e0b' : 'var(--success,#16a34a)';
+          capHtml = `<span style="font-size:0.7rem;color:${clr};font-weight:600;padding:1px 7px;border-radius:10px;border:1px solid ${clr};margin-inline-start:6px;white-space:nowrap;flex-shrink:0">${full ? 'מלא' : avail + ' פנויים'} ${occupied}/${_locMeta.maxPlaces}</span>`;
+        }
         return `
         <div class="loc-group">
           <div class="loc-group-header">
-            <span style="flex:1">${highlightText(g.loc + (g.sub ? ' / ' + g.sub : ''), terms)}</span>
+            <span style="flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:2px">${highlightText(g.loc + (g.sub ? ' / ' + g.sub : ''), terms)}${capHtml}</span>
             <button class="sr-hdr-btn sr-add-btn" data-loc="${esc(g.loc)}" data-sub="${esc(g.sub||'')}" title="הוסף פריטים">+</button>
             <button class="sr-hdr-btn sr-clear-rest-btn" data-loc="${esc(g.loc)}" data-sub="${esc(g.sub||'')}" title="מחק את השאר">✕</button>
             <button class="sr-pin-btn${isPinned ? ' pinned' : ''}" data-pin-key="${esc(gKey)}" title="${isPinned ? 'בטל הצמדה' : 'הצמד למעלה'}">${isPinned ? '\u2605' : '\u2606'}</button>
@@ -7534,7 +7587,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v120</span>
+        <span class="version-badge">v121</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -7681,10 +7734,36 @@
     });
 
     // map action — choose type then copy + open edit modal
+    function _mapCapacityBarHtml() {
+      const locs = DB.getMetadata().locations.filter(l => l.maxPlaces);
+      if (!locs.length) return '';
+      const locOcc = {};
+      DB.getAllCarts().forEach(c => {
+        if (c.location && !c.parentCartId) locOcc[c.location] = (locOcc[c.location] || 0) + 1;
+      });
+      const rows = locs.map(l => {
+        const occ = locOcc[l.name] || 0;
+        const avail = l.maxPlaces - occ;
+        const pct = Math.min(100, Math.round((occ / l.maxPlaces) * 100));
+        const full = avail <= 0;
+        const low = !full && avail <= 3;
+        const clr = full ? 'var(--danger)' : low ? '#f59e0b' : 'var(--success,#16a34a)';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:2px 0">
+          <span style="min-width:70px;font-size:0.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.name)}</span>
+          <div style="flex:1;height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${clr};border-radius:3px;transition:width .3s"></div>
+          </div>
+          <span style="font-size:0.72rem;color:${clr};font-weight:600;white-space:nowrap">${full ? 'מלא' : avail + ' פנויים'} (${occ}/${l.maxPlaces})</span>
+        </div>`;
+      }).join('');
+      return `<div style="background:var(--area-bg);border-radius:8px;padding:8px 12px;margin-bottom:8px">${rows}</div>`;
+    }
+
     function _openMapEditModal(mapText) {
       Modal.open({
         title: 'עריכת מיפוי',
         html: `
+          ${_mapCapacityBarHtml()}
           <p class="card-meta" style="margin-bottom:10px">ערוך את המיפוי ולחץ שמור. השינויים ימוזגו לנתונים הקיימים.</p>
           <textarea id="map-edit-area" rows="16"
             style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
