@@ -1804,6 +1804,16 @@
       save();
     }
 
+    function getCapacityFeature() {
+      return load().metadata.capacityFeature || null;
+    }
+    function setCapacityFeature(feat) {
+      const db = load();
+      if (feat) db.metadata.capacityFeature = feat;
+      else delete db.metadata.capacityFeature;
+      save();
+    }
+
     function addMetaCart(cartId) {
       const db = load();
       if (!db.metadata.carts.includes(cartId)) {
@@ -1959,6 +1969,7 @@
       upsertLocation, deleteLocation, upsertProperty, deleteProperty,
       addPropertyOption, removePropertyOption, setOptionAliases, getOptionAliases,
       getMixingPairs, addMixingPair, removeMixingPair,
+      getCapacityFeature, setCapacityFeature,
       addMetaCart, removeMetaCart,
       renameCartType, renameContainerType, renameLocation, renameSubLocation,
       renameProperty, renamePropertyOption,
@@ -2990,6 +3001,24 @@
     return issues;
   }
 
+  // ── Capacity Feature Helper ───────────────────────────────────────────────────
+  // Returns { used, feat } for a location, or null if no capacity feature is configured.
+  // Counts each non-child cart at the location: for each slot, adds feat.values[propVal].
+  function _calcLocCapacityUsage(locName) {
+    const feat = DB.getCapacityFeature();
+    if (!feat || !feat.category || !feat.values) return null;
+    const carts = DB.getAllCarts().filter(c => c.location === locName && !c.parentCartId);
+    let used = 0;
+    for (const cart of carts) {
+      const slots = [cart.properties || {}, ...(cart.extraItems || []).map(e => e.properties || {})];
+      for (const props of slots) {
+        const val = props[feat.category];
+        if (val && feat.values[val]) used += Number(feat.values[val]) || 0;
+      }
+    }
+    return { used, feat };
+  }
+
   // ── Map Health Check ─────────────────────────────────────────────────────────
   // Scans the whole DB after a map save and returns an array of issue objects.
   function scanMapIssues() {
@@ -3101,6 +3130,21 @@
           type: 'loc-overcapacity', icon: '🏠', groupLabel: 'מיקום מעל קיבולת',
           label: loc.name,
           description: `${occ} עגלות (מקסימום: ${loc.maxPlaces})`,
+          autoFix: null, editKey: null,
+        });
+      }
+    });
+
+    // 6. Capacity feature limit exceeded
+    locMeta.forEach(loc => {
+      if (!loc.capacityLimit) return;
+      const cap = _calcLocCapacityUsage(loc.name);
+      if (cap && cap.used > loc.capacityLimit) {
+        const fname = cap.feat.name || 'תכונה';
+        issues.push({
+          type: 'over-capacity-feature', icon: '⚖️', groupLabel: `חריגת ${fname}`,
+          label: loc.name,
+          description: `${cap.used} / ${loc.capacityLimit} (מגבלה)`,
           autoFix: null, editKey: null,
         });
       }
@@ -4014,6 +4058,29 @@
                 ]
               });
             }},
+            ...(() => {
+              const cf = DB.getCapacityFeature();
+              if (!cf) return [];
+              const fname = cf.name || 'תכונה';
+              return [{ id: 'caplimit', label: loc.capacityLimit ? `מגבלת ${fname}: ${loc.capacityLimit} (ערוך)` : `הגדר מגבלת ${fname}`, onClick: () => {
+                Modal.close();
+                Modal.open({
+                  title: `מגבלת ${fname} — ${locName}`,
+                  html: `<p class="card-meta" style="margin-bottom:8px">סכום ה${fname} המקסימלי המותר במיקום זה.</p>
+                         <div class="form-group"><label class="form-label">מגבלה (0 = ללא)</label><input id="caplimit-input" class="form-input" type="number" min="0" placeholder="ללא הגבלה" value="${loc.capacityLimit || ''}"></div>`,
+                  actions: [
+                    { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                      const val = parseFloat(document.getElementById('caplimit-input').value) || 0;
+                      DB.upsertLocation({ name: locName, capacityLimit: val || null });
+                      Modal.close();
+                      renderList();
+                      Toast.show('מגבלה עודכנה', 'success');
+                    }},
+                    { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                  ]
+                });
+              }}];
+            })(),
             { id: 'sublocs', label: `תתי-מיקומים (${(loc.subLocations || []).length})`, onClick: () => {
               Modal.close();
               function openSubModal() {
@@ -4234,6 +4301,29 @@
             <div style="display:flex;gap:8px">
               <button id="ep-export-defs" class="btn btn-outline" style="flex:1">ייצוא הגדרות</button>
               <button id="ep-import-defs" class="btn btn-outline" style="flex:1">ייבוא הגדרות</button>
+            </div>
+          </div>
+
+          <div class="card mt-12">
+            <div class="card-title">תכונה מיוחדת</div>
+            <p class="card-meta" style="margin-bottom:8px">תכונה מספרית שסכומה מוגבל בכל מיקום. מקושרת למאפיין בעל אפשרויות.</p>
+            <div class="form-group">
+              <label class="form-label">שם התכונה</label>
+              <input id="cf-name" class="form-input" placeholder="למשל: משקל">
+            </div>
+            <div class="form-group">
+              <label class="form-label">מאפיין מקושר</label>
+              <select id="cf-category" class="form-input">
+                <option value="">— בחר מאפיין —</option>
+              </select>
+            </div>
+            <div id="cf-values-section" hidden>
+              <div style="font-size:0.85rem;font-weight:600;margin:4px 0 8px;color:var(--muted)">ערך מספרי לכל אפשרות</div>
+              <div id="cf-values-rows"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button id="cf-save" class="btn btn-primary" style="flex:1">שמור</button>
+              <button id="cf-clear" class="btn btn-outline" style="flex:1;color:var(--danger);border-color:var(--danger)">נקה תכונה</button>
             </div>
           </div>
         </div>
@@ -4726,6 +4816,71 @@
           ]
         });
       });
+
+      // ── Capacity Feature card ──────────────────────────────
+      (function initCapacityFeatureCard() {
+        const cfName     = tabContent.querySelector('#cf-name');
+        const cfCat      = tabContent.querySelector('#cf-category');
+        const cfValSec   = tabContent.querySelector('#cf-values-section');
+        const cfValRows  = tabContent.querySelector('#cf-values-rows');
+        if (!cfName) return; // safety guard
+
+        // Populate category dropdown with existing properties
+        DB.getMetadata().properties.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.name;
+          opt.textContent = p.name;
+          cfCat.appendChild(opt);
+        });
+
+        function buildValRows(catName, existingVals) {
+          const prop = DB.getMetadata().properties.find(p => p.name === catName);
+          if (!prop || !prop.options || !prop.options.length) { cfValSec.hidden = true; return; }
+          cfValRows.innerHTML = prop.options.map(o => `
+            <div class="prop-option-row" style="align-items:center">
+              <span style="flex:1">• ${esc(o)}</span>
+              <input type="number" class="form-input cf-val-input" data-opt="${esc(o)}"
+                min="0" step="0.1" style="width:80px;text-align:center;padding:4px 6px"
+                placeholder="0" value="${existingVals[o] != null ? existingVals[o] : ''}">
+            </div>`).join('');
+          cfValSec.hidden = false;
+        }
+
+        // Load existing feature config
+        const existing = DB.getCapacityFeature();
+        if (existing) {
+          cfName.value    = existing.name || '';
+          cfCat.value     = existing.category || '';
+          if (existing.category) buildValRows(existing.category, existing.values || {});
+        }
+
+        cfCat.addEventListener('change', () => {
+          const cur = DB.getCapacityFeature();
+          const curVals = (cur && cur.category === cfCat.value) ? (cur.values || {}) : {};
+          buildValRows(cfCat.value, curVals);
+        });
+
+        tabContent.querySelector('#cf-save').addEventListener('click', () => {
+          const name     = cfName.value.trim();
+          const category = cfCat.value;
+          if (!category) { Toast.show('יש לבחור מאפיין מקושר', 'error'); return; }
+          const values = {};
+          cfValRows.querySelectorAll('.cf-val-input').forEach(inp => {
+            const v = parseFloat(inp.value);
+            if (!isNaN(v) && v > 0) values[inp.dataset.opt] = v;
+          });
+          DB.setCapacityFeature({ name, category, values });
+          Toast.show('תכונה מיוחדת נשמרה', 'success');
+        });
+
+        tabContent.querySelector('#cf-clear').addEventListener('click', () => {
+          DB.setCapacityFeature(null);
+          cfName.value = '';
+          cfCat.value  = '';
+          cfValSec.hidden = true;
+          Toast.show('תכונה מיוחדת נוקתה', 'info');
+        });
+      })();
     }
 
     // ── Floor Items Tab ──────────────────────────────────────
@@ -5252,8 +5407,53 @@
       return msg;
     }
 
+    // Compute projected capacity usage issue for current destination, or null if OK
+    function _getCapacityLimitIssue() {
+      if (!_currentData || _currentType !== 'cart' || _currentData.parentCartId) return null;
+      const feat = DB.getCapacityFeature();
+      if (!feat || !feat.category || !feat.values) return null;
+      const destLoc = screen.querySelector('#tr-dest-loc').value.trim();
+      if (!destLoc) return null;
+      const locMeta = DB.getMetadata().locations.find(l => l.name === destLoc);
+      if (!locMeta || !locMeta.capacityLimit) return null;
+      const allSlots = _trReadAllSlots();
+      let newContrib = 0;
+      for (const slot of allSlots) {
+        const val = (slot.properties || {})[feat.category];
+        if (val && feat.values[val] != null) newContrib += Number(feat.values[val]) || 0;
+      }
+      const cap = _calcLocCapacityUsage(destLoc);
+      let currentUsed = cap ? cap.used : 0;
+      // subtract this cart's current contribution if it was already at destLoc
+      if (_currentData.location === destLoc) {
+        const cart = DB.getCart(_currentData.cartId);
+        if (cart && !cart.parentCartId) {
+          const oldSlots = [cart.properties || {}, ...(cart.extraItems || []).map(e => e.properties || {})];
+          for (const props of oldSlots) {
+            const v = props[feat.category];
+            if (v && feat.values[v] != null) currentUsed -= Number(feat.values[v]) || 0;
+          }
+        }
+      }
+      const projected = currentUsed + newContrib;
+      if (projected > locMeta.capacityLimit) {
+        const fname = feat.name || 'תכונה';
+        return `${fname} ב${destLoc}: ${projected} / ${locMeta.capacityLimit} (מגבלה)`;
+      }
+      return null;
+    }
+
     // save + send / save only — both run slot-homogeneity validation first
     function _trSaveWithValidation(andSend) {
+      const doSaveAndSend = () => {
+        const msg = doTransferSave();
+        if (andSend && msg) Utils.shareOrCopy(msg);
+      };
+      const checkCapacityThenSave = () => {
+        const capIssue = _getCapacityLimitIssue();
+        if (capIssue) { showValidationWarning([capIssue], doSaveAndSend); return; }
+        doSaveAndSend();
+      };
       if (_currentData && _currentType === 'cart') {
         const allSlots = _trReadAllSlots();
         const slot0 = allSlots[0] || { properties: {}, itemCount: 0, itemIds: [] };
@@ -5261,15 +5461,11 @@
           itemCount: slot0.itemCount, properties: slot0.properties, extraItems: allSlots.slice(1)
         });
         if (issue) {
-          showValidationWarning([`${_currentData.cartId}: ${issue}`], () => {
-            const msg = doTransferSave();
-            if (andSend && msg) Utils.shareOrCopy(msg);
-          });
+          showValidationWarning([`${_currentData.cartId}: ${issue}`], checkCapacityThenSave);
           return;
         }
       }
-      const msg = doTransferSave();
-      if (andSend && msg) Utils.shareOrCopy(msg);
+      checkCapacityThenSave();
     }
     screen.querySelector('#tr-save-btn').addEventListener('click', () => _trSaveWithValidation(true));
     screen.querySelector('#tr-save-only-btn').addEventListener('click', () => _trSaveWithValidation(false));
@@ -5988,6 +6184,36 @@
           const issues = [];
           const sh = validateCartSlotsHomogeneity({ itemCount: slot0.itemCount, properties: slot0.properties, extraItems: extras });
           if (sh) issues.push(`${destCartId}: ${sh}`);
+          // Capacity limit check: loading may change the cart's property values at its location
+          const _cfeat = DB.getCapacityFeature();
+          if (_cfeat && _cfeat.category && _cfeat.values) {
+            const destCartMeta = DB.getCart(destCartId);
+            const cartLoc = destCartMeta ? destCartMeta.location : null;
+            if (cartLoc) {
+              const locMeta = DB.getMetadata().locations.find(l => l.name === cartLoc);
+              if (locMeta && locMeta.capacityLimit) {
+                let newContrib = 0;
+                for (const sl of [slot0, ...extras]) {
+                  const v = (sl.properties || {})[_cfeat.category];
+                  if (v && _cfeat.values[v] != null) newContrib += Number(_cfeat.values[v]) || 0;
+                }
+                const cap2 = _calcLocCapacityUsage(cartLoc);
+                let curUsed = cap2 ? cap2.used : 0;
+                if (destCartMeta && !destCartMeta.parentCartId) {
+                  const oldSlots2 = [destCartMeta.properties || {}, ...(destCartMeta.extraItems || []).map(e => e.properties || {})];
+                  for (const props2 of oldSlots2) {
+                    const v2 = props2[_cfeat.category];
+                    if (v2 && _cfeat.values[v2] != null) curUsed -= Number(_cfeat.values[v2]) || 0;
+                  }
+                }
+                const projected2 = curUsed + newContrib;
+                if (projected2 > locMeta.capacityLimit) {
+                  const fname2 = _cfeat.name || 'תכונה';
+                  issues.push(`${fname2} ב${cartLoc}: ${projected2} / ${locMeta.capacityLimit} (מגבלה)`);
+                }
+              }
+            }
+          }
           if (issues.length) { showValidationWarning(issues, () => doLoadSave(true)); return null; }
         }
         DB.upsertCart({
@@ -7092,10 +7318,24 @@
           const clr = full ? 'var(--danger)' : low ? '#f59e0b' : 'var(--success,#16a34a)';
           capHtml = `<span style="font-size:0.7rem;color:${clr};font-weight:600;padding:1px 7px;border-radius:10px;border:1px solid ${clr};margin-inline-start:6px;white-space:nowrap;flex-shrink:0">${full ? 'מלא' : avail + ' פנויים'} ${occupied}/${_locMeta.maxPlaces}</span>`;
         }
+        let capFeatHtml = '';
+        const _cf = DB.getCapacityFeature();
+        if (_cf && _locMeta && _locMeta.capacityLimit) {
+          const cap = _calcLocCapacityUsage(g.loc);
+          if (cap) {
+            const used = cap.used;
+            const limit = _locMeta.capacityLimit;
+            const rem = limit - used;
+            const pct = limit > 0 ? used / limit * 100 : 0;
+            const clr2 = rem <= 0 ? 'var(--danger)' : pct >= 80 ? '#f59e0b' : 'var(--success,#16a34a)';
+            const fname = _cf.name || 'תכונה';
+            capFeatHtml = `<span style="font-size:0.7rem;color:${clr2};font-weight:600;padding:1px 7px;border-radius:10px;border:1px solid ${clr2};margin-inline-start:4px;white-space:nowrap;flex-shrink:0">${rem <= 0 ? fname + ' מלא' : rem + ' נותר (' + fname + ')'} ${used}/${limit}</span>`;
+          }
+        }
         return `
         <div class="loc-group">
           <div class="loc-group-header">
-            <span style="flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:2px">${highlightText(g.loc + (g.sub ? ' / ' + g.sub : ''), terms)}${capHtml}</span>
+            <span style="flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:2px">${highlightText(g.loc + (g.sub ? ' / ' + g.sub : ''), terms)}${capHtml}${capFeatHtml}</span>
             <button class="sr-hdr-btn sr-add-btn" data-loc="${esc(g.loc)}" data-sub="${esc(g.sub||'')}" title="הוסף פריטים">+</button>
             <button class="sr-hdr-btn sr-clear-rest-btn" data-loc="${esc(g.loc)}" data-sub="${esc(g.sub||'')}" title="מחק את השאר">✕</button>
             <button class="sr-pin-btn${isPinned ? ' pinned' : ''}" data-pin-key="${esc(gKey)}" title="${isPinned ? 'בטל הצמדה' : 'הצמד למעלה'}">${isPinned ? '\u2605' : '\u2606'}</button>
