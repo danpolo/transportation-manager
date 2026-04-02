@@ -3042,7 +3042,7 @@
       const sh = validateCartSlotsHomogeneity(cart);
       if (sh) {
         issues.push({
-          type: 'homogeneity', icon: '⚠️', groupLabel: 'חוסר אחידות בין משבצות',
+          type: 'homogeneity', icon: '⚠️', groupLabel: Lang.T('חוסר אחידות בין משבצות', 'Inconsistencia entre slots'),
           label: lbl, description: sh.split('\n')[0],
           autoFix: null, editKey: cart.cartId,
         });
@@ -3050,8 +3050,8 @@
 
       // 2. Invalid property values (only for props with defined option lists)
       const slots = [
-        { props: cart.properties || {}, slot: 'משבצת 1' },
-        ...(cart.extraItems || []).map((e, i) => ({ props: e.properties || {}, slot: `משבצת ${i + 2}` }))
+        { props: cart.properties || {}, slot: Lang.T('משבצת 1', 'Slot 1') },
+        ...(cart.extraItems || []).map((e, i) => ({ props: e.properties || {}, slot: Lang.T('משבצת ', 'Slot ') + (i + 2) }))
       ];
       slots.forEach(({ props, slot }) => {
         propDefs.forEach(p => {
@@ -3060,7 +3060,7 @@
           if (!val) return;
           if (!validOptions[p.name].has(val.toLowerCase())) {
             issues.push({
-              type: 'invalid-prop', icon: '❓', groupLabel: 'ערך מאפיין לא מוכר',
+              type: 'invalid-prop', icon: '❓', groupLabel: Lang.T('ערך מאפיין לא מוכר', 'Valor de atributo no reconocido'),
               label: lbl, description: `${slot}: "${p.name}" — "${val}"`,
               autoFix: null, editKey: cart.cartId,
             });
@@ -3074,10 +3074,10 @@
         if (!parent) {
           const snap = Object.assign({}, cart);
           issues.push({
-            type: 'orphaned-child', icon: '🔗', groupLabel: 'טעונה על הורה שאינו קיים',
-            label: lbl, description: `מוגדרת כטעונה על "${cart.parentCartId}"`,
+            type: 'orphaned-child', icon: '🔗', groupLabel: Lang.T('טעונה על הורה שאינו קיים', 'Cargado sobre padre inexistente'),
+            label: lbl, description: Lang.T('מוגדרת כטעונה על "', 'Definido como cargado sobre "') + cart.parentCartId + '"',
             autoFix: () => DB.upsertCart(Object.assign({}, snap, { parentCartId: null })),
-            autoFixLabel: 'נקה הורה',
+            autoFixLabel: Lang.T('נקה הורה', 'Limpiar padre'),
             editKey: null,
           });
         }
@@ -3090,8 +3090,8 @@
           const total = cartTotalCount(cart);
           if (total > maxItems) {
             issues.push({
-              type: 'over-max', icon: '🔢', groupLabel: 'חריגה ממקסימום פריטים',
-              label: lbl, description: `${total} פריטים (מקסימום: ${maxItems})`,
+              type: 'over-max', icon: '🔢', groupLabel: Lang.T('חריגה ממקסימום פריטים', 'Excede máximo de ítems'),
+              label: lbl, description: `${total} ${Lang.T('פריטים (מקסימום: ', 'ítems (máximo: ')}${maxItems})`,
               autoFix: null, editKey: cart.cartId,
             });
           }
@@ -3106,10 +3106,10 @@
           const parentLoc = parent.location + (parent.subLocation ? ' / ' + parent.subLocation : '');
           const childLoc = cart.location + (cart.subLocation ? ' / ' + cart.subLocation : '');
           issues.push({
-            type: 'loc-mismatch', icon: '📍', groupLabel: 'מיקום שונה מהורה',
-            label: lbl, description: `${childLoc} ← צפוי: ${parentLoc}`,
+            type: 'loc-mismatch', icon: '📍', groupLabel: Lang.T('מיקום שונה מהורה', 'Ubicación distinta al padre'),
+            label: lbl, description: `${childLoc} ← ${Lang.T('צפוי: ', 'esperado: ')}${parentLoc}`,
             autoFix: () => DB.upsertCart(Object.assign({}, snap, { location: parent.location, subLocation: parent.subLocation || '' })),
-            autoFixLabel: 'יישר',
+            autoFixLabel: Lang.T('יישר', 'Alinear'),
             editKey: null,
           });
         }
@@ -3127,9 +3127,9 @@
       const occ = locOccupied[loc.name] || 0;
       if (occ > loc.maxPlaces) {
         issues.push({
-          type: 'loc-overcapacity', icon: '🏠', groupLabel: 'מיקום מעל קיבולת',
+          type: 'loc-overcapacity', icon: '🏠', groupLabel: Lang.T('מיקום מעל קיבולת', 'Ubicación sobre capacidad'),
           label: loc.name,
-          description: `${occ} עגלות (מקסימום: ${loc.maxPlaces})`,
+          description: `${occ} ${Lang.T('עגלות (מקסימום: ', 'carretas (máximo: ')}${loc.maxPlaces})`,
           autoFix: null, editKey: null,
         });
       }
@@ -3142,9 +3142,9 @@
       if (cap && cap.used > loc.capacityLimit) {
         const fname = cap.feat.name || 'תכונה';
         issues.push({
-          type: 'over-capacity-feature', icon: '⚖️', groupLabel: `חריגת ${fname}`,
+          type: 'over-capacity-feature', icon: '⚖️', groupLabel: Lang.T('חריגת ', 'Excede ') + fname,
           label: loc.name,
-          description: `${cap.used} / ${loc.capacityLimit} (מגבלה)`,
+          description: `${cap.used} / ${loc.capacityLimit} (${Lang.T('מגבלה', 'límite')})`,
           autoFix: null, editKey: null,
         });
       }
@@ -3158,13 +3158,13 @@
     let issues = scanMapIssues();
 
     if (!issues.length) {
-      Toast.show('המיפוי תקין — לא נמצאו בעיות 👍', 'success');
+      Toast.show(Lang.T('המיפוי תקין — לא נמצאו בעיות 👍', 'El mapa está bien — no se encontraron problemas 👍'), 'success');
       return;
     }
 
     function buildHtml(list) {
       if (!list.length) {
-        return `<div style="text-align:center;padding:24px 16px;color:var(--success,#16a34a);font-size:1rem;font-weight:600">✅ הכל תוקן!</div>`;
+        return `<div style="text-align:center;padding:24px 16px;color:var(--success,#16a34a);font-size:1rem;font-weight:600">${Lang.T("✅ הכל תוקן!", "✅ ¡Todo corregido!")}</div>`;
       }
       const groups = {};
       list.forEach((iss, i) => {
@@ -3179,7 +3179,7 @@
           const btn = iss.autoFix
             ? `<button class="btn btn-sm mrv-fix" data-i="${iss._i}" style="background:var(--brand);color:#fff;white-space:nowrap;flex-shrink:0">${esc(iss.autoFixLabel)} ✓</button>`
             : iss.editKey
-              ? `<button class="btn btn-sm mrv-goto" data-key="${esc(iss.editKey)}" style="white-space:nowrap;flex-shrink:0">ערוך ›</button>`
+              ? `<button class="btn btn-sm mrv-goto" data-key="${esc(iss.editKey)}" style="white-space:nowrap;flex-shrink:0">${Lang.T('ערוך ›', 'Editar ›')}</button>`
               : '';
           h += `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f3f4f6">
             <div style="flex:1;min-width:0">
@@ -3197,9 +3197,9 @@
 
     function open() {
       Modal.open({
-        title: `סקירת מיפוי — ${issues.length} בעיות`,
+        title: `${Lang.T('סקירת מיפוי — ', 'Revisión del mapa — ')}${issues.length}${Lang.T(' בעיות', ' problemas')}`,
         html: buildHtml(issues),
-        actions: [{ id: 'mrv-close', label: 'סגור', cls: 'btn-outline', onClick: Modal.close }]
+        actions: [{ id: 'mrv-close', label: Lang.T('סגור', 'Cerrar'), cls: 'btn-outline', onClick: Modal.close }]
       });
       const overlay = document.getElementById('modal-overlay');
       overlay.querySelectorAll('.mrv-fix').forEach(btn => {
@@ -3208,11 +3208,11 @@
           if (issues[i] && issues[i].autoFix) {
             issues[i].autoFix();
             issues = scanMapIssues(); // rescan after fix
-            if (!issues.length) { Modal.close(); Toast.show('כל הבעיות תוקנו ✅', 'success'); return; }
+            if (!issues.length) { Modal.close(); Toast.show(Lang.T('כל הבעיות תוקנו ✅', 'Todos los problemas corregidos ✅'), 'success'); return; }
             Modal.open({
-              title: `סקירת מיפוי — ${issues.length} בעיות`,
+              title: `${Lang.T('סקירת מיפוי — ', 'Revisión del mapa — ')}${issues.length}${Lang.T(' בעיות', ' problemas')}`,
               html: buildHtml(issues),
-              actions: [{ id: 'mrv-close', label: 'סגור', cls: 'btn-outline', onClick: Modal.close }]
+              actions: [{ id: 'mrv-close', label: Lang.T('סגור', 'Cerrar'), cls: 'btn-outline', onClick: Modal.close }]
             });
             wireButtons();
           }
@@ -3235,11 +3235,11 @@
           if (issues[i] && issues[i].autoFix) {
             issues[i].autoFix();
             issues = scanMapIssues();
-            if (!issues.length) { Modal.close(); Toast.show('כל הבעיות תוקנו ✅', 'success'); return; }
+            if (!issues.length) { Modal.close(); Toast.show(Lang.T('כל הבעיות תוקנו ✅', 'Todos los problemas corregidos ✅'), 'success'); return; }
             Modal.open({
-              title: `סקירת מיפוי — ${issues.length} בעיות`,
+              title: `${Lang.T('סקירת מיפוי — ', 'Revisión del mapa — ')}${issues.length}${Lang.T(' בעיות', ' problemas')}`,
               html: buildHtml(issues),
-              actions: [{ id: 'mrv-close', label: 'סגור', cls: 'btn-outline', onClick: Modal.close }]
+              actions: [{ id: 'mrv-close', label: Lang.T('סגור', 'Cerrar'), cls: 'btn-outline', onClick: Modal.close }]
             });
             wireButtons();
           }
@@ -3413,57 +3413,57 @@
       tabContent.innerHTML = `
         <div class="p-screen">
           <div class="card">
-            <div class="card-title" id="ec-form-title">הוספת / עדכון עגלה</div>
+            <div class="card-title" id="ec-form-title">${Lang.T('הוספת / עדכון עגלה', 'Agregar / Actualizar carreta')}</div>
             <div class="form-group">
-              <label class="form-label">קטגוריה</label>
+              <label class="form-label">${Lang.T('קטגוריה', 'Categoría')}</label>
               <select id="ec-containertype" class="form-select"></select>
             </div>
             <div class="form-group">
-              <label class="form-label">מספר מזהה</label>
+              <label class="form-label">${Lang.T('מספר מזהה', 'Número de ID')}</label>
               <input id="ec-cartid" class="form-input" placeholder="8-6" autocomplete="off">
             </div>
             <div class="form-group">
-              <label class="form-label">סוג</label>
+              <label class="form-label">${Lang.T('סוג', 'Tipo')}</label>
               <select id="ec-carttype" class="form-select">
-                <option value="">— ללא —</option>
+                <option value="">${Lang.T('— ללא —', '— Ninguno —')}</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">מיקום</label>
+              <label class="form-label">${Lang.T('מיקום', 'Ubicación')}</label>
               <input id="ec-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
             <div class="form-group" id="ec-subloc-group" hidden>
-              <label class="form-label">תת-מיקום</label>
+              <label class="form-label">${Lang.T('תת-מיקום', 'Sub-ubicación')}</label>
               <input id="ec-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
             <div class="form-group">
-              <label class="form-label">מועמס על: (אופציונלי)</label>
+              <label class="form-label">${Lang.T('מועמס על: (אופציונלי)', 'Cargado sobre: (opcional)')}</label>
               <select id="ec-parent" class="form-select">
-                <option value="">— ללא —</option>
+                <option value="">${Lang.T('— ללא —', '— Ninguno —')}</option>
               </select>
             </div>
-            <button id="ec-save" class="btn btn-primary btn-full">שמור עגלה</button>
+            <button id="ec-save" class="btn btn-primary btn-full">${Lang.T('שמור עגלה', 'Guardar carreta')}</button>
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">עגלות קיימות</div>
+            <div class="card-title">${Lang.T('עגלות קיימות', 'Carretas existentes')}</div>
             <div id="ec-list"></div>
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">סוגים</div>
+            <div class="card-title">${Lang.T('סוגים', 'Tipos')}</div>
             <div class="form-group" style="display:flex;gap:8px;">
               <input id="ec-newtype" class="form-input" placeholder="110" autocomplete="off" style="flex:1">
-              <button id="ec-addtype-btn" class="btn btn-outline">+ הוסף</button>
+              <button id="ec-addtype-btn" class="btn btn-outline">${Lang.T('+ הוסף', '+ Agregar')}</button>
             </div>
             <div id="ec-type-list"></div>
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">קטגוריות</div>
+            <div class="card-title">${Lang.T('קטגוריות', 'Categorías')}</div>
             <div class="form-group" style="display:flex;gap:8px;">
               <input id="ec-newcontainertype" class="form-input" placeholder="משטח" autocomplete="off" style="flex:1">
-              <button id="ec-addcontainertype-btn" class="btn btn-outline">+ הוסף</button>
+              <button id="ec-addcontainertype-btn" class="btn btn-outline">${Lang.T('+ הוסף', '+ Agregar')}</button>
             </div>
             <div id="ec-containertype-list"></div>
           </div>
@@ -3473,21 +3473,21 @@
       function renderCartTypeOptions() {
         const sel = tabContent.querySelector('#ec-carttype');
         const types = DB.getMetadata().cartTypes || [];
-        sel.innerHTML = '<option value="">— ללא —</option>' +
+        sel.innerHTML = `<option value="">${Lang.T('— ללא —', '— Ninguno —')}</option>` +
           types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
       }
 
       function renderTypeList() {
         const container = tabContent.querySelector('#ec-type-list');
         const types = DB.getMetadata().cartTypes || [];
-        if (!types.length) { container.innerHTML = '<p class="card-meta">אין סוגים מוגדרים</p>'; return; }
+        if (!types.length) { container.innerHTML = `<p class="card-meta">${Lang.T('אין סוגים מוגדרים', 'No hay tipos definidos')}</p>`; return; }
         container.innerHTML = types.map(t => {
           const maxItems = DB.getCartTypeMax(t);
           return `
           <div class="list-item" style="flex-wrap:wrap">
             <div class="list-item-body"><div class="list-item-title">${esc(t)}</div></div>
             <div style="display:flex;align-items:center;gap:4px;font-size:0.8rem;color:var(--muted)">
-              <span>מקס׳:</span>
+              <span>${Lang.T('מקס׳:', 'Máx.:')}</span>
               <input class="form-input ec-maxitems-input" type="number" min="1" placeholder="—"
                      data-type="${esc(t)}" value="${maxItems || ''}"
                      style="width:56px;padding:3px 6px;font-size:0.82rem;text-align:center">
@@ -3503,7 +3503,7 @@
           inp.addEventListener('change', () => {
             const val = parseInt(inp.value) || 0;
             DB.setCartTypeMax(inp.dataset.type, val || null);
-            Toast.show('מקסימום עודכן', 'success');
+            Toast.show(Lang.T('מקסימום עודכן', 'Máximo actualizado'), 'success');
           });
         });
       }
@@ -3517,7 +3517,7 @@
       function renderContainerTypeList() {
         const container = tabContent.querySelector('#ec-containertype-list');
         const types = (DB.getMetadata().containerTypes || ['עגלה']).filter(t => t !== 'עגלה');
-        if (!types.length) { container.innerHTML = '<p class="card-meta">רק ברירת מחדל (עגלה)</p>'; return; }
+        if (!types.length) { container.innerHTML = `<p class="card-meta">${Lang.T('רק ברירת מחדל (עגלה)', 'Solo predeterminada (carreta)')}</p>`; return; }
         container.innerHTML = types.map(t => `
           <div class="list-item">
             <div class="list-item-body"><div class="list-item-title">${esc(t)}</div></div>
@@ -3531,8 +3531,8 @@
 
       function updateFormLabels() {
         const ct = tabContent.querySelector('#ec-containertype').value || 'עגלה';
-        tabContent.querySelector('#ec-form-title').textContent = 'הוספת / עדכון ' + ct;
-        tabContent.querySelector('#ec-save').textContent = 'שמור ' + ct;
+        tabContent.querySelector('#ec-form-title').textContent = Lang.T('הוספת / עדכון ', 'Agregar / Actualizar ') + ct;
+        tabContent.querySelector('#ec-save').textContent = Lang.T('שמור ', 'Guardar ') + ct;
       }
 
       // render list
@@ -3540,18 +3540,18 @@
         const list = tabContent.querySelector('#ec-list');
         const carts = DB.getAllCarts();
         if (!carts.length) {
-          list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🛒</div><div class="es-desc">עדיין אין עגלות. הוסף עגלה ראשונה למעלה או ייבא מיפוי.</div></div>';
+          list.innerHTML = `<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🛒</div><div class="es-desc">${Lang.T('עדיין אין עגלות. הוסף עגלה ראשונה למעלה או ייבא מיפוי.', 'Aún no hay carretas. Agrega la primera arriba o importa un mapa.')}</div></div>`;
           return;
         }
         list.innerHTML = carts.sort((a,b) => a.cartId.localeCompare(b.cartId)).map(c => {
-          const parts = [c.location || 'ללא מיקום'];
-          if (cartTotalCount(c)) parts.push(cartTotalCount(c) + ' פריטים');
+          const parts = [c.location || Lang.T('ללא מיקום', 'Sin ubicación')];
+          if (cartTotalCount(c)) parts.push(cartTotalCount(c) + Lang.T(' פריטים', ' ítems'));
           if (c.parentCartId) {
             const p = DB.getCart(c.parentCartId);
-            parts.push('על ' + (p ? cartLabel(p) : c.parentCartId));
+            parts.push(Lang.T('על ', 'sobre ') + (p ? cartLabel(p) : c.parentCartId));
           }
           const childCount = DB.getChildCarts(c.cartId).length;
-          if (childCount) parts.push(childCount + ' טעונות');
+          if (childCount) parts.push(childCount + Lang.T(' טעונות', ' cargadas'));
           const ctBadge = (c.containerType && c.containerType !== DEFAULT_CONTAINER)
             ? ` <span style="background:#E0E7FF;color:#3730A3;padding:1px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">${esc(c.containerType)}</span>` : '';
           return `
@@ -3588,7 +3588,7 @@
           exclude.add(excludeId);
           for (const id of getDescendantIds(excludeId)) exclude.add(id);
         }
-        sel.innerHTML = '<option value="">— ללא —</option>' +
+        sel.innerHTML = `<option value="">${Lang.T('— ללא —', '— Ninguno —')}</option>` +
           carts.filter(c => !exclude.has(c.cartId))
                .sort((a,b) => a.cartId.localeCompare(b.cartId))
                .map(c => `<option value="${esc(c.cartId)}">${esc(cartLabel(c))}</option>`).join('');
@@ -3612,7 +3612,7 @@
       // save
       tabContent.querySelector('#ec-save').addEventListener('click', () => {
         const cartId   = tabContent.querySelector('#ec-cartid').value.trim();
-        if (!cartId) { Toast.show('יש להזין מספר מזהה', 'error'); return; }
+        if (!cartId) { Toast.show(Lang.T('יש להזין מספר מזהה', 'Ingresa un número de ID'), 'error'); return; }
         const containerType = tabContent.querySelector('#ec-containertype').value || 'עגלה';
         const cartType = tabContent.querySelector('#ec-carttype').value;
         const loc      = tabContent.querySelector('#ec-loc').value.trim();
@@ -3623,7 +3623,7 @@
           DB.upsertCart({ cartId, cartType, containerType, location: loc, subLocation: subLoc,
                           parentCartId,
                           isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
-          Toast.show(containerType + ' נשמרה', 'success');
+          Toast.show(containerType + Lang.T(' נשמרה', ' guardada'), 'success');
           renderList();
           renderParentOptions(null);
           tabContent.querySelector('#ec-cartid').value = '';
@@ -3664,16 +3664,16 @@
           const delCart = DB.getCart(delBtn.dataset.id) || { cartId: delBtn.dataset.id };
           const delCtName = containerName(delCart);
           Modal.open({
-            title: 'מחיקת ' + delCtName,
-            html: `<p>האם למחוק את ה${esc(delCtName)} <strong>${esc(cartLabel(delCart))}</strong>?</p>`,
+            title: Lang.T('מחיקת ', 'Eliminar ') + delCtName,
+            html: `<p>${Lang.T('האם למחוק את ה', '¿Eliminar ')}${esc(delCtName)} <strong>${esc(cartLabel(delCart))}</strong>${Lang.T('?', '?')}</p>`,
             actions: [
-              { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
+              { id: 'del', label: Lang.T('מחק', 'Eliminar'), cls: 'btn-danger', onClick: () => {
                 DB.deleteCart(delBtn.dataset.id);
                 Modal.close();
-                Toast.show(delCtName + ' נמחקה', 'info');
+                Toast.show(delCtName + Lang.T(' נמחקה', ' eliminada'), 'info');
                 renderList();
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
         }
@@ -3687,7 +3687,7 @@
         tabContent.querySelector('#ec-newtype').value = '';
         renderCartTypeOptions();
         renderTypeList();
-        Toast.show('סוג נוסף', 'success');
+        Toast.show(Lang.T('סוג נוסף', 'Tipo agregado'), 'success');
       });
 
       tabContent.querySelector('#ec-type-list').addEventListener('click', e => {
@@ -3695,18 +3695,18 @@
         if (renameBtn) {
           const oldName = renameBtn.dataset.type;
           Modal.open({
-            title: 'שינוי שם סוג',
-            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-type-input" class="form-input" value="${esc(oldName)}"></div>`,
+            title: Lang.T('שינוי שם סוג', 'Renombrar tipo'),
+            html: `<div class="form-group"><label class="form-label">${Lang.T('שם חדש', 'Nuevo nombre')}</label><input id="rename-type-input" class="form-input" value="${esc(oldName)}"></div>`,
             actions: [
-              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+              { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                 const newName = document.getElementById('rename-type-input').value.trim();
                 if (!newName || newName === oldName) { Modal.close(); return; }
                 DB.renameCartType(oldName, newName);
                 Modal.close();
                 renderCartTypeOptions(); renderTypeList(); renderList();
-                Toast.show('סוג שונה', 'success');
+                Toast.show(Lang.T('סוג שונה', 'Tipo renombrado'), 'success');
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
           return;
@@ -3714,17 +3714,17 @@
         const delBtn = e.target.closest('.ec-deltype-btn');
         if (!delBtn) return;
         Modal.open({
-          title: 'מחיקת סוג',
+          title: Lang.T('מחיקת סוג', 'Eliminar tipo'),
           html: `<p>האם למחוק את הסוג <strong>${esc(delBtn.dataset.type)}</strong>?</p>`,
           actions: [
-            { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
+            { id: 'del', label: Lang.T('מחק', 'Eliminar'), cls: 'btn-danger', onClick: () => {
               DB.deleteCartType(delBtn.dataset.type);
               Modal.close();
               renderCartTypeOptions();
               renderTypeList();
-              Toast.show('סוג נמחק', 'info');
+              Toast.show(Lang.T('סוג נמחק', 'Tipo eliminado'), 'info');
             }},
-            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
           ]
         });
       });
@@ -3737,7 +3737,7 @@
         tabContent.querySelector('#ec-newcontainertype').value = '';
         renderContainerTypeOptions();
         renderContainerTypeList();
-        Toast.show('קטגוריה נוספה', 'success');
+        Toast.show(Lang.T('קטגוריה נוספה', 'Categoría agregada'), 'success');
       });
 
       tabContent.querySelector('#ec-containertype-list').addEventListener('click', e => {
@@ -3745,18 +3745,18 @@
         if (renameBtn) {
           const oldName = renameBtn.dataset.type;
           Modal.open({
-            title: 'שינוי שם קטגוריה',
-            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-ct-input" class="form-input" value="${esc(oldName)}"></div>`,
+            title: Lang.T('שינוי שם קטגוריה', 'Renombrar categoría'),
+            html: `<div class="form-group"><label class="form-label">${Lang.T('שם חדש', 'Nuevo nombre')}</label><input id="rename-ct-input" class="form-input" value="${esc(oldName)}"></div>`,
             actions: [
-              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+              { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                 const newName = document.getElementById('rename-ct-input').value.trim();
                 if (!newName || newName === oldName) { Modal.close(); return; }
                 DB.renameContainerType(oldName, newName);
                 Modal.close();
                 renderContainerTypeOptions(); renderContainerTypeList(); renderList();
-                Toast.show('קטגוריה שונתה', 'success');
+                Toast.show(Lang.T('קטגוריה שונתה', 'Categoría renombrada'), 'success');
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
           return;
@@ -3764,18 +3764,18 @@
         const delBtn = e.target.closest('.ec-delcontainertype-btn');
         if (!delBtn) return;
         Modal.open({
-          title: 'מחיקת קטגוריה',
+          title: Lang.T('מחיקת קטגוריה', 'Eliminar categoría'),
           html: `<p>האם למחוק את הקטגוריה <strong>${esc(delBtn.dataset.type)}</strong>? פריטים מקטגוריה זו יוחזרו לעגלה.</p>`,
           actions: [
-            { id: 'del', label: 'מחק', cls: 'btn-danger', onClick: () => {
+            { id: 'del', label: Lang.T('מחק', 'Eliminar'), cls: 'btn-danger', onClick: () => {
               DB.deleteContainerType(delBtn.dataset.type);
               Modal.close();
               renderContainerTypeOptions();
               renderContainerTypeList();
               renderList();
-              Toast.show('קטגוריה נמחקה', 'info');
+              Toast.show(Lang.T('קטגוריה נמחקה', 'Categoría eliminada'), 'info');
             }},
-            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
           ]
         });
       });
@@ -3804,23 +3804,23 @@
       tabContent.innerHTML = `
         <div class="p-screen">
           <div class="card">
-            <div class="card-title">הוספת מיקום</div>
+            <div class="card-title">${Lang.T('הוספת מיקום', 'Agregar ubicación')}</div>
             <div class="form-group">
-              <label class="form-label">שם מיקום</label>
+              <label class="form-label">${Lang.T('שם מיקום', 'Nombre de ubicación')}</label>
               <input id="el-name" class="form-input" placeholder="משני">
             </div>
             <label style="display:flex;align-items:center;gap:10px;margin-bottom:14px;cursor:pointer">
-              <label class="modern-check"><input type="checkbox" id="el-inmap"><span class="modern-check-box"></span></label> הצג במיפוי
+              <label class="modern-check"><input type="checkbox" id="el-inmap"><span class="modern-check-box"></span></label> ${Lang.T('הצג במיפוי', 'Mostrar en mapa')}
             </label>
-            <button id="el-save" class="btn btn-primary btn-full">שמור מיקום</button>
+            <button id="el-save" class="btn btn-primary btn-full">${Lang.T('שמור מיקום', 'Guardar ubicación')}</button>
           </div>
 
           <div class="card mt-12">
             <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-              <span>מיקומים קיימים</span>
+              <span>${Lang.T('מיקומים קיימים', 'Ubicaciones existentes')}</span>
               <div style="display:flex;align-items:center;gap:8px">
                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.78rem;font-weight:normal">
-                  <span id="el-lock-emoji">🔓</span> נעילת סדר
+                  <span id="el-lock-emoji">🔓</span> ${Lang.T('נעילת סדר', 'Bloquear orden')}
                   <span class="toggle-switch"><input type="checkbox" id="el-order-lock"><span class="toggle-slider"></span></span>
                 </label>
                 <button class="btn-icon" id="el-order-lock-info" title="מידע" style="font-size:0.85rem;padding:2px 5px;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center">i</button>
@@ -3830,27 +3830,27 @@
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">ניהול תתי-מיקומים</div>
+            <div class="card-title">${Lang.T('ניהול תתי-מיקומים', 'Gestión de sub-ubicaciones')}</div>
             <div class="form-group">
-              <label class="form-label">בחר מיקום</label>
+              <label class="form-label">${Lang.T('בחר מיקום', 'Elegir ubicación')}</label>
               <select id="el-sub-loc-sel" class="form-select">
-                <option value="">— בחר מיקום —</option>
+                <option value="">${Lang.T('— בחר מיקום —', '— Elegir ubicación —')}</option>
               </select>
             </div>
             <div id="el-sub-list"></div>
             <div id="el-sub-add-row" class="prop-add-row" hidden>
-              <input id="el-sub-input" class="form-input btn-sm" placeholder="שם תת-מיקום">
-              <button id="el-sub-add" class="btn btn-outline btn-sm">הוסף</button>
+              <input id="el-sub-input" class="form-input btn-sm" placeholder="${Lang.T('שם תת-מיקום', 'Nombre de sub-ubicación')}">
+              <button id="el-sub-add" class="btn btn-outline btn-sm">${Lang.T('הוסף', 'Agregar')}</button>
             </div>
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">הגדרות מיפוי</div>
+            <div class="card-title">${Lang.T('הגדרות מיפוי', 'Configuración del mapa')}</div>
             <div class="form-group">
-              <label class="form-label">שם מיפוי חיצוני</label>
+              <label class="form-label">${Lang.T('שם מיפוי חיצוני', 'Nombre del mapa externo')}</label>
               <div style="display:flex;gap:8px">
                 <input id="el-offmap-label" class="form-input" placeholder="חיצוני" autocomplete="off">
-                <button id="el-offmap-label-save" class="btn btn-primary" style="white-space:nowrap">שמור</button>
+                <button id="el-offmap-label-save" class="btn btn-primary" style="white-space:nowrap">${Lang.T('שמור', 'Guardar')}</button>
               </div>
             </div>
           </div>
@@ -3860,7 +3860,7 @@
       function renderList() {
         const list = tabContent.querySelector('#el-list');
         const locs = DB.getMetadata().locations;
-        if (!locs.length) { list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">📍</div><div class="es-desc">הוסף מיקום ראשון למעלה כדי להתחיל.</div></div>'; return; }
+        if (!locs.length) { list.innerHTML = `<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">📍</div><div class="es-desc">${Lang.T('הוסף מיקום ראשון למעלה כדי להתחיל.', 'Agrega la primera ubicación arriba para empezar.')}</div></div>`; return; }
         list.innerHTML = locs.map((l, idx) => {
           const subs = (l.subLocations || []);
           const subStr = subs.length ? subs.join(', ') : '';
@@ -3868,7 +3868,7 @@
             <div class="list-item reorder-item" data-loc-idx="${idx}">
               <div class="list-item-body" style="flex:1">
                 <div class="list-item-title">${l.name}</div>
-                <div class="list-item-sub">${l.inMap ? '✓ מוצג במיפוי' : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}${l.maxPlaces ? (l.inMap || subStr ? ' · ' : '') + 'מקס׳ ' + l.maxPlaces + ' מקומות' : ''}</div>
+                <div class="list-item-sub">${l.inMap ? Lang.T('✓ מוצג במיפוי', '✓ Visible en mapa') : ''}${subStr ? (l.inMap ? ' · ' : '') + subStr : ''}${l.maxPlaces ? (l.inMap || subStr ? ' · ' : '') + Lang.T('מקס׳ ', 'Máx. ') + l.maxPlaces + Lang.T(' מקומות', ' lugares') : ''}</div>
               </div>
               <div class="list-item-actions">
                 <button class="btn-icon-edit el-menu-btn" data-name="${esc(l.name)}" title="אפשרויות">✏️</button>
@@ -3883,7 +3883,7 @@
         const sel  = tabContent.querySelector('#el-sub-loc-sel');
         const locs = DB.getMetadata().locations;
         const prev = sel.value;
-        sel.innerHTML = '<option value="">— בחר מיקום —</option>' +
+        sel.innerHTML = `<option value="">${Lang.T('— בחר מיקום —', '— Elegir ubicación —')}</option>` +
           locs.map(l => `<option value="${esc(l.name)}" ${l.name === prev ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
       }
 
@@ -3895,7 +3895,7 @@
         const loc  = DB.getMetadata().locations.find(l => l.name === locName);
         const subs = (loc && loc.subLocations) || [];
         if (!subs.length) {
-          subList.innerHTML = '<p class="card-meta" style="margin-bottom:8px">אין תתי-מיקומים</p>';
+          subList.innerHTML = `<p class="card-meta" style="margin-bottom:8px">${Lang.T('אין תתי-מיקומים', 'Sin sub-ubicaciones')}</p>`;
           return;
         }
         subList.innerHTML = subs.map(s => `
@@ -3922,23 +3922,23 @@
                 <span style="flex:1;font-size:0.9rem">${esc(a)}</span>
                 <button class="btn-icon alias-rm-btn" data-rm="${i}">✕</button>
               </div>`).join('')
-            : `<p style="font-size:0.83rem;color:var(--muted);margin-bottom:4px">אין שמות חלופיים</p>`;
+            : `<p style="font-size:0.83rem;color:var(--muted);margin-bottom:4px">${Lang.T('אין שמות חלופיים', 'Sin nombres alternativos')}</p>`;
         }
         function refreshRows() {
           document.getElementById('alias-rows').innerHTML = aliasRowsHtml();
         }
         Modal.open({
-          title: `שמות חלופיים — ${itemName}`,
+          title: `${Lang.T('שמות חלופיים — ', 'Nombres alternativos — ')}${itemName}`,
           html: `
-            <p style="font-size:0.83rem;color:var(--muted);margin-bottom:10px">שמות נוספים שיזוהו בייבוא מיפוי ויומרו לשם הרשמי</p>
+            <p style="font-size:0.83rem;color:var(--muted);margin-bottom:10px">${Lang.T('שמות נוספים שיזוהו בייבוא מיפוי ויומרו לשם הרשמי', 'Nombres adicionales reconocidos al importar mapa, convertidos al nombre oficial')}</p>
             <div id="alias-rows">${aliasRowsHtml()}</div>
             <div style="display:flex;gap:8px;margin-top:10px">
-              <input id="alias-new-input" class="form-input" style="flex:1;font-size:0.88rem;padding:6px 10px" placeholder="שם חלופי חדש">
-              <button id="alias-add-btn" class="btn btn-outline btn-sm">הוסף</button>
+              <input id="alias-new-input" class="form-input" style="flex:1;font-size:0.88rem;padding:6px 10px" placeholder="${Lang.T('שם חלופי חדש', 'Nuevo nombre alternativo')}">
+              <button id="alias-add-btn" class="btn btn-outline btn-sm">${Lang.T('הוסף', 'Agregar')}</button>
             </div>`,
           actions: [
-            { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => { Modal.close(); onSave(current); Toast.show('נשמר', 'success'); } },
-            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => { Modal.close(); onSave(current); Toast.show(Lang.T('נשמר', 'Guardado'), 'success'); } },
+            { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
           ]
         });
         const overlay = document.getElementById('modal-overlay');
@@ -3969,9 +3969,9 @@
       });
       tabContent.querySelector('#el-order-lock-info').addEventListener('click', () => {
         Modal.open({
-          title: 'נעילת סדר',
-          html: '<p style="line-height:1.6">כאשר הסדר נעול הסדר של המיקומים יקבע אך ורק על פי הסדר במסך הזה. כאשר הוא לא נעול בעת ייבוא מיפוי הסדר במיפוי הוא שיקבע.</p>',
-          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+          title: Lang.T('נעילת סדר', 'Bloquear orden'),
+          html: `<p style="line-height:1.6">${Lang.T('כאשר הסדר נעול הסדר של המיקומים יקבע אך ורק על פי הסדר במסך הזה. כאשר הוא לא נעול בעת ייבוא מיפוי הסדר במיפוי הוא שיקבע.', 'Cuando el orden está bloqueado, el orden de las ubicaciones se determina exclusivamente por el orden de esta pantalla. Cuando está desbloqueado, al importar un mapa el orden del mapa es el que prevalece.')}</p>`,
+          actions: [{ id: 'close', label: Lang.T('סגור', 'Cerrar'), onClick: Modal.close }]
         });
       });
 
@@ -3982,15 +3982,15 @@
         const val = _offMapInput.value.trim();
         DB.getMetadata().offMapLabel = val || '';
         DB.save();
-        Toast.show('שם מיפוי חיצוני נשמר', 'success');
+        Toast.show(Lang.T('שם מיפוי חיצוני נשמר', 'Nombre del mapa externo guardado'), 'success');
       });
 
       tabContent.querySelector('#el-save').addEventListener('click', () => {
         const name  = tabContent.querySelector('#el-name').value.trim();
-        if (!name) { Toast.show('יש להזין שם מיקום', 'error'); return; }
+        if (!name) { Toast.show(Lang.T('יש להזין שם מיקום', 'Ingresa un nombre de ubicación'), 'error'); return; }
         const inMap = tabContent.querySelector('#el-inmap').checked;
         DB.upsertLocation({ name, inMap });
-        Toast.show('מיקום נשמר', 'success');
+        Toast.show(Lang.T('מיקום נשמר', 'Ubicación guardada'), 'success');
         renderList();
         refreshSubLocSelect();
         tabContent.querySelector('#el-name').value = '';
@@ -4022,39 +4022,39 @@
           title: locName,
           html: '',
           actions: [
-            { id: 'rename', label: 'שנה שם', onClick: () => {
+            { id: 'rename', label: Lang.T('שנה שם', 'Renombrar'), onClick: () => {
               Modal.close();
               Modal.open({
-                title: 'שינוי שם מיקום',
-                html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-loc-input" class="form-input" value="${esc(locName)}"></div>`,
+                title: Lang.T('שינוי שם מיקום', 'Renombrar ubicación'),
+                html: `<div class="form-group"><label class="form-label">${Lang.T('שם חדש', 'Nuevo nombre')}</label><input id="rename-loc-input" class="form-input" value="${esc(locName)}"></div>`,
                 actions: [
-                  { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                  { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                     const newName = document.getElementById('rename-loc-input').value.trim();
                     if (!newName || newName === locName) { Modal.close(); return; }
                     DB.renameLocation(locName, newName);
                     Modal.close();
                     renderList(); refreshSubLocSelect();
-                    Toast.show('מיקום שונה', 'success');
+                    Toast.show(Lang.T('מיקום שונה', 'Ubicación renombrada'), 'success');
                   }},
-                  { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                  { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
                 ]
               });
             }},
-            { id: 'maxplaces', label: loc.maxPlaces ? `מקסימום: ${loc.maxPlaces} (ערוך)` : 'הגדר מקסימום מקומות', onClick: () => {
+            { id: 'maxplaces', label: loc.maxPlaces ? Lang.T(`מקסימום: ${loc.maxPlaces} (ערוך)`, `Máximo: ${loc.maxPlaces} (editar)`) : Lang.T('הגדר מקסימום מקומות', 'Definir máximo de lugares'), onClick: () => {
               Modal.close();
               Modal.open({
-                title: 'מקסימום מקומות — ' + locName,
-                html: `<p class="card-meta" style="margin-bottom:8px">המספר המקסימלי של עגלות שיכולות להיות במיקום זה.</p>
-                       <div class="form-group"><label class="form-label">מקסימום מקומות</label><input id="maxplaces-input" class="form-input" type="number" min="0" placeholder="ללא הגבלה" value="${loc.maxPlaces || ''}"></div>`,
+                title: Lang.T('מקסימום מקומות — ', 'Máximo de lugares — ') + locName,
+                html: `<p class="card-meta" style="margin-bottom:8px">${Lang.T('המספר המקסימלי של עגלות שיכולות להיות במיקום זה.', 'El número máximo de carretas que pueden estar en esta ubicación.')}</p>
+                       <div class="form-group"><label class="form-label">${Lang.T('מקסימום מקומות', 'Máximo de lugares')}</label><input id="maxplaces-input" class="form-input" type="number" min="0" placeholder="${Lang.T('ללא הגבלה', 'Sin límite')}" value="${loc.maxPlaces || ''}"></div>`,
                 actions: [
-                  { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                  { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                     const val = parseInt(document.getElementById('maxplaces-input').value) || 0;
                     DB.upsertLocation({ name: locName, maxPlaces: val || null });
                     Modal.close();
                     renderList();
-                    Toast.show('מקסימום עודכן', 'success');
+                    Toast.show(Lang.T('מקסימום עודכן', 'Máximo actualizado'), 'success');
                   }},
-                  { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                  { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
                 ]
               });
             }},
@@ -4062,32 +4062,32 @@
               const cf = DB.getCapacityFeature();
               if (!cf) return [];
               const fname = cf.name || 'תכונה';
-              return [{ id: 'caplimit', label: loc.capacityLimit ? `מגבלת ${fname}: ${loc.capacityLimit} (ערוך)` : `הגדר מגבלת ${fname}`, onClick: () => {
+              return [{ id: 'caplimit', label: loc.capacityLimit ? Lang.T(`מגבלת ${fname}: ${loc.capacityLimit} (ערוך)`, `Límite de ${fname}: ${loc.capacityLimit} (editar)`) : Lang.T(`הגדר מגבלת ${fname}`, `Definir límite de ${fname}`), onClick: () => {
                 Modal.close();
                 Modal.open({
-                  title: `מגבלת ${fname} — ${locName}`,
-                  html: `<p class="card-meta" style="margin-bottom:8px">סכום ה${fname} המקסימלי המותר במיקום זה.</p>
-                         <div class="form-group"><label class="form-label">מגבלה (0 = ללא)</label><input id="caplimit-input" class="form-input" type="number" min="0" placeholder="ללא הגבלה" value="${loc.capacityLimit || ''}"></div>`,
+                  title: Lang.T(`מגבלת ${fname} — ${locName}`, `Límite de ${fname} — ${locName}`),
+                  html: `<p class="card-meta" style="margin-bottom:8px">${Lang.T(`סכום ה${fname} המקסימלי המותר במיקום זה.`, `La suma máxima de ${fname} permitida en esta ubicación.`)}</p>
+                         <div class="form-group"><label class="form-label">${Lang.T('מגבלה (0 = ללא)', 'Límite (0 = sin límite)')}</label><input id="caplimit-input" class="form-input" type="number" min="0" placeholder="${Lang.T('ללא הגבלה', 'Sin límite')}" value="${loc.capacityLimit || ''}"></div>`,
                   actions: [
-                    { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                    { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                       const val = parseFloat(document.getElementById('caplimit-input').value) || 0;
                       DB.upsertLocation({ name: locName, capacityLimit: val || null });
                       Modal.close();
                       renderList();
-                      Toast.show('מגבלה עודכנה', 'success');
+                      Toast.show(Lang.T('מגבלה עודכנה', 'Límite actualizado'), 'success');
                     }},
-                    { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                    { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
                   ]
                 });
               }}];
             })(),
-            { id: 'sublocs', label: `תתי-מיקומים (${(loc.subLocations || []).length})`, onClick: () => {
+            { id: 'sublocs', label: `${Lang.T('תתי-מיקומים', 'Sub-ubicaciones')} (${(loc.subLocations || []).length})`, onClick: () => {
               Modal.close();
               function openSubModal() {
                 function rowsHtml() {
                   const locObj = DB.getMetadata().locations.find(l => l.name === locName);
                   const ss = (locObj && locObj.subLocations) || [];
-                  if (!ss.length) return '<p class="card-meta" style="margin:6px 0 10px;text-align:center">אין תתי-מיקומים</p>';
+                  if (!ss.length) return `<p class="card-meta" style="margin:6px 0 10px;text-align:center">${Lang.T('אין תתי-מיקומים', 'Sin sub-ubicaciones')}</p>`;
                   return ss.map(s => `
                     <div class="prop-option-row" style="align-items:center">
                       <span style="flex:1">• ${esc(s)}</span>
@@ -4098,13 +4098,13 @@
                     </div>`).join('');
                 }
                 Modal.open({
-                  title: `תתי-מיקומים — ${locName}`,
+                  title: `${Lang.T('תתי-מיקומים — ', 'Sub-ubicaciones — ')}${locName}`,
                   html: `<div id="sl-rows">${rowsHtml()}</div>
                          <div class="prop-add-row" style="margin-top:10px">
-                           <input id="sl-new-input" class="form-input btn-sm" placeholder="שם תת-מיקום חדש">
-                           <button id="sl-add-btn" class="btn btn-outline btn-sm">הוסף</button>
+                           <input id="sl-new-input" class="form-input btn-sm" placeholder="${Lang.T('שם תת-מיקום חדש', 'Nuevo nombre de sub-ubicación')}">
+                           <button id="sl-add-btn" class="btn btn-outline btn-sm">${Lang.T('הוסף', 'Agregar')}</button>
                          </div>`,
-                  actions: [{ id: 'sl-close', label: 'סגור', cls: 'btn-outline', onClick: () => {
+                  actions: [{ id: 'sl-close', label: Lang.T('סגור', 'Cerrar'), cls: 'btn-outline', onClick: () => {
                     Modal.close();
                     renderList();
                     const selVal = tabContent.querySelector('#el-sub-loc-sel').value;
@@ -4137,16 +4137,16 @@
                   if (renBtn) {
                     const oldSub = renBtn.dataset.sub;
                     Modal.open({
-                      title: 'שינוי שם תת-מיקום',
-                      html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="sl-ren-input" class="form-input" value="${esc(oldSub)}"></div>`,
+                      title: Lang.T('שינוי שם תת-מיקום', 'Renombrar sub-ubicación'),
+                      html: `<div class="form-group"><label class="form-label">${Lang.T('שם חדש', 'Nuevo nombre')}</label><input id="sl-ren-input" class="form-input" value="${esc(oldSub)}"></div>`,
                       actions: [
-                        { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                        { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                           const newSub = document.getElementById('sl-ren-input').value.trim();
                           if (newSub && newSub !== oldSub) DB.renameSubLocation(locName, oldSub, newSub);
                           Modal.close();
                           openSubModal();
                         }},
-                        { id: 'cancel', label: 'ביטול', onClick: () => { Modal.close(); openSubModal(); } }
+                        { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: () => { Modal.close(); openSubModal(); } }
                       ]
                     });
                     return;
@@ -4163,27 +4163,27 @@
               }
               openSubModal();
             }},
-            { id: 'alias', label: 'שמות חלופיים', onClick: () => {
+            { id: 'alias', label: Lang.T('שמות חלופיים', 'Nombres alternativos'), onClick: () => {
               Modal.close();
               showAliasModal(locName, (loc && loc.aliases) || [], newAliases => {
                 DB.upsertLocation({ name: locName, aliases: newAliases });
                 renderList();
               });
             }},
-            { id: 'toggle', label: loc.inMap ? 'הסר ממיפוי' : 'הוסף למיפוי', onClick: () => {
+            { id: 'toggle', label: loc.inMap ? Lang.T('הסר ממיפוי', 'Quitar del mapa') : Lang.T('הוסף למיפוי', 'Agregar al mapa'), onClick: () => {
               DB.upsertLocation({ name: locName, inMap: !loc.inMap });
               Modal.close();
               renderList();
             }},
-            { id: 'delete', label: 'מחק', cls: 'btn-danger', onClick: () => {
+            { id: 'delete', label: Lang.T('מחק', 'Eliminar'), cls: 'btn-danger', onClick: () => {
               DB.deleteLocation(locName);
               Modal.close();
-              Toast.show('מיקום נמחק', 'info');
+              Toast.show(Lang.T('מיקום נמחק', 'Ubicación eliminada'), 'info');
               renderList();
               refreshSubLocSelect();
               renderSubList(tabContent.querySelector('#el-sub-loc-sel').value);
             }},
-            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
           ]
         });
       });
@@ -4198,14 +4198,14 @@
         const locName = tabContent.querySelector('#el-sub-loc-sel').value;
         const input   = tabContent.querySelector('#el-sub-input');
         const sub     = input.value.trim();
-        if (!locName) { Toast.show('יש לבחור מיקום', 'error'); return; }
-        if (!sub)     { Toast.show('יש להזין שם תת-מיקום', 'error'); return; }
+        if (!locName) { Toast.show(Lang.T('יש לבחור מיקום', 'Elige una ubicación'), 'error'); return; }
+        if (!sub)     { Toast.show(Lang.T('יש להזין שם תת-מיקום', 'Ingresa un nombre de sub-ubicación'), 'error'); return; }
         const loc  = DB.getMetadata().locations.find(l => l.name === locName);
         const subs = [...((loc && loc.subLocations) || [])];
         if (!subs.includes(sub)) {
           subs.push(sub);
           DB.upsertLocation({ name: locName, subLocations: subs });
-          Toast.show('תת-מיקום נוסף', 'success');
+          Toast.show(Lang.T('תת-מיקום נוסף', 'Sub-ubicación agregada'), 'success');
         }
         input.value = '';
         renderSubList(locName);
@@ -4239,18 +4239,18 @@
           const locName = renameBtn.dataset.loc;
           const oldSub = renameBtn.dataset.sub;
           Modal.open({
-            title: 'שינוי שם תת-מיקום',
+            title: Lang.T('שינוי שם תת-מיקום', 'Renombrar sub-ubicación'),
             html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-sub-input" class="form-input" value="${esc(oldSub)}"></div>`,
             actions: [
-              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+              { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                 const newSub = document.getElementById('rename-sub-input').value.trim();
                 if (!newSub || newSub === oldSub) { Modal.close(); return; }
                 DB.renameSubLocation(locName, oldSub, newSub);
                 Modal.close();
                 renderSubList(locName); renderList();
-                Toast.show('תת-מיקום שונה', 'success');
+                Toast.show(Lang.T('תת-מיקום שונה', 'Sub-ubicación renombrada'), 'success');
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
           return;
@@ -4273,20 +4273,20 @@
       tabContent.innerHTML = `
         <div class="p-screen">
           <div class="card">
-            <div class="card-title">הוספת מאפיין</div>
+            <div class="card-title">${Lang.T('הוספת מאפיין', 'Agregar atributo')}</div>
             <div class="form-group">
-              <label class="form-label">שם מאפיין</label>
+              <label class="form-label">${Lang.T('שם מאפיין', 'Nombre de atributo')}</label>
               <input id="ep-name" class="form-input" placeholder="מרעום">
             </div>
-            <button id="ep-save" class="btn btn-primary btn-full">הוסף מאפיין</button>
+            <button id="ep-save" class="btn btn-primary btn-full">${Lang.T('הוסף מאפיין', 'Agregar atributo')}</button>
           </div>
 
           <div class="card mt-12">
             <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-              <span>מאפיינים קיימים</span>
+              <span>${Lang.T('מאפיינים קיימים', 'Atributos existentes')}</span>
               <div style="display:flex;align-items:center;gap:6px">
                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.78rem;font-weight:normal">
-                  <span id="ep-lock-emoji">🔓</span> נעילת סדר
+                  <span id="ep-lock-emoji">🔓</span> ${Lang.T('נעילת סדר', 'Bloquear orden')}
                   <span class="toggle-switch"><input type="checkbox" id="ep-order-lock"><span class="toggle-slider"></span></span>
                 </label>
                 <button class="btn-icon" id="ep-order-lock-info" title="מידע" style="font-size:0.85rem;padding:2px 5px;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center">i</button>
@@ -4296,34 +4296,34 @@
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">ייצוא / ייבוא הגדרות</div>
-            <p class="card-meta" style="margin-bottom:8px">כולל מאפיינים + מיקומים שלא במיפוי</p>
+            <div class="card-title">${Lang.T('ייצוא / ייבוא הגדרות', 'Exportar / Importar configuración')}</div>
+            <p class="card-meta" style="margin-bottom:8px">${Lang.T('כולל מאפיינים + מיקומים שלא במיפוי', 'Incluye atributos + ubicaciones fuera del mapa')}</p>
             <div style="display:flex;gap:8px">
-              <button id="ep-export-defs" class="btn btn-outline" style="flex:1">ייצוא הגדרות</button>
-              <button id="ep-import-defs" class="btn btn-outline" style="flex:1">ייבוא הגדרות</button>
+              <button id="ep-export-defs" class="btn btn-outline" style="flex:1">${Lang.T('ייצוא הגדרות', 'Exportar configuración')}</button>
+              <button id="ep-import-defs" class="btn btn-outline" style="flex:1">${Lang.T('ייבוא הגדרות', 'Importar configuración')}</button>
             </div>
           </div>
 
           <div class="card mt-12">
-            <div class="card-title">תכונה מיוחדת</div>
-            <p class="card-meta" style="margin-bottom:8px">תכונה מספרית שסכומה מוגבל בכל מיקום. מקושרת למאפיין בעל אפשרויות.</p>
+            <div class="card-title">${Lang.T('תכונה מיוחדת', 'Característica especial')}</div>
+            <p class="card-meta" style="margin-bottom:8px">${Lang.T('תכונה מספרית שסכומה מוגבל בכל מיקום. מקושרת למאפיין בעל אפשרויות.', 'Característica numérica cuya suma está limitada por ubicación. Vinculada a un atributo con opciones.')}</p>
             <div class="form-group">
-              <label class="form-label">שם התכונה</label>
+              <label class="form-label">${Lang.T('שם התכונה', 'Nombre de la característica')}</label>
               <input id="cf-name" class="form-input" placeholder="למשל: משקל">
             </div>
             <div class="form-group">
-              <label class="form-label">מאפיין מקושר</label>
+              <label class="form-label">${Lang.T('מאפיין מקושר', 'Atributo vinculado')}</label>
               <select id="cf-category" class="form-input">
-                <option value="">— בחר מאפיין —</option>
+                <option value="">${Lang.T('— בחר מאפיין —', '— Elegir atributo —')}</option>
               </select>
             </div>
             <div id="cf-values-section" hidden>
-              <div style="font-size:0.85rem;font-weight:600;margin:4px 0 8px;color:var(--muted)">ערך מספרי לכל אפשרות</div>
+              <div style="font-size:0.85rem;font-weight:600;margin:4px 0 8px;color:var(--muted)">${Lang.T('ערך מספרי לכל אפשרות', 'Valor numérico por opción')}</div>
               <div id="cf-values-rows"></div>
             </div>
             <div style="display:flex;gap:8px;margin-top:10px">
-              <button id="cf-save" class="btn btn-primary" style="flex:1">שמור</button>
-              <button id="cf-clear" class="btn btn-outline" style="flex:1;color:var(--danger);border-color:var(--danger)">נקה תכונה</button>
+              <button id="cf-save" class="btn btn-primary" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
+              <button id="cf-clear" class="btn btn-outline" style="flex:1;color:var(--danger);border-color:var(--danger)">${Lang.T('נקה תכונה', 'Limpiar característica')}</button>
             </div>
           </div>
         </div>
@@ -4332,12 +4332,12 @@
       function renderList() {
         const list  = tabContent.querySelector('#ep-list');
         const props = DB.getMetadata().properties;
-        if (!props.length) { list.innerHTML = '<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🏷️</div><div class="es-desc">הוסף מאפיין ראשון למעלה כדי לסווג פריטים.</div></div>'; return; }
+        if (!props.length) { list.innerHTML = `<div class="empty-state-rich" style="padding:20px 12px"><div class="es-illustration">🏷️</div><div class="es-desc">${Lang.T('הוסף מאפיין ראשון למעלה כדי לסווג פריטים.', 'Agrega el primer atributo arriba para clasificar ítems.')}</div></div>`; return; }
         list.innerHTML = props.map((p, idx) => {
           const aliases = p.aliases || {};
           const conds = normalizeConditions(p.condition);
           const condLabel = conds
-            ? 'תנאי: ' + conds.map(c => `${esc(c.prop)} = ${c.value ? esc(c.value) : 'לא נבחר'}`).join(' או ')
+            ? Lang.T('תנאי: ', 'Condición: ') + conds.map(c => `${esc(c.prop)} = ${c.value ? esc(c.value) : Lang.T('לא נבחר', 'No seleccionado')}`).join(' או ')
             : '';
           return `
           <div class="prop-group reorder-item" data-prop="${esc(p.name)}" data-prop-idx="${idx}">
@@ -4353,9 +4353,9 @@
             </div>
             <div class="prop-options">
               <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">
-                <button class="btn btn-outline btn-sm ep-condition-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px">${conds ? 'ערוך תנאי' : 'הוסף תנאי'}</button>
-                ${conds ? `<button class="btn btn-outline btn-sm ep-condition-clear" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px;color:var(--danger);border-color:var(--danger)">הסר תנאי</button>` : ''}
-                ${p.options.length >= 2 ? `<button class="btn btn-outline btn-sm ep-mixing-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px${p.mixingPairs && p.mixingPairs.length ? ';color:var(--brand);border-color:var(--brand)' : ''}">ערבוב${p.mixingPairs && p.mixingPairs.length ? ' (' + p.mixingPairs.length + ')' : ''}</button>` : ''}
+                <button class="btn btn-outline btn-sm ep-condition-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px">${conds ? Lang.T('ערוך תנאי', 'Editar condición') : Lang.T('הוסף תנאי', 'Agregar condición')}</button>
+                ${conds ? `<button class="btn btn-outline btn-sm ep-condition-clear" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px;color:var(--danger);border-color:var(--danger)">${Lang.T('הסר תנאי', 'Quitar condición')}</button>` : ''}
+                ${p.options.length >= 2 ? `<button class="btn btn-outline btn-sm ep-mixing-btn" data-prop="${esc(p.name)}" style="font-size:0.72rem;padding:2px 10px${p.mixingPairs && p.mixingPairs.length ? ';color:var(--brand);border-color:var(--brand)' : ''}">${Lang.T('ערבוב', 'Mezcla')}${p.mixingPairs && p.mixingPairs.length ? ' (' + p.mixingPairs.length + ')' : ''}</button>` : ''}
               </div>
               ${p.options.map(o => {
                 const optAliases = aliases[o] || [];
@@ -4365,16 +4365,16 @@
                     <span>• ${esc(o)}</span>
                     <div style="display:flex;align-items:center;gap:4px">
                       <button class="btn-icon-edit ep-rename-opt" data-prop="${esc(p.name)}" data-opt="${esc(o)}" title="שנה שם">✏️</button>
-                      <button class="btn btn-outline btn-sm ep-aliases-btn" data-prop="${esc(p.name)}" data-opt="${esc(o)}" style="font-size:0.7rem;padding:2px 8px">שמות חלופיים</button>
+                      <button class="btn btn-outline btn-sm ep-aliases-btn" data-prop="${esc(p.name)}" data-opt="${esc(o)}" style="font-size:0.7rem;padding:2px 8px">${Lang.T('שמות חלופיים', 'Nombres alternativos')}</button>
                       <button class="btn-icon ep-del-opt" data-prop="${esc(p.name)}" data-opt="${esc(o)}">✕</button>
                     </div>
                   </div>
-                  ${optAliases.length ? `<div style="width:100%;padding:2px 16px 0;font-size:0.75rem;color:var(--muted)">חלופיים: ${optAliases.map(a => esc(a)).join(', ')}</div>` : ''}
+                  ${optAliases.length ? `<div style="width:100%;padding:2px 16px 0;font-size:0.75rem;color:var(--muted)">${Lang.T('חלופיים:', 'Alternativos:')} ${optAliases.map(a => esc(a)).join(', ')}</div>` : ''}
                 </div>`;
               }).join('')}
               <div class="prop-add-row">
-                <input class="form-input btn-sm ep-opt-input" data-prop="${esc(p.name)}" placeholder="אפשרות חדשה">
-                <button class="btn btn-outline btn-sm ep-add-opt" data-prop="${esc(p.name)}">הוסף</button>
+                <input class="form-input btn-sm ep-opt-input" data-prop="${esc(p.name)}" placeholder="${Lang.T('אפשרות חדשה', 'Opción nueva')}">
+                <button class="btn btn-outline btn-sm ep-add-opt" data-prop="${esc(p.name)}">${Lang.T('הוסף', 'Agregar')}</button>
               </div>
             </div>
           </div>`;
@@ -4393,17 +4393,17 @@
       });
       tabContent.querySelector('#ep-order-lock-info').addEventListener('click', () => {
         Modal.open({
-          title: 'נעילת סדר',
-          html: '<p style="line-height:1.6">כאשר הסדר נעול הסדר של המאפיינים יקבע אך ורק על פי הסדר במסך הזה. כאשר הוא לא נעול בעת ייבוא מיפוי הסדר במיפוי הוא שיקבע.</p>',
-          actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }]
+          title: Lang.T('נעילת סדר', 'Bloquear orden'),
+          html: `<p style="line-height:1.6">${Lang.T('כאשר הסדר נעול הסדר של המאפיינים יקבע אך ורק על פי הסדר במסך הזה. כאשר הוא לא נעול בעת ייבוא מיפוי הסדר במיפוי הוא שיקבע.', 'Cuando el orden está bloqueado, el orden de los atributos se determina exclusivamente por el orden de esta pantalla. Cuando está desbloqueado, al importar un mapa el orden del mapa prevalece.')}</p>`,
+          actions: [{ id: 'close', label: Lang.T('סגור', 'Cerrar'), onClick: Modal.close }]
         });
       });
 
       tabContent.querySelector('#ep-save').addEventListener('click', () => {
         const name = tabContent.querySelector('#ep-name').value.trim();
-        if (!name) { Toast.show('יש להזין שם מאפיין', 'error'); return; }
+        if (!name) { Toast.show(Lang.T('יש להזין שם מאפיין', 'Ingresa un nombre de atributo'), 'error'); return; }
         DB.upsertProperty({ name, options: [] });
-        Toast.show('מאפיין נוסף', 'success');
+        Toast.show(Lang.T('מאפיין נוסף', 'Atributo agregado'), 'success');
         renderList();
         tabContent.querySelector('#ep-name').value = '';
       });
@@ -4433,7 +4433,7 @@
                 <span style="flex:1;font-weight:500">${esc(a)} ↔ ${esc(b)}</span>
                 <button class="btn btn-outline btn-sm ep-mix-rm" data-a="${esc(a)}" data-b="${esc(b)}" style="color:var(--danger);border-color:var(--danger);padding:2px 10px">✕</button>
               </div>`).join('')
-          : `<p class="card-meta" style="padding:6px 0">אין זוגות ערבוב מוגדרים</p>`;
+          : `<p class="card-meta" style="padding:6px 0">${Lang.T('אין זוגות ערבוב מוגדרים', 'No hay pares de mezcla definidos')}</p>`;
         const addRow = options.length >= 2
           ? `<div style="display:flex;align-items:center;gap:6px;margin-top:10px">
                <select id="mix-sel-a" class="form-input" style="flex:1;font-size:0.88rem">
@@ -4443,14 +4443,14 @@
                <select id="mix-sel-b" class="form-input" style="flex:1;font-size:0.88rem">
                  ${options.map((o, i) => `<option value="${esc(o)}"${i === 1 ? ' selected' : ''}>${esc(o)}</option>`).join('')}
                </select>
-               <button id="ep-mix-add" class="btn btn-outline btn-sm" style="white-space:nowrap">הוסף</button>
+               <button id="ep-mix-add" class="btn btn-outline btn-sm" style="white-space:nowrap">${Lang.T('הוסף', 'Agregar')}</button>
              </div>`
           : '';
         Modal.open({
-          title: `ערבוב ערכים — ${esc(propName)}`,
-          html: `<p class="card-meta" style="margin-bottom:10px">זוגות ערכים שניתן לשלב באותה עגלה ללא שייחשב כהבדל בין משבצות.</p>
+          title: `${Lang.T('ערבוב ערכים — ', 'Mezcla de valores — ')}${esc(propName)}`,
+          html: `<p class="card-meta" style="margin-bottom:10px">${Lang.T('זוגות ערכים שניתן לשלב באותה עגלה ללא שייחשב כהבדל בין משבצות.', 'Pares de valores que pueden combinarse en la misma carreta sin considerarse diferencia entre slots.')}</p>
                  <div id="mix-pairs-list">${pairsHtml}</div>${addRow}`,
-          actions: [{ id: 'mix-close', label: 'סגור', onClick: () => {
+          actions: [{ id: 'mix-close', label: Lang.T('סגור', 'Cerrar'), onClick: () => {
             Modal.close();
             renderList();
             const g = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
@@ -4463,7 +4463,7 @@
             addBtn.addEventListener('click', () => {
               const selA = document.getElementById('mix-sel-a');
               const selB = document.getElementById('mix-sel-b');
-              if (!selA || !selB || selA.value === selB.value) { Toast.show('בחר שני ערכים שונים', 'error'); return; }
+              if (!selA || !selB || selA.value === selB.value) { Toast.show(Lang.T('בחר שני ערכים שונים', 'Selecciona dos valores distintos'), 'error'); return; }
               DB.addMixingPair(propName, selA.value, selB.value);
               openMixingPairsModal(propName);
             });
@@ -4490,18 +4490,18 @@
         if (renameProp) {
           const oldName = renameProp.dataset.prop;
           Modal.open({
-            title: 'שינוי שם מאפיין',
-            html: `<div class="form-group"><label class="form-label">שם חדש</label><input id="rename-prop-input" class="form-input" value="${esc(oldName)}"></div>`,
+            title: Lang.T('שינוי שם מאפיין', 'Renombrar atributo'),
+            html: `<div class="form-group"><label class="form-label">${Lang.T('שם חדש', 'Nuevo nombre')}</label><input id="rename-prop-input" class="form-input" value="${esc(oldName)}"></div>`,
             actions: [
-              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+              { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                 const newName = document.getElementById('rename-prop-input').value.trim();
                 if (!newName || newName === oldName) { Modal.close(); return; }
                 DB.renameProperty(oldName, newName);
                 Modal.close();
                 renderList();
-                Toast.show('מאפיין שונה', 'success');
+                Toast.show(Lang.T('מאפיין שונה', 'Atributo renombrado'), 'success');
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
           return;
@@ -4510,7 +4510,7 @@
         const delProp = e.target.closest('.ep-del-prop');
         if (delProp) {
           DB.deleteProperty(delProp.dataset.prop);
-          Toast.show('מאפיין נמחק', 'info');
+          Toast.show(Lang.T('מאפיין נמחק', 'Atributo eliminado'), 'info');
           renderList();
           return;
         }
@@ -4520,10 +4520,10 @@
           const propName = renameOpt.dataset.prop;
           const oldOpt = renameOpt.dataset.opt;
           Modal.open({
-            title: 'שינוי שם אפשרות',
-            html: `<div class="form-group"><label class="form-label">שם חדש ל-"${esc(oldOpt)}"</label><input id="rename-opt-input" class="form-input" value="${esc(oldOpt)}"></div>`,
+            title: Lang.T('שינוי שם אפשרות', 'Renombrar opción'),
+            html: `<div class="form-group"><label class="form-label">${Lang.T('שם חדש ל-"', 'Nuevo nombre para "') + esc(oldOpt) + '"'}</label><input id="rename-opt-input" class="form-input" value="${esc(oldOpt)}"></div>`,
             actions: [
-              { id: 'save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+              { id: 'save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                 const newOpt = document.getElementById('rename-opt-input').value.trim();
                 if (!newOpt || newOpt === oldOpt) { Modal.close(); return; }
                 DB.renamePropertyOption(propName, oldOpt, newOpt);
@@ -4532,9 +4532,9 @@
                 // re-expand the group
                 const group = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
                 if (group) group.classList.add('expanded');
-                Toast.show('אפשרות שונתה', 'success');
+                Toast.show(Lang.T('אפשרות שונתה', 'Opción renombrada'), 'success');
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
           return;
@@ -4553,21 +4553,21 @@
           const optName = aliasBtn.dataset.opt;
           const currentAliases = DB.getOptionAliases(propName, optName);
           Modal.open({
-            title: 'שמות חלופיים: ' + optName,
+            title: Lang.T('שמות חלופיים: ', 'Nombres alternativos: ') + optName,
             html: `
-              <p class="card-meta" style="margin-bottom:10px">הוסף שמות חלופיים לאפשרות <strong>${esc(optName)}</strong>.<br>בייבוא מיפוי, כל השמות החלופיים יומרו אוטומטית לשם הרגיל.</p>
+              <p class="card-meta" style="margin-bottom:10px">${Lang.T('הוסף שמות חלופיים לאפשרות', 'Agrega nombres alternativos para la opción')} <strong>${esc(optName)}</strong>.<br>${Lang.T('בייבוא מיפוי, כל השמות החלופיים יומרו אוטומטית לשם הרגיל.', 'Al importar mapa, todos los nombres alternativos se convierten automáticamente al nombre oficial.')}</p>
               <div id="alias-list-container">
                 ${currentAliases.map((a, i) => `
                   <div class="form-group" style="display:flex;gap:8px;margin-bottom:6px" data-alias-row>
-                    <input class="form-input alias-input" value="${esc(a)}" placeholder="שם חלופי" style="flex:1">
+                    <input class="form-input alias-input" value="${esc(a)}" placeholder="${Lang.T('שם חלופי', 'Nombre alternativo')}" style="flex:1">
                     <button class="btn btn-outline btn-sm alias-remove-btn" type="button">✕</button>
                   </div>
                 `).join('')}
               </div>
-              <button id="alias-add-row-btn" class="btn btn-outline btn-sm" style="margin-top:6px">+ הוסף שם חלופי</button>
+              <button id="alias-add-row-btn" class="btn btn-outline btn-sm" style="margin-top:6px">${Lang.T('+ הוסף שם חלופי', '+ Agregar nombre alternativo')}</button>
             `,
             actions: [
-              { id: 'save-aliases', label: 'שמור', cls: 'btn-primary', onClick: () => {
+              { id: 'save-aliases', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                 const inputs = document.querySelectorAll('#alias-list-container .alias-input');
                 const aliases = Array.from(inputs).map(inp => inp.value.trim()).filter(Boolean);
                 DB.setOptionAliases(propName, optName, aliases);
@@ -4577,7 +4577,7 @@
                 const group = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
                 if (group) group.classList.add('expanded');
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
           // wire up add/remove buttons inside the modal
@@ -4590,7 +4590,7 @@
                 row.className = 'form-group';
                 row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
                 row.setAttribute('data-alias-row', '');
-                row.innerHTML = '<input class="form-input alias-input" placeholder="שם חלופי" style="flex:1"><button class="btn btn-outline btn-sm alias-remove-btn" type="button">✕</button>';
+                row.innerHTML = `<input class="form-input alias-input" placeholder="${Lang.T('שם חלופי', 'Nombre alternativo')}" style="flex:1"><button class="btn btn-outline btn-sm alias-remove-btn" type="button">✕</button>`;
                 container.appendChild(row);
                 row.querySelector('.alias-input').focus();
               });
@@ -4628,17 +4628,17 @@
           const allProps = DB.getMetadata().properties;
           const thisProp = allProps.find(p => p.name === propName);
           const otherProps = allProps.filter(p => p.name !== propName);
-          if (!otherProps.length) { Toast.show('אין מאפיינים אחרים להגדרת תנאי', 'error'); return; }
+          if (!otherProps.length) { Toast.show(Lang.T('אין מאפיינים אחרים להגדרת תנאי', 'No hay otros atributos para la condición'), 'error'); return; }
           const currentConds = normalizeConditions(thisProp.condition) || [{ prop: '', value: '' }];
           Modal.open({
-            title: 'תנאי להצגת: ' + propName,
+            title: Lang.T('תנאי להצגת: ', 'Condición para mostrar: ') + propName,
             html: `
-              <p class="card-meta" style="margin-bottom:10px">מאפיין זה יוצג כאשר לפחות אחד מהתנאים מתקיים (או).</p>
+              <p class="card-meta" style="margin-bottom:10px">${Lang.T('מאפיין זה יוצג כאשר לפחות אחד מהתנאים מתקיים (או).', 'Este atributo se mostrará cuando al menos una condición se cumpla (O).')}</p>
               <div id="cond-rows-container"></div>
-              <button id="cond-add-row" class="btn btn-outline btn-sm" style="margin-top:8px;font-size:0.78rem">+ הוסף תנאי נוסף (או)</button>
+              <button id="cond-add-row" class="btn btn-outline btn-sm" style="margin-top:8px;font-size:0.78rem">${Lang.T('+ הוסף תנאי נוסף (או)', '+ Agregar condición (O)')}</button>
             `,
             actions: [
-              { id: 'save-cond', label: 'שמור', cls: 'btn-primary', onClick: () => {
+              { id: 'save-cond', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                 const rows = document.querySelectorAll('.cond-row');
                 const conditions = [];
                 rows.forEach(row => {
@@ -4658,7 +4658,7 @@
                 const group = Array.from(tabContent.querySelectorAll('.prop-group')).find(el => el.dataset.prop === propName);
                 if (group) group.classList.add('expanded');
               }},
-              { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+              { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
             ]
           });
           setTimeout(() => {
@@ -4747,14 +4747,14 @@
         };
         const text = JSON.stringify(defs, null, 2);
         Utils.copyToClipboard(text)
-          .then(() => Toast.show('הגדרות הועתקו ללוח', 'success'))
-          .catch(() => Toast.show('שגיאה בהעתקה', 'error'));
+          .then(() => Toast.show(Lang.T('הגדרות הועתקו ללוח', 'Configuración copiada al portapapeles'), 'success'))
+          .catch(() => Toast.show(Lang.T('שגיאה בהעתקה', 'Error al copiar'), 'error'));
       });
 
       // import definitions
       tabContent.querySelector('#ep-import-defs').addEventListener('click', () => {
         Modal.open({
-          title: 'ייבוא הגדרות',
+          title: Lang.T('ייבוא הגדרות', 'Importar configuración'),
           html: `
             <p class="card-meta" style="margin-bottom:10px">הדבק כאן את טקסט ההגדרות שהועתק בייצוא:</p>
             <textarea id="ep-import-area" rows="6"
@@ -4762,9 +4762,9 @@
                      font-size:0.82rem;font-family:monospace;direction:ltr;text-align:left;resize:vertical"></textarea>
           `,
           actions: [
-            { id: 'do-import-defs', label: 'ייבא', cls: 'btn-primary', onClick: () => {
+            { id: 'do-import-defs', label: Lang.T('ייבא', 'Importar'), cls: 'btn-primary', onClick: () => {
               let text = document.getElementById('ep-import-area').value.trim();
-              if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+              if (!text) { Toast.show(Lang.T('לא הודבק טקסט', 'No se pegó texto'), 'error'); return; }
               // Sanitize pasted text: remove BOM, zero-width chars, directional marks, replace smart quotes
               text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
               text = text.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"');
@@ -4806,13 +4806,13 @@
                   }
                 });
                 Modal.close();
-                Toast.show('הגדרות יובאו בהצלחה', 'success');
+                Toast.show(Lang.T('הגדרות יובאו בהצלחה', 'Configuración importada correctamente'), 'success');
                 renderList();
               } catch(err) {
-                Toast.show('שגיאה: ' + err.message, 'error');
+                Toast.show(Lang.T('שגיאה: ', 'Error: ') + err.message, 'error');
               }
             }},
-            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
           ]
         });
       });
@@ -4863,14 +4863,14 @@
         tabContent.querySelector('#cf-save').addEventListener('click', () => {
           const name     = cfName.value.trim();
           const category = cfCat.value;
-          if (!category) { Toast.show('יש לבחור מאפיין מקושר', 'error'); return; }
+          if (!category) { Toast.show(Lang.T('יש לבחור מאפיין מקושר', 'Elige un atributo vinculado'), 'error'); return; }
           const values = {};
           cfValRows.querySelectorAll('.cf-val-input').forEach(inp => {
             const v = parseFloat(inp.value);
             if (!isNaN(v) && v > 0) values[inp.dataset.opt] = v;
           });
           DB.setCapacityFeature({ name, category, values });
-          Toast.show('תכונה מיוחדת נשמרה', 'success');
+          Toast.show(Lang.T('תכונה מיוחדת נשמרה', 'Característica especial guardada'), 'success');
         });
 
         tabContent.querySelector('#cf-clear').addEventListener('click', () => {
@@ -4878,7 +4878,7 @@
           cfName.value = '';
           cfCat.value  = '';
           cfValSec.hidden = true;
-          Toast.show('תכונה מיוחדת נוקתה', 'info');
+          Toast.show(Lang.T('תכונה מיוחדת נוקתה', 'Característica especial limpiada'), 'info');
         });
       })();
     }
@@ -4915,9 +4915,9 @@
       <div class="p-screen">
         <div class="form-group">
           <div class="pill-toggle" id="tr-mode-toggle">
-            <button class="active" data-mode="cart">עגלה</button>
-            <button data-mode="container">משטח</button>
-            <button data-mode="floor">רצפה</button>
+            <button class="active" data-mode="cart">${Lang.T('עגלה', 'Carreta')}</button>
+            <button data-mode="container">${Lang.T('משטח', 'Palé')}</button>
+            <button data-mode="floor">${Lang.T('רצפה', 'Suelo')}</button>
           </div>
         </div>
 
@@ -4934,17 +4934,17 @@
         <!-- floor mode: pick source by location + properties + batch transfer -->
         <div id="tr-floor-section" hidden>
           <div class="form-group">
-            <label class="form-label">מיקום מקור</label>
+            <label class="form-label">${Lang.T('מיקום מקור', 'Ubicación origen')}</label>
             <input id="tr-floor-src-loc" class="form-input" placeholder="משני" autocomplete="off">
           </div>
           <div class="form-group" id="tr-floor-src-subloc-group" hidden>
-            <label class="form-label">תת-מיקום מקור</label>
+            <label class="form-label">${Lang.T('תת-מיקום מקור', 'Sub-ubicación origen')}</label>
             <input id="tr-floor-src-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
           <div id="tr-floor-src-props" class="mt-12"></div>
           <div id="tr-floor-avail" class="card" style="margin:14px 0;" hidden></div>
           <div class="form-group">
-            <label class="form-label">כמות להעברה</label>
+            <label class="form-label">${Lang.T('כמות להעברה', 'Cantidad a trasladar')}</label>
             <input id="tr-floor-count" class="form-input" type="number" min="0" placeholder="0">
           </div>
           <div id="tr-floor-item-rows" class="item-rows"></div>
@@ -4953,30 +4953,30 @@
         <!-- shared fields (destination + cart item fields) -->
         <div id="tr-shared-fields" hidden>
           <div id="tr-current-info" class="card" style="margin:0 0 14px;"></div>
-          <button id="tr-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון עגלה</button>
+          <button id="tr-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">${Lang.T('ריקון עגלה', 'Vaciar carreta')}</button>
 
           <div class="form-group">
-            <label class="form-label">מיקום יעד</label>
+            <label class="form-label">${Lang.T('מיקום יעד', 'Ubicación destino')}</label>
             <input id="tr-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
           </div>
           <div class="form-group" id="tr-dest-subloc-group" hidden>
-            <label class="form-label">תת-מיקום יעד</label>
+            <label class="form-label">${Lang.T('תת-מיקום יעד', 'Sub-ubicación destino')}</label>
             <input id="tr-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
           <div class="form-group" id="tr-dest-subloc2-group" hidden>
-            <label class="form-label">תת-מיקום נוסף (אופציונלי)</label>
+            <label class="form-label">${Lang.T('תת-מיקום נוסף (אופציונלי)', 'Sub-ubicación adicional (opcional)')}</label>
             <input id="tr-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
 
           <!-- cart-mode: multi-slot support -->
           <div id="tr-cart-item-fields">
             <div id="tr-slots-container"></div>
-            <button id="tr-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
+            <button id="tr-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
           </div>
 
           <div style="display:flex;gap:8px;margin-top:16px">
-            <button id="tr-save-only-btn" class="btn btn-outline" style="flex:1">שמור</button>
-            <button id="tr-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+            <button id="tr-save-only-btn" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
+            <button id="tr-save-btn" class="btn btn-primary" style="flex:2">${Lang.T('שמור ושלח 💬', 'Guardar y enviar 💬')}</button>
           </div>
         </div>
       </div>
@@ -5025,7 +5025,7 @@
       _currentType = 'fi';
       avail.hidden = false;
       const locLabel = loc + (subloc ? ' / ' + subloc : '');
-      avail.innerHTML = `<div class="card-title">נמצאו ${total} פריטים</div><div class="card-meta">${esc(locLabel)}</div>`;
+      avail.innerHTML = `<div class="card-title">${Lang.T('נמצאו ', 'Encontrados ')}${total}${Lang.T(' פריטים', ' ítems')}</div><div class="card-meta">${esc(locLabel)}</div>`;
       showSharedFields(_currentData, 'fi');
     }
 
@@ -5036,7 +5036,7 @@
         rows.push(`
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
-            <input class="item-id-input floor-serial-input" placeholder="מספר סידורי" value="${esc(existingIds[i] || '')}">
+            <input class="item-id-input floor-serial-input" placeholder="${Lang.T('מספר סידורי', 'Número de serie')}" value="${esc(existingIds[i] || '')}">
             <button class="scan-btn" title="סרוק ברקוד">📷</button>
           </div>
         `);
@@ -5083,7 +5083,7 @@
       if (type === 'cart') {
         info.innerHTML = `
           <div class="card-title">${esc(containerName(data))}: ${esc(cartLabel(data))}</div>
-          <div class="card-meta">מיקום נוכחי: ${esc(data.location || 'לא ידוע')}</div>
+          <div class="card-meta">${Lang.T('מיקום נוכחי:', 'Ubicación actual:')} ${esc(data.location || Lang.T('לא ידוע', 'Desconocido'))}</div>
           ${data.comment ? `<div class="card-meta" style="color:var(--muted);font-style:italic">${esc(data.comment)}</div>` : ''}
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = false;
@@ -5091,8 +5091,8 @@
       } else {
         const propStr = Utils.orderedPropValues(data.properties, DB.getMetadata().properties || []);
         info.innerHTML = `
-          <div class="card-title">על משטח ${esc(propStr)} · ${data.itemCount || 0} פריטים</div>
-          <div class="card-meta">מיקום: ${esc(data.location || 'לא ידוע')}</div>
+          <div class="card-title">${Lang.T('על משטח ', 'En piso ')}${esc(propStr)} · ${data.itemCount || 0}${Lang.T(' פריטים', ' ítems')}</div>
+          <div class="card-meta">${Lang.T('מיקום: ', 'Ubicación: ')}${esc(data.location || Lang.T('לא ידוע', 'Desconocido'))}</div>
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = true;
       }
@@ -5105,12 +5105,12 @@
         rows.push(`
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
-            <input class="item-id-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
+            <input class="item-id-input" placeholder="${Lang.T('מספר סידורי', 'Número de serie')}" value="${esc(existing[i] || '')}">
             <button class="scan-btn" title="סרוק ברקוד">📷</button>
-            <button class="btn-icon item-dest-btn" title="יעד ספציפי לפריט זה">+</button>
+            <button class="btn-icon item-dest-btn" title="${Lang.T('יעד ספציפי לפריט זה', 'Destino específico para este ítem')}">+</button>
           </div>
           <div class="item-dest-row" hidden>
-            <input class="item-dest-input form-input" placeholder="יעד ספציפי..." autocomplete="off">
+            <input class="item-dest-input form-input" placeholder="${Lang.T('יעד ספציפי...', 'Destino específico...')}" autocomplete="off">
           </div>
         `);
       }
@@ -5138,11 +5138,11 @@
       div.innerHTML = `
         <div class="item-slot-header">
           <span class="card-meta" style="font-weight:600"></span>
-          <button class="btn-icon slot-del-btn" title="הסר סוג" style="font-size:1rem;padding:0 4px">✕</button>
+          <button class="btn-icon slot-del-btn" title="${Lang.T('הסר סוג', 'Eliminar tipo')}" style="font-size:1rem;padding:0 4px">✕</button>
         </div>
         <div class="slot-props"></div>
         <div class="form-group" style="margin-top:8px;">
-          <label class="form-label">כמות</label>
+          <label class="form-label">${Lang.T('כמות', 'Cantidad')}</label>
           <input class="form-input slot-count-input" type="number" min="0" placeholder="0" value="${existingCount}">
         </div>
         <div class="item-rows slot-item-rows"></div>
@@ -5167,7 +5167,7 @@
       slots.forEach((el, idx) => {
         el.dataset.slotIdx = String(idx);
         const lbl = el.querySelector('.item-slot-header span');
-        if (lbl) lbl.textContent = idx === 0 ? 'סוג ראשון' : `סוג ${idx + 1}`;
+        if (lbl) lbl.textContent = idx === 0 ? Lang.T('סוג ראשון', 'Tipo principal') : `${Lang.T('סוג', 'Tipo')} ${idx + 1}`;
         const del = el.querySelector('.slot-del-btn');
         if (del) del.hidden = (slots.length === 1);
       });
@@ -5237,8 +5237,8 @@
       const host = screen.querySelector('#tr-container-form-host');
       host.innerHTML = `
         <div class="form-group">
-          <label class="form-label">מספר משטח</label>
-          <input id="tr-container-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
+          <label class="form-label">${Lang.T('מספר משטח', 'Número de palé')}</label>
+          <input id="tr-container-id" class="form-input" placeholder="${Lang.T('מספר מזהה', 'Número de ID')}" autocomplete="off">
         </div>
       `;
       const input = host.querySelector('#tr-container-id');
@@ -5278,12 +5278,12 @@
 
     // transfer save logic (returns msg or null on error)
     function doTransferSave() {
-      if (!_currentData) { Toast.show('בחר עגלה, משטח או מקור רצפה', 'error'); return null; }
+      if (!_currentData) { Toast.show(Lang.T('בחר עגלה, משטח או מקור רצפה', 'Elige carreta, palé o fuente de suelo'), 'error'); return null; }
       const destLoc    = screen.querySelector('#tr-dest-loc').value.trim();
       const _dSub1 = screen.querySelector('#tr-dest-subloc-group').hidden ? '' : screen.querySelector('#tr-dest-subloc').value.trim();
       const _dSub2 = screen.querySelector('#tr-dest-subloc2-group').hidden ? '' : screen.querySelector('#tr-dest-subloc2').value.trim();
       const destSubLoc = (_dSub1 && _dSub2) ? `${_dSub1}/${_dSub2}` : _dSub1;
-      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return null; }
+      if (!destLoc) { Toast.show(Lang.T('יש להזין מיקום יעד', 'Ingresa una ubicación destino'), 'error'); return null; }
 
       let msg;
 
@@ -5297,7 +5297,7 @@
           if (maxItems !== null) {
             const totalItems = allSlots.reduce((s, sl) => s + (sl.itemCount || 0), 0);
             if (totalItems > maxItems) {
-              Toast.show(`חריגה ממקסימום: ${totalItems} / ${maxItems} פריטים`, 'error');
+              Toast.show(`${Lang.T('חריגה ממקסימום: ', 'Excede el máximo: ')}${totalItems} / ${maxItems}${Lang.T(' פריטים', ' ítems')}`, 'error');
               return null;
             }
           }
@@ -5358,7 +5358,7 @@
         Toast.show(containerName(_currentData) + ' הועברה', 'success');
       } else {
         const moveCount = parseInt(screen.querySelector('#tr-floor-count').value) || 0;
-        if (moveCount <= 0) { Toast.show('יש להזין כמות להעברה', 'error'); return null; }
+        if (moveCount <= 0) { Toast.show(Lang.T('יש להזין כמות להעברה', 'Ingresa cantidad a trasladar'), 'error'); return null; }
         const serials = [...screen.querySelectorAll('.floor-serial-input')].map(i => i.value.trim()).filter(Boolean);
 
         // Remove items from source
@@ -5389,7 +5389,7 @@
         const floorTo   = waMsgLoc(destLoc, destSubLoc);
         const serialStr = serials.length ? '\n' + serials.join('\n') : '';
         msg = `על משטח ${moveCount} ${propStr}\nמ${floorFrom} ל${floorTo}${serialStr}`.trim();
-        Toast.show(moveCount + ' פריטי רצפה הועברו', 'success');
+        Toast.show(moveCount + Lang.T(' פריטי רצפה הועברו', ' ítems de piso transferidos'), 'success');
         screen.querySelector('#tr-floor-count').value = '';
         screen.querySelector('#tr-floor-item-rows').innerHTML = '';
         updateFloorDisplay();
@@ -5472,7 +5472,7 @@
 
     // empty cart / container
     screen.querySelector('#tr-empty-cart').addEventListener('click', () => {
-      if (!_currentData || _currentType !== 'cart') { Toast.show('בחר עגלה או משטח', 'error'); return; }
+      if (!_currentData || _currentType !== 'cart') { Toast.show(Lang.T('בחר עגלה או משטח', 'Elige una carreta o palé'), 'error'); return; }
       DB.upsertCart({ cartId: _currentData.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
       const entityName = containerName(_currentData);
       Toast.show(entityName + ' רוקן/ה', 'success');
@@ -5536,76 +5536,76 @@
         <div id="lu-load-section">
           <!-- destination cart at top -->
           <div class="form-group">
-            <label class="form-label">יעד להעמסה</label>
+            <label class="form-label">${Lang.T('יעד להעמסה', 'Destino de carga')}</label>
             <input id="lu-dest-cart" class="form-input" placeholder="8-6(110)" autocomplete="off">
           </div>
 
           <div class="form-group">
             <div class="pill-toggle" id="lu-load-type-toggle">
-              <button class="active" data-lt="new">פריט חדש</button>
-              <button data-lt="floor">מרצפה</button>
+              <button class="active" data-lt="new">${Lang.T('פריט חדש', 'Ítem nuevo')}</button>
+              <button data-lt="floor">${Lang.T('מרצפה', 'Desde suelo')}</button>
             </div>
           </div>
 
           <!-- new item sub-section -->
           <div id="lu-new-item-section">
             <div id="lu-slots-container"></div>
-            <button id="lu-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
+            <button id="lu-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
           </div>
 
           <!-- floor source sub-section: multi-slot with auto-fill -->
           <div id="lu-floor-src-section" hidden>
             <div class="form-group">
-              <label class="form-label">מיקום מקור</label>
+              <label class="form-label">${Lang.T('מיקום מקור', 'Ubicación origen')}</label>
               <input id="lu-src-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
             <div class="form-group" id="lu-src-subloc-group" hidden>
-              <label class="form-label">תת-מיקום מקור</label>
+              <label class="form-label">${Lang.T('תת-מיקום מקור', 'Sub-ubicación origen')}</label>
               <input id="lu-src-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
             <div id="lu-floor-slots-container"></div>
-            <button id="lu-floor-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
+            <button id="lu-floor-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
           </div>
 
           <!-- optional destination for move -->
           <div class="form-group" style="margin-top:16px;">
-            <label class="form-label">יעד העברה (אופציונלי)</label>
-            <input id="lu-load-move-dest" class="form-input" placeholder="העברה ל..." autocomplete="off">
+            <label class="form-label">${Lang.T('יעד העברה (אופציונלי)', 'Destino de traslado (opcional)')}</label>
+            <input id="lu-load-move-dest" class="form-input" placeholder="${Lang.T('העברה ל...', 'Trasladar a...')}" autocomplete="off">
           </div>
           <div class="form-group" id="lu-load-move-dest-subloc-group" hidden>
-            <label class="form-label">תת-מיקום יעד</label>
+            <label class="form-label">${Lang.T('תת-מיקום יעד', 'Sub-ubicación destino')}</label>
             <input id="lu-load-move-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
           <div class="form-group" id="lu-load-move-dest-subloc2-group" hidden>
-            <label class="form-label">תת-מיקום נוסף (אופציונלי)</label>
+            <label class="form-label">${Lang.T('תת-מיקום נוסף (אופציונלי)', 'Sub-ubicación adicional (opcional)')}</label>
             <input id="lu-load-move-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
-            <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">שמור</button>
-            <button id="lu-load-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+            <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
+            <button id="lu-load-save-btn" class="btn btn-primary" style="flex:2">${Lang.T('שמור ושלח 💬', 'Guardar y enviar 💬')}</button>
           </div>
         </div>
 
         <!-- ═══ CONTAINER ON CART SECTION ═══ -->
         <div id="lu-container-section" hidden>
           <div class="form-group">
-            <label class="form-label">מספר משטח</label>
-            <input id="lu-ct-id" class="form-input" placeholder="מספר מזהה" autocomplete="off">
+            <label class="form-label">${Lang.T('מספר משטח', 'Número de palé')}</label>
+            <input id="lu-ct-id" class="form-input" placeholder="${Lang.T('מספר מזהה', 'Número de ID')}" autocomplete="off">
           </div>
           <div id="lu-ct-info" class="card" style="margin:0 0 14px;display:none"></div>
           <div id="lu-ct-slots-container"></div>
-          <button id="lu-ct-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">+ הוסף סוג נוסף</button>
+          <button id="lu-ct-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
           <div class="form-group" style="margin-top:16px;">
-            <label class="form-label">טעינה על עגלה</label>
-            <input id="lu-ct-parent-cart" class="form-input" placeholder="מספר עגלה" autocomplete="off">
+            <label class="form-label">${Lang.T('טעינה על עגלה', 'Cargar en carreta')}</label>
+            <input id="lu-ct-parent-cart" class="form-input" placeholder="${Lang.T('מספר עגלה', 'Número de carreta')}" autocomplete="off">
           </div>
           <div class="form-group">
-            <label class="form-label">יעד העברה (אופציונלי)</label>
-            <input id="lu-ct-move-dest" class="form-input" placeholder="העברה ל..." autocomplete="off">
+            <label class="form-label">${Lang.T('יעד העברה (אופציונלי)', 'Destino de traslado (opcional)')}</label>
+            <input id="lu-ct-move-dest" class="form-input" placeholder="${Lang.T('העברה ל...', 'Trasladar a...')}" autocomplete="off">
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
-            <button id="lu-ct-save-only" class="btn btn-outline" style="flex:1">שמור</button>
-            <button id="lu-ct-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+            <button id="lu-ct-save-only" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
+            <button id="lu-ct-save-btn" class="btn btn-primary" style="flex:2">${Lang.T('שמור ושלח 💬', 'Guardar y enviar 💬')}</button>
           </div>
         </div>
 
@@ -5614,24 +5614,24 @@
           <div id="lu-unload-cart-form-host"></div>
           <div id="lu-unload-fields" hidden>
             <div id="lu-unload-cart-info" class="card" style="margin:0 0 14px;"></div>
-            <button id="lu-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">ריקון עגלה</button>
+            <button id="lu-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">${Lang.T('ריקון עגלה', 'Vaciar carreta')}</button>
             <div id="lu-unload-slots-container"></div>
             <div class="form-group" style="margin-top:16px;">
-              <label class="form-label">מיקום יעד (רצפה)</label>
+              <label class="form-label">${Lang.T('מיקום יעד (רצפה)', 'Ubicación destino (suelo)')}</label>
               <input id="lu-unload-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
             </div>
             <div class="form-group" id="lu-unload-dest-subloc-group" hidden>
-              <label class="form-label">תת-מיקום יעד</label>
+              <label class="form-label">${Lang.T('תת-מיקום יעד', 'Sub-ubicación destino')}</label>
               <input id="lu-unload-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
             <div class="form-group" id="lu-unload-dest-subloc2-group" hidden>
-              <label class="form-label">תת-מיקום נוסף (אופציונלי)</label>
+              <label class="form-label">${Lang.T('תת-מיקום נוסף (אופציונלי)', 'Sub-ubicación adicional (opcional)')}</label>
               <input id="lu-unload-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
-            <button id="lu-unload-save-only" class="btn btn-outline" style="flex:1">שמור</button>
-            <button id="lu-unload-save-btn" class="btn btn-primary" style="flex:2">שמור ושלח 💬</button>
+            <button id="lu-unload-save-only" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
+            <button id="lu-unload-save-btn" class="btn btn-primary" style="flex:2">${Lang.T('שמור ושלח 💬', 'Guardar y enviar 💬')}</button>
           </div>
         </div>
       </div>
@@ -5764,7 +5764,7 @@
         rows.push(`
           <div class="item-row">
             <span class="item-row-num">${i+1}</span>
-            <input class="item-id-input floor-serial-input" placeholder="מספר סידורי" value="${esc(existing[i] || '')}">
+            <input class="item-id-input floor-serial-input" placeholder="${Lang.T('מספר סידורי', 'Número de serie')}" value="${esc(existing[i] || '')}">
             <button class="scan-btn" title="סרוק ברקוד">📷</button>
           </div>
         `);
@@ -6041,7 +6041,7 @@
 
       const rawParent = screen.querySelector('#lu-ct-parent-cart').value.trim();
       const parentCartId = rawParent.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
-      if (!parentCartId) { Toast.show('יש להזין מספר עגלה', 'error'); return null; }
+      if (!parentCartId) { Toast.show(Lang.T('יש להזין מספר עגלה', 'Ingresa número de carreta'), 'error'); return null; }
 
       // Read all slots
       const allSlots = readAllSlots(ctSlotsContainer);
@@ -6138,7 +6138,7 @@
           if (_unloadCartRef) _unloadCartRef.clear();
           setOp('load');
           screen.querySelector('#lu-dest-cart').value = cartLabel(cart);
-          Toast.show('העגלה ריקה — עובר להעמסה', 'info');
+          Toast.show(Lang.T('העגלה ריקה — עובר להעמסה', 'La carreta está vacía — cambiando a carga'), 'info');
           return;
         }
         fields.hidden = false;
@@ -6157,12 +6157,12 @@
       return new Promise(resolve => {
         const propStr = Utils.orderedPropValues(props, DB.getMetadata().properties || []);
         Modal.open({
-          title: 'מספר סידורי לא נמצא',
+          title: Lang.T('מספר סידורי לא נמצא', 'Número de serie no encontrado'),
           html: `<p class="card-meta">"${esc(serial)}" לא נמצא ב${esc(loc)}${propStr ? ' (' + esc(propStr) + ')' : ''}.</p>
                  <p class="card-meta" style="margin-top:8px">להמשיך בכל זאת? אם הפריט קיים במיקום אחר הוא יועבר.</p>`,
           actions: [
-            { id: 'yes', label: 'כן, המשך', cls: 'btn-primary', onClick: () => { Modal.close(); resolve(true); } },
-            { id: 'no', label: 'ביטול', onClick: () => { Modal.close(); resolve(false); } }
+            { id: 'yes', label: Lang.T('כן, המשך', 'Sí, continuar'), cls: 'btn-primary', onClick: () => { Modal.close(); resolve(true); } },
+            { id: 'no', label: Lang.T('ביטול', 'Cancelar'), onClick: () => { Modal.close(); resolve(false); } }
           ]
         });
       });
@@ -6171,7 +6171,7 @@
     async function doLoadSave(skipValidation = false) {
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
       const destCartId = rawDest.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
-      if (!destCartId) { Toast.show('יש להזין יעד להעמסה', 'error'); return null; }
+      if (!destCartId) { Toast.show(Lang.T('יש להזין יעד להעמסה', 'Ingresa destino de carga'), 'error'); return null; }
 
       let msg;
 
@@ -6233,15 +6233,15 @@
           (sl.itemIds || []).forEach(id => msgLines.push(id));
         });
         msg = msgLines.join('\n');
-        Toast.show('פריטים הועמסו', 'success');
+        Toast.show(Lang.T('פריטים הועמסו', 'Ítems cargados'), 'success');
         initEmptySlots(slotsContainer);
       } else {
         // Floor mode: multi-slot
         const loc = _getFloorLoc();
         const subloc = _getFloorSubloc();
-        if (!loc) { Toast.show('יש להזין מיקום מקור', 'error'); return null; }
+        if (!loc) { Toast.show(Lang.T('יש להזין מיקום מקור', 'Ingresa ubicación origen'), 'error'); return null; }
         const floorSlots = readAllFloorSlots();
-        if (!floorSlots.some(s => s.itemCount > 0)) { Toast.show('יש להזין כמות', 'error'); return null; }
+        if (!floorSlots.some(s => s.itemCount > 0)) { Toast.show(Lang.T('יש להזין כמות', 'Ingresa cantidad'), 'error'); return null; }
 
         // Validate serials — check for unknowns
         for (const slot of floorSlots) {
@@ -6319,7 +6319,7 @@
         const ctName = destCart ? containerName(destCart) : 'עגלה';
         const cartLoc = destCart ? (destCart.location || '?') : '?';
         msg = [`${ctName} ${label}`, `מועמסת ב${cartLoc}`, ...msgLines].join('\n');
-        Toast.show('פריטים הועמסו מרצפה', 'success');
+        Toast.show(Lang.T('פריטים הועמסו מרצפה', 'Ítems cargados desde suelo'), 'success');
         initFloorSlots();
       }
       // Optional destination — move cart and append to message
@@ -6354,9 +6354,9 @@
 
     // ── unload save logic ──
     function doUnloadSave() {
-      if (!_srcCart) { Toast.show('יש לבחור מקור לפירוק', 'error'); return null; }
+      if (!_srcCart) { Toast.show(Lang.T('יש לבחור מקור לפירוק', 'Selecciona fuente para descarga'), 'error'); return null; }
       const destLoc = screen.querySelector('#lu-unload-dest-loc').value.trim();
-      if (!destLoc) { Toast.show('יש להזין מיקום יעד', 'error'); return null; }
+      if (!destLoc) { Toast.show(Lang.T('יש להזין מיקום יעד', 'Ingresa una ubicación destino'), 'error'); return null; }
       const _uSub1 = screen.querySelector('#lu-unload-dest-subloc-group').hidden ? '' : screen.querySelector('#lu-unload-dest-subloc').value.trim();
       const _uSub2 = screen.querySelector('#lu-unload-dest-subloc2-group').hidden ? '' : screen.querySelector('#lu-unload-dest-subloc2').value.trim();
       const destSubLoc = (_uSub1 && _uSub2) ? `${_uSub1}/${_uSub2}` : _uSub1;
@@ -6398,7 +6398,7 @@
       const label = msgCartLabel(_srcCart);
       const unloadDest = waMsgLoc(destLoc, destSubLoc);
       const msg   = [`${containerName(_srcCart)} ${label}`, ...msgParts, `פורקו ל${unloadDest}`].join('\n');
-      Toast.show('פריטים פורקו לרצפה', 'success');
+      Toast.show(Lang.T('פריטים פורקו לרצפה', 'Ítems descargados al suelo'), 'success');
 
       _srcCart = null;
       screen.querySelector('#lu-unload-fields').hidden = true;
@@ -6419,9 +6419,9 @@
 
     // empty cart (unload screen)
     screen.querySelector('#lu-empty-cart').addEventListener('click', () => {
-      if (!_srcCart) { Toast.show('בחר עגלה', 'error'); return; }
+      if (!_srcCart) { Toast.show(Lang.T('בחר עגלה', 'Selecciona carreta'), 'error'); return; }
       DB.upsertCart({ cartId: _srcCart.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
-      Toast.show('עגלה רוקנה', 'success');
+      Toast.show(Lang.T('עגלה רוקנה', 'Carreta vaciada'), 'success');
       _srcCart = null;
       screen.querySelector('#lu-unload-fields').hidden = true;
     });
@@ -6472,22 +6472,22 @@
       </div>
       <div id="sr-collapse-bar" class="sr-collapse-bar" style="display:none">
         <span class="sr-collapse-summary" id="sr-collapse-summary"></span>
-        <span class="sr-collapse-toggle" id="sr-collapse-toggle">הצג סינונים ▼</span>
+        <span class="sr-collapse-toggle" id="sr-collapse-toggle">${Lang.T('הצג סינונים ▼', 'Mostrar filtros ▼')}</span>
       </div>
       <div class="sr-search-inputs" id="sr-search-inputs">
-        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 1"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 2"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 3"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 4"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="סינון חיובי 5"></div>
-        <div class="sr-suggest-wrap"><input id="sr-exc-1" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 1 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 2 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 3 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-4" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 4 (לא לכלול)"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-5" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="החרגה 5 (לא לכלול)"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 1', 'Filtro positivo 1')}"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 2', 'Filtro positivo 2')}"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 3', 'Filtro positivo 3')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 4', 'Filtro positivo 4')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 5', 'Filtro positivo 5')}"></div>
+        <div class="sr-suggest-wrap"><input id="sr-exc-1" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 1 (לא לכלול)', 'Exclusión 1 (no incluir)')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 2 (לא לכלול)', 'Exclusión 2 (no incluir)')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 3 (לא לכלול)', 'Exclusión 3 (no incluir)')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-4" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 4 (לא לכלול)', 'Exclusión 4 (no incluir)')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-5" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 5 (לא לכלול)', 'Exclusión 5 (no incluir)')}"></div>
         <div style="display:flex;gap:8px;">
-          <div class="sr-add-filter" id="sr-add-filter" style="flex:1"><a>+ הוסף שדה סינון</a></div>
-          <div class="sr-add-filter" id="sr-add-exc-filter" style="flex:1"><a>+ הוסף שדה החרגה</a></div>
+          <div class="sr-add-filter" id="sr-add-filter" style="flex:1"><a>${Lang.T('+ הוסף שדה סינון', '+ Agregar campo de filtro')}</a></div>
+          <div class="sr-add-filter" id="sr-add-exc-filter" style="flex:1"><a>${Lang.T('+ הוסף שדה החרגה', '+ Agregar campo de exclusión')}</a></div>
         </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0;">
           <label class="sr-empty-label">
@@ -6508,12 +6508,12 @@
       <div id="sr-type-filters" class="recent-filters" style="padding-bottom:2px"></div>
       <div id="sr-recent-filters" class="recent-filters"></div>
       <div class="sr-filter-actions">
-        <span id="sr-filter-count" class="sr-filter-count">כל הפריטים</span>
-        <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">נקה סינון</button>
+        <span id="sr-filter-count" class="sr-filter-count">${Lang.T('כל הפריטים', 'Todos los ítems')}</span>
+        <button id="sr-clear-btn" class="btn btn-sm btn-outline" style="display:none">${Lang.T('נקה סינון', 'Limpiar filtro')}</button>
       </div>
       <div style="display:flex;gap:6px;padding:0 12px 8px;flex-wrap:wrap">
-        <button id="sr-copy-results" class="btn btn-sm btn-outline">העתק תוצאות</button>
-        <button id="sr-copy-summary" class="btn btn-sm btn-outline">העתק סיכום</button>
+        <button id="sr-copy-results" class="btn btn-sm btn-outline">${Lang.T('העתק תוצאות', 'Copiar resultados')}</button>
+        <button id="sr-copy-summary" class="btn btn-sm btn-outline">${Lang.T('העתק סיכום', 'Copiar resumen')}</button>
         <button id="sr-laizko" class="btn btn-sm btn-outline">לאיצקו</button>
       </div>
       <div id="sr-summary" hidden></div>
@@ -6562,13 +6562,13 @@
       const excParts = state.excludeTerms.map(t => t);
       let summary = incParts.join(', ');
       if (excParts.length) {
-        summary += (summary ? ' | ' : '') + 'לא כולל: ' + excParts.join(', ');
+        summary += (summary ? ' | ' : '') + Lang.T('לא כולל: ', 'Excluyendo: ') + excParts.join(', ');
       }
       if (state.emptyOnly) {
-        summary += (summary ? ' | ' : '') + 'ריקות בלבד';
+        summary += (summary ? ' | ' : '') + Lang.T('ריקות בלבד', 'Solo vacías');
       }
       collapseSummary.textContent = summary;
-      collapseToggle.textContent = _filtersCollapsed ? 'הצג סינונים ▼' : 'הסתר סינונים ▲';
+      collapseToggle.textContent = _filtersCollapsed ? Lang.T('הצג סינונים ▼', 'Mostrar filtros ▼') : Lang.T('הסתר סינונים ▲', 'Ocultar filtros ▲');
     }
 
     collapseBar.addEventListener('click', () => {
@@ -6630,7 +6630,7 @@
       const parts = [];
       if (r.inc && r.inc.length) parts.push(r.inc.join(', '));
       if (r.exc && r.exc.length) parts.push('!' + r.exc.join(', '));
-      if (r.empty) parts.push('ריקות');
+      if (r.empty) parts.push(Lang.T('ריקות', 'Vacías'));
       return parts.join(' | ');
     }
     function _applyRecent(r) {
@@ -6793,13 +6793,13 @@
 
       const header = document.createElement('div');
       header.className = 'sr-disambig-header';
-      header.textContent = 'הערך קיים בכמה קטגוריות — בחר:';
+      header.textContent = Lang.T('הערך קיים בכמה קטגוריות — בחר:', 'El valor existe en varias categorías — elegir:');
       list.appendChild(header);
 
       // "All categories" option
       const allItem = document.createElement('div');
       allItem.className = 'sr-suggest-item';
-      allItem.textContent = 'כל הקטגוריות';
+      allItem.textContent = Lang.T('כל הקטגוריות', 'Todas las categorías');
       allItem.addEventListener('pointerdown', e => {
         e.preventDefault();
         _inputCategoryMap.delete(input);
@@ -6936,7 +6936,7 @@
       const count    = countActive();
       const label    = document.getElementById('sr-filter-count');
       const clearBtn = document.getElementById('sr-clear-btn');
-      label.textContent = count ? count + ' סינונים פעילים' : 'כל הפריטים';
+      label.textContent = count ? count + Lang.T(' סינונים פעילים', ' filtros activos') : Lang.T('כל הפריטים', 'Todos los ítems');
       clearBtn.style.display = count ? '' : 'none';
       updateCollapseBar();
       updateCopyBtnLabels();
@@ -6946,8 +6946,8 @@
       const n = _selectedItems.size;
       const copyBtn = document.getElementById('sr-copy-results');
       const summBtn = document.getElementById('sr-copy-summary');
-      copyBtn.textContent = n ? `העתק תוצאות (${n})` : 'העתק תוצאות';
-      summBtn.textContent = n ? `העתק סיכום (${n})` : 'העתק סיכום';
+      copyBtn.textContent = n ? `${Lang.T('העתק תוצאות', 'Copiar resultados')} (${n})` : Lang.T('העתק תוצאות', 'Copiar resultados');
+      summBtn.textContent = n ? `${Lang.T('העתק סיכום', 'Copiar resumen')} (${n})` : Lang.T('העתק סיכום', 'Copiar resumen');
     }
 
     // ── Filter logic ──────────────────────────────────────────────
@@ -7013,9 +7013,9 @@
       const meta = DB.getMetadata();
       const ctypes = meta.containerTypes || [DEFAULT_CONTAINER];
       const chips = [
-        { label: 'הכל', value: null },
+        { label: Lang.T('הכל', 'Todo'), value: null },
         ...ctypes.map(ct => ({ label: ct, value: ct })),
-        { label: 'רצפה', value: 'floor' }
+        { label: Lang.T('רצפה', 'Piso'), value: 'floor' }
       ];
       container.innerHTML = chips.map(c => {
         const active = state.itemTypeFilter === c.value ? ' active' : '';
@@ -7135,7 +7135,7 @@
       all.filter(x => !x.isEmpty && x.itemCount).forEach(item => {
         const key   = propDefs.map(p => (item.properties || {})[p.name] || '').join('|');
         const label = propDefs.map(p => (item.properties || {})[p.name]).filter(Boolean).join(' · ');
-        if (!comboStats[key]) comboStats[key] = { label: label || 'ללא מאפיינים', total: 0 };
+        if (!comboStats[key]) comboStats[key] = { label: label || Lang.T('ללא מאפיינים', 'Sin atributos'), total: 0 };
         comboStats[key].total += item.itemCount;
       });
       const comboEntries = Object.values(comboStats).sort((a,b) => b.total - a.total);
@@ -7584,7 +7584,7 @@
         carts = carts.filter(c => _selectedItems.has('cart:' + c.cartId));
         fis = fis.filter(fi => _selectedItems.has('fi:' + fi.id));
       }
-      if (!carts.length && !fis.length) { Toast.show('אין תוצאות', 'error'); return; }
+      if (!carts.length && !fis.length) { Toast.show(Lang.T('אין תוצאות', 'Sin resultados'), 'error'); return; }
 
       const groups = {};
       const addItem = (item, type) => {
@@ -7627,7 +7627,7 @@
         return header + '\n' + lines;
       }).join('\n\n');
 
-      Utils.copyToClipboard(text).then(() => Toast.show('תוצאות הועתקו', 'success')).catch(() => Toast.show('שגיאה בהעתקה', 'error'));
+      Utils.copyToClipboard(text).then(() => Toast.show(Lang.T('תוצאות הועתקו', 'Resultados copiados'), 'success')).catch(() => Toast.show(Lang.T('שגיאה בהעתקה', 'Error al copiar'), 'error'));
     });
 
     // ── Copy summary text ──────────────────────────────────────────
@@ -7635,7 +7635,7 @@
       const carts = DB.getAllCarts().filter(itemPasses);
       const fis   = DB.getAllFloorItems().filter(itemPasses);
       const all   = [...carts, ...fis];
-      if (!all.length) { Toast.show('אין תוצאות', 'error'); return; }
+      if (!all.length) { Toast.show(Lang.T('אין תוצאות', 'Sin resultados'), 'error'); return; }
 
       const totalItems = all.reduce((s, x) => s + (x.itemCount || 0), 0);
       const meta = DB.getMetadata();
@@ -7667,14 +7667,14 @@
         lines.push(`${count} ${label}`);
       });
       const text = lines.join('\n');
-      Utils.copyToClipboard(text).then(() => Toast.show('סיכום הועתק', 'success')).catch(() => Toast.show('שגיאה בהעתקה', 'error'));
+      Utils.copyToClipboard(text).then(() => Toast.show(Lang.T('סיכום הועתק', 'Resumen copiado'), 'success')).catch(() => Toast.show(Lang.T('שגיאה בהעתקה', 'Error al copiar'), 'error'));
     });
 
     // ── לאיצקו (CSV download) ──────────────────────────────────────
     document.getElementById('sr-laizko').addEventListener('click', () => {
       const carts = DB.getAllCarts().filter(itemPasses);
       const fis   = DB.getAllFloorItems().filter(itemPasses);
-      if (!carts.length && !fis.length) { Toast.show('אין תוצאות', 'error'); return; }
+      if (!carts.length && !fis.length) { Toast.show(Lang.T('אין תוצאות', 'Sin resultados'), 'error'); return; }
 
       const meta = DB.getMetadata();
       const propDefs = meta.properties || [];
@@ -7708,7 +7708,7 @@
       const a = document.createElement('a');
       a.href = url; a.download = `laizko-${ts}.csv`; a.click();
       URL.revokeObjectURL(url);
-      Toast.show('CSV הורד', 'success');
+      Toast.show(Lang.T('CSV הורד', 'CSV descargado'), 'success');
     });
 
     // ── Item click → modal ────────────────────────────────────────
@@ -7741,21 +7741,21 @@
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(cart.lastUpdated)}</p>
           `,
           actions: [
-            { id: 'edit-cart', label: '✏️ עריכת תוכן', cls: 'btn-outline', onClick: () => {
+            { id: 'edit-cart', label: Lang.T('✏️ עריכת תוכן', '✏️ Editar contenido'), cls: 'btn-outline', onClick: () => {
               Modal.close();
               openEditCartModal(cart);
             }},
-            { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
+            { id: 'transfer', label: Lang.T('🔄 העברה', '🔄 Traslado'), cls: 'btn-primary', onClick: () => {
               Modal.close();
               Router.navigate('transfer', { cartId: id });
               history.replaceState(null, '', '#transfer');
             }},
-            { id: 'loadunload', label: '📦 העמסה / פירוק', cls: 'btn-outline', onClick: () => {
+            { id: 'loadunload', label: Lang.T('📦 העמסה / פירוק', '📦 Carga / Descarga'), cls: 'btn-outline', onClick: () => {
               Modal.close();
               Router.navigate('loadunload', { cartId: id });
               history.replaceState(null, '', '#loadunload');
             }},
-            { id: 'close', label: 'סגור', onClick: Modal.close }
+            { id: 'close', label: Lang.T('סגור', 'Cerrar'), onClick: Modal.close }
           ]
         });
       } else {
@@ -7772,7 +7772,7 @@
             <p class="card-meta" style="font-size:0.75rem;margin-top:8px">עדכון: ${Utils.formatDate(fi.lastUpdated)}</p>
           `,
           actions: [
-            { id: 'edit-fi', label: '✏️ עריכה', cls: 'btn-outline', onClick: () => {
+            { id: 'edit-fi', label: Lang.T('✏️ עריכה', '✏️ Editar'), cls: 'btn-outline', onClick: () => {
               Modal.close();
               const fiEdit = DB.getFloorItem(id);
               if (!fiEdit) return;
@@ -7787,7 +7787,7 @@
                 `<div class="item-row"><span class="item-row-num">${i+1}</span><input class="item-id-input fi-eid" placeholder="מספר סידורי" value="${esc(existing[i] || '')}"><button class="scan-btn" title="סרוק ברקוד">📷</button></div>`
               ).join('');
               Modal.open({
-                title: 'עריכת פריטי רצפה',
+                title: Lang.T('עריכת פריטי רצפה', 'Editar ítems de suelo'),
                 html: `
                   <div class="form-group"><label class="form-label">כמות</label><input id="fi-edit-count" class="form-input" type="number" min="0" value="${cnt}"></div>
                   <div id="fi-edit-id-rows">${buildIdRows(Math.max(cnt, ids.length), ids)}</div>
@@ -7795,7 +7795,7 @@
                   <div class="form-group"><label class="form-label">הערה</label><input id="fi-edit-comment" class="form-input" value="${esc(fiEdit.comment || '')}" placeholder="הערה"></div>
                 `,
                 actions: [
-                  { id: 'fi-save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+                  { id: 'fi-save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
                     const newCount = parseInt(document.getElementById('fi-edit-count').value) || 0;
                     const newIds = [...document.querySelectorAll('.fi-eid')].map(i => i.value.trim()).filter(Boolean);
                     const newProps = {};
@@ -7806,9 +7806,9 @@
                                          isEmpty: newCount === 0, comment: newComment });
                     Modal.close();
                     renderResults();
-                    Toast.show('פריטי רצפה עודכנו', 'success');
+                    Toast.show(Lang.T('פריטי רצפה עודכנו', 'Ítems de suelo actualizados'), 'success');
                   }},
-                  { id: 'fi-cancel', label: 'ביטול', onClick: Modal.close }
+                  { id: 'fi-cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
                 ]
               });
               document.getElementById('fi-edit-count').addEventListener('input', () => {
@@ -7817,17 +7817,17 @@
                 document.getElementById('fi-edit-id-rows').innerHTML = buildIdRows(n, existing);
               });
             }},
-            { id: 'transfer', label: '🔄 העברה', cls: 'btn-primary', onClick: () => {
+            { id: 'transfer', label: Lang.T('🔄 העברה', '🔄 Traslado'), cls: 'btn-primary', onClick: () => {
               Modal.close();
               Router.navigate('transfer', { floorItemId: id });
               history.replaceState(null, '', '#transfer');
             }},
-            { id: 'loadunload', label: '📦 העמסה / פירוק', cls: 'btn-outline', onClick: () => {
+            { id: 'loadunload', label: Lang.T('📦 העמסה / פירוק', '📦 Carga / Descarga'), cls: 'btn-outline', onClick: () => {
               Modal.close();
               Router.navigate('loadunload', { floorItemId: id });
               history.replaceState(null, '', '#loadunload');
             }},
-            { id: 'close', label: 'סגור', onClick: Modal.close }
+            { id: 'close', label: Lang.T('סגור', 'Cerrar'), onClick: Modal.close }
           ]
         });
       }
@@ -7856,7 +7856,7 @@
           <button id="ec-empty-btn" class="btn btn-outline btn-full mt-12" style="color:var(--danger);border-color:var(--danger)">ריקון עגלה</button>
         `,
         actions: [
-          { id: 'ec-save', label: 'שמור', cls: 'btn-primary', onClick: () => {
+          { id: 'ec-save', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
             const newCount = parseInt(document.getElementById('ec-count').value) || 0;
             const newIds = [...document.querySelectorAll('.ec-id')].map(i => i.value.trim()).filter(Boolean);
             const newProps = {};
@@ -7864,10 +7864,10 @@
             const newComment = (document.getElementById('ec-comment').value || '').trim();
             DB.upsertCart({ cartId: cart.cartId, itemCount: newCount, itemIds: newIds, properties: newProps, isEmpty: newCount === 0, comment: newComment });
             Modal.close();
-            Toast.show('עגלה עודכנה', 'success');
+            Toast.show(Lang.T('עגלה עודכנה', 'Carreta actualizada'), 'success');
             renderResults();
           }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
         ]
       });
       // dynamic rows on count change
@@ -7882,7 +7882,7 @@
       document.getElementById('ec-empty-btn').addEventListener('click', () => {
         DB.upsertCart({ cartId: cart.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
         Modal.close();
-        Toast.show('עגלה רוקנה', 'success');
+        Toast.show(Lang.T('עגלה רוקנה', 'Carreta vaciada'), 'success');
         renderResults();
       });
     }
@@ -7916,7 +7916,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v124</span>
+        <span class="version-badge">v125</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8000,24 +8000,24 @@
 
     // export — copy + WhatsApp
     screen.querySelector('#main-export').addEventListener('click', async () => {
-      Progress.show('מייצא נתונים...');
+      Progress.show(Lang.T('מייצא נתונים...', 'Exportando datos...'));
       Progress.update(30);
       try {
         const text = await Utils.generateExportText(DB.getRaw());
         Progress.update(80);
         Utils.shareOrCopy(text);
         Progress.update(100);
-        setTimeout(() => { Progress.hide(); Toast.show('גיבוי הועתק ונשלח', 'success'); }, 300);
+        setTimeout(() => { Progress.hide(); Toast.show(Lang.T('גיבוי הועתק ונשלח', 'Respaldo copiado y enviado'), 'success'); }, 300);
       } catch(e) {
         Progress.hide();
-        Toast.show('שגיאה בייצוא', 'error');
+        Toast.show(Lang.T('שגיאה בייצוא', 'Error al exportar'), 'error');
       }
     });
 
     // import — paste via modal textarea
     screen.querySelector('#main-import').addEventListener('click', () => {
       Modal.open({
-        title: 'ייבוא נתונים',
+        title: Lang.T('ייבוא נתונים', 'Importar datos'),
         html: `
           <p class="card-meta" style="margin-bottom:10px">הדבק כאן את טקסט הגיבוי שהועתק בייצוא:</p>
           <textarea id="import-paste-area" rows="6"
@@ -8025,13 +8025,13 @@
                    font-size:0.82rem;font-family:monospace;direction:ltr;text-align:left;resize:vertical"></textarea>
         `,
         actions: [
-          { id: 'do-import', label: 'ייבא', cls: 'btn-primary', onClick: async () => {
+          { id: 'do-import', label: Lang.T('ייבא', 'Importar'), cls: 'btn-primary', onClick: async () => {
             let text = document.getElementById('import-paste-area').value.trim();
-            if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+            if (!text) { Toast.show(Lang.T('לא הודבק טקסט', 'No se pegó texto'), 'error'); return; }
             // Sanitize: remove directional marks, BOM, zero-width chars (iOS paste issue)
             text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
             Modal.close();
-            Progress.show('מייבא נתונים...');
+            Progress.show(Lang.T('מייבא נתונים...', 'Importando datos...'));
             Progress.update(20);
             try {
               const jsonStr = await Utils.parseImportText(text);
@@ -8041,7 +8041,7 @@
               const doImport = () => {
                 DB.importJSON(jsonStr, 'merge');
                 Progress.update(100);
-                setTimeout(() => { Progress.hide(); Toast.show('נתונים יובאו בהצלחה', 'success'); }, 300);
+                setTimeout(() => { Progress.hide(); Toast.show(Lang.T('נתונים יובאו בהצלחה', 'Datos importados exitosamente'), 'success'); }, 300);
               };
               if (parsedImport) {
                 const issues = collectImportValidationIssues(parsedImport);
@@ -8054,10 +8054,10 @@
               doImport();
             } catch(err) {
               Progress.hide();
-              Toast.show('שגיאה: ' + err.message, 'error');
+              Toast.show(Lang.T('שגיאה: ', 'Error: ') + err.message, 'error');
             }
           }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
         ]
       });
     });
@@ -8090,7 +8090,7 @@
 
     function _openMapEditModal(mapText) {
       Modal.open({
-        title: 'עריכת מיפוי',
+        title: Lang.T('עריכת מיפוי', 'Editar mapa'),
         html: `
           ${_mapCapacityBarHtml()}
           <p class="card-meta" style="margin-bottom:10px">ערוך את המיפוי ולחץ שמור. השינויים ימוזגו לנתונים הקיימים.</p>
@@ -8099,21 +8099,21 @@
                    font-size:0.82rem;font-family:monospace;direction:rtl;text-align:right;resize:vertical;line-height:1.6">${esc(mapText)}</textarea>
         `,
         actions: [
-          { id: 'save-map-edit', label: 'שמור', cls: 'btn-primary', onClick: () => {
+          { id: 'save-map-edit', label: Lang.T('שמור', 'Guardar'), cls: 'btn-primary', onClick: () => {
             const text = document.getElementById('map-edit-area').value.trim();
-            if (!text) { Toast.show('אין טקסט', 'error'); return; }
+            if (!text) { Toast.show(Lang.T('אין טקסט', 'No hay texto'), 'error'); return; }
             try {
               const propDefs = DB.getMetadata().properties || [];
               const normalizedText = _normalizeAliases(text, propDefs, DB.getMetadata().locations);
               const blocks = _parseMap(normalizedText);
-              if (!blocks.length) { Toast.show('לא נמצאו בלוקים', 'error'); return; }
+              if (!blocks.length) { Toast.show(Lang.T('לא נמצאו בלוקים', 'No se encontraron bloques'), 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
               const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
               const doActualImportCore = () => {
                 DB.importJSON(JSON.stringify(importedDb), 'merge');
                 _applyMapOrdering(blocks, propDefs);
                 Modal.close();
-                Toast.show('מיפוי נשמר בהצלחה', 'success');
+                Toast.show(Lang.T('מיפוי נשמר בהצלחה', 'Mapa guardado exitosamente'), 'success');
                 showMapReviewModal();
               };
               const doActualImport = () => {
@@ -8128,14 +8128,14 @@
               if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
               doImport();
             } catch(err) {
-              Toast.show('שגיאה: ' + err.message, 'error');
+              Toast.show(Lang.T('שגיאה: ', 'Error: ') + err.message, 'error');
             }
           }},
-          { id: 'copy-map-edit', label: 'העתק', cls: 'btn-outline', onClick: () => {
+          { id: 'copy-map-edit', label: Lang.T('העתק', 'Copiar'), cls: 'btn-outline', onClick: () => {
             const text = document.getElementById('map-edit-area').value;
-            Utils.copyToClipboard(text).then(() => Toast.show('הועתק ללוח', 'success'));
+            Utils.copyToClipboard(text).then(() => Toast.show(Lang.T('הועתק ללוח', 'Copiado al portapapeles'), 'success'));
           }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
         ]
       });
     }
@@ -8143,7 +8143,7 @@
     screen.querySelector('#main-map-action').addEventListener('click', () => {
       const label = _offMapLabel();
       Modal.open({
-        title: 'מיפוי — בחר סוג',
+        title: Lang.T('מיפוי — בחר סוג', 'Mapa — elegir tipo'),
         html: `
           <div style="display:flex;gap:12px;margin-top:8px;">
             <button id="map-choice-regular" class="btn btn-primary btn-full" style="font-size:1.1rem;padding:18px 8px;">רגיל</button>
@@ -8158,7 +8158,7 @@
         const raw = DB.load();
         const mapText = Utils.generateMapText(raw);
         Utils.copyToClipboard(mapText).catch(() => {});
-        Toast.show('מיפוי הועתק ללוח', 'success');
+        Toast.show(Lang.T('מיפוי הועתק ללוח', 'Mapa copiado al portapapeles'), 'success');
         _openMapEditModal(mapText);
       });
       overlay.querySelector('#map-choice-offmap').addEventListener('click', () => {
@@ -8166,7 +8166,7 @@
         const raw = DB.load();
         const mapText = Utils.generateOffMapText(raw, label);
         Utils.copyToClipboard(mapText).catch(() => {});
-        Toast.show(`מיפוי ${label} הועתק ללוח`, 'success');
+        Toast.show(`${Lang.T('מיפוי ', 'Mapa ')}${label}${Lang.T(' הועתק ללוח', ' copiado al portapapeles')}`, 'success');
         _openMapEditModal(mapText);
       });
     });
@@ -8174,7 +8174,7 @@
     // map import — parse map text and merge into DB
     screen.querySelector('#main-map-import').addEventListener('click', () => {
       Modal.open({
-        title: 'ייבוא מיפוי',
+        title: Lang.T('ייבוא מיפוי', 'Importar mapa'),
         html: `
           <p class="card-meta" style="margin-bottom:10px">הדבק כאן טקסט מיפוי (באותו פורמט של יצירת מיפוי):</p>
           <textarea id="map-import-area" rows="10"
@@ -8182,14 +8182,14 @@
                    font-size:0.82rem;font-family:monospace;direction:rtl;text-align:right;resize:vertical"></textarea>
         `,
         actions: [
-          { id: 'do-map-import', label: 'ייבא מיפוי', cls: 'btn-primary', onClick: () => {
+          { id: 'do-map-import', label: Lang.T('ייבא מיפוי', 'Importar mapa'), cls: 'btn-primary', onClick: () => {
             const text = document.getElementById('map-import-area').value.trim();
-            if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+            if (!text) { Toast.show(Lang.T('לא הודבק טקסט', 'No se pegó texto'), 'error'); return; }
             try {
               const propDefs = DB.getMetadata().properties || [];
               const normalizedText = _normalizeAliases(text, propDefs, DB.getMetadata().locations);
               const blocks = _parseMap(normalizedText);
-              if (!blocks.length) { Toast.show('לא נמצאו בלוקים במיפוי', 'error'); return; }
+              if (!blocks.length) { Toast.show(Lang.T('לא נמצאו בלוקים במיפוי', 'No se encontraron bloques en el mapa'), 'error'); return; }
               const diffs = _getLocationDiffs(blocks);
               const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
               const doActualImportCore = () => {
@@ -8198,7 +8198,7 @@
                 const cartCount = Object.keys(importedDb.carts).length;
                 const floorCount = Object.keys(importedDb.floorItems).length;
                 Modal.close();
-                Toast.show(`יובאו ${cartCount + floorCount} פריטים`, 'success');
+                Toast.show(`${Lang.T('יובאו ', 'Importados ')}${cartCount + floorCount}${Lang.T(' פריטים', ' ítems')}`, 'success');
               };
               const doActualImport = () => {
                 const issues = collectImportValidationIssues(importedDb);
@@ -8212,10 +8212,10 @@
               if (diffs.length) { _showLocationDiffModal(diffs, doImport); return; }
               doImport();
             } catch(err) {
-              Toast.show('שגיאה: ' + err.message, 'error');
+              Toast.show(Lang.T('שגיאה: ', 'Error: ') + err.message, 'error');
             }
           }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
         ]
       });
     });
@@ -8269,13 +8269,13 @@
         </label>`).join('');
 
       Modal.open({
-        title: 'עדכון הגדרות לפני ייבוא 🔒',
+        title: Lang.T('עדכון הגדרות לפני ייבוא 🔒', 'Actualizar configuración antes de importar 🔒'),
         html: `
-          <p style="margin-bottom:10px;font-size:0.88rem;color:var(--muted)">המיפוי מכיל מיקומים שאינם בהגדרות. בחר מה להוסיף להגדרות לפני הייבוא:</p>
+          <p style="margin-bottom:10px;font-size:0.88rem;color:var(--muted)">${Lang.T('המיפוי מכיל מיקומים שאינם בהגדרות. בחר מה להוסיף להגדרות לפני הייבוא:', 'El mapa contiene ubicaciones que no están en la configuración. Elige qué agregar antes de importar:')}</p>
           <div style="max-height:260px;overflow-y:auto;margin-bottom:4px">${checkboxRows}</div>
         `,
         actions: [
-          { id: 'apply-import', label: 'הוסף ויייבא', cls: 'btn-primary', onClick: () => {
+          { id: 'apply-import', label: Lang.T('הוסף ויייבא', 'Agregar e importar'), cls: 'btn-primary', onClick: () => {
             const overlay = document.getElementById('modal-overlay');
             const checked = [...overlay.querySelectorAll('[data-diff-idx]:checked')]
               .map(cb => diffs[+cb.dataset.diffIdx]);
@@ -8292,7 +8292,7 @@
             Modal.close();
             onProceed();
           }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
         ]
       });
     }
@@ -8301,7 +8301,7 @@
       const optionsHint = propDefs.map(p => `${p.name}: ${(p.options||[]).join(', ')}`).filter(s => s.includes(':')).join('  |  ');
       const rowsHtml = unmatchedItems.map(item =>
         `<div style="margin-bottom:10px;padding:8px;background:var(--surface2,#f0f0f0);border-radius:6px">
-          <div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px">${esc(item.label)} — ${item.itemCount} יח׳</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px">${esc(item.label)} — ${item.itemCount}${Lang.T(' יח׳', ' uds.')}</div>
           <input data-fi-id="${esc(item.fiId)}" data-fixed-comment="${esc(item.fixedComment || '')}" value="${esc(item.rawProps)}"
             style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:0.9rem;direction:rtl;box-sizing:border-box" />
         </div>`
@@ -8310,14 +8310,14 @@
         ? `<p style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;direction:ltr;text-align:left">${esc(optionsHint)}</p>`
         : '';
       Modal.open({
-        title: 'פריטי רצפה עם מאפיינים לא מוכרים',
+        title: Lang.T('פריטי רצפה עם מאפיינים לא מוכרים', 'Ítems de piso con atributos no reconocidos'),
         html: `
-          <p style="font-size:0.84rem;margin-bottom:8px">ערוך את המאפיינים ולחץ המשך, או השאר כפי שהוא:</p>
+          <p style="font-size:0.84rem;margin-bottom:8px">${Lang.T('ערוך את המאפיינים ולחץ המשך, או השאר כפי שהוא:', 'Edita los atributos y presiona Continuar, o déjalos como están:')}</p>
           ${hintHtml}
           <div style="max-height:300px;overflow-y:auto">${rowsHtml}</div>
         `,
         actions: [
-          { id: 'continue-import', label: 'המשך', cls: 'btn-primary', onClick: () => {
+          { id: 'continue-import', label: Lang.T('המשך', 'Continuar'), cls: 'btn-primary', onClick: () => {
             document.querySelectorAll('[data-fi-id]').forEach(inp => {
               const fi = importedDb.floorItems[inp.dataset.fiId];
               if (!fi) return;
@@ -8333,7 +8333,7 @@
             Modal.close();
             onProceed();
           }},
-          { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+          { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
         ]
       });
     }
@@ -8998,7 +8998,7 @@
     // consolidated delete button — choose items-only or full reset
     screen.querySelector('#main-delete').addEventListener('click', () => {
       Modal.open({
-        title: 'מחיקת נתונים',
+        title: Lang.T('מחיקת נתונים', 'Eliminar datos'),
         html: `
           <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
             <button id="del-choice-items" class="btn btn-outline btn-full" style="padding:14px 8px;">🧹 פריטים בלבד<br><small style="color:var(--muted);font-weight:400">מיקומים ומאפיינים נשמרים</small></button>
@@ -9013,42 +9013,42 @@
       overlay.querySelector('#del-choice-items').addEventListener('click', () => {
         Modal.close();
         Modal.open({
-          title: 'מחיקת נתוני פריטים',
+          title: Lang.T('מחיקת נתוני פריטים', 'Eliminar datos de ítems'),
           html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל הפריטים.<br>מיקומים, תת-מיקומים, מאפיינים וסוגי עגלות <strong>לא יימחקו</strong>.<br><br><strong>אין אפשרות לשחזר.</strong></p>',
           actions: [
-            { id: 'confirm-clear-items', label: 'מחק פריטים', cls: 'btn-danger', onClick: () => {
+            { id: 'confirm-clear-items', label: Lang.T('מחק פריטים', 'Eliminar ítems'), cls: 'btn-danger', onClick: () => {
               DB.clearItemsOnly();
               Modal.close();
-              Toast.show('נתוני הפריטים נמחקו', 'success');
+              Toast.show(Lang.T('נתוני הפריטים נמחקו', 'Datos de ítems eliminados'), 'success');
               Router.navigate('main');
             }},
-            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
           ]
         });
       });
       overlay.querySelector('#del-choice-all').addEventListener('click', () => {
         Modal.close();
         Modal.open({
-          title: 'מחיקת כל הנתונים',
-          html: '<p style="margin-bottom:8px">פעולה זו תמחק את כל העגלות, פריטי הרצפה, מיקומים ומאפיינים.<br><strong>אין אפשרות לשחזר.</strong></p>',
+          title: Lang.T('מחיקת כל הנתונים', 'Eliminar todos los datos'),
+          html: `<p style="margin-bottom:8px">${Lang.T('פעולה זו תמחק את כל העגלות, פריטי הרצפה, מיקומים ומאפיינים.', 'Esta acción eliminará todas las carretas, ítems de piso, ubicaciones y atributos.')}<br><strong>${Lang.T('אין אפשרות לשחזר.', 'No se puede deshacer.')}</strong></p>`,
           actions: [
-            { id: 'confirm-delete-all', label: 'מחק הכל — אני בטוח', cls: 'btn-danger', onClick: () => {
+            { id: 'confirm-delete-all', label: Lang.T('מחק הכל — אני בטוח', 'Eliminar todo — estoy seguro'), cls: 'btn-danger', onClick: () => {
               Modal.close();
               Modal.open({
-                title: 'אישור סופי',
-                html: '<p style="margin-bottom:8px;color:var(--danger)"><strong>פעולה בלתי הפיכה!</strong><br>כל הנתונים יימחקו לצמיתות.<br>להמשיך?</p>',
+                title: Lang.T('אישור סופי', 'Confirmación final'),
+                html: `<p style="margin-bottom:8px;color:var(--danger)"><strong>${Lang.T('פעולה בלתי הפיכה!', '¡Acción irreversible!')}</strong><br>${Lang.T('כל הנתונים יימחקו לצמיתות.', 'Todos los datos se eliminarán permanentemente.')}<br>${Lang.T('להמשיך?', '¿Continuar?')}</p>`,
                 actions: [
-                  { id: 'final-confirm', label: 'כן, מחק הכל', cls: 'btn-danger', onClick: () => {
+                  { id: 'final-confirm', label: Lang.T('כן, מחק הכל', 'Sí, eliminar todo'), cls: 'btn-danger', onClick: () => {
                     DB.clear();
                     Modal.close();
-                    Toast.show('כל הנתונים נמחקו', 'success');
+                    Toast.show(Lang.T('כל הנתונים נמחקו', 'Todos los datos eliminados'), 'success');
                     Router.navigate('main');
                   }},
-                  { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+                  { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
                 ]
               });
             }},
-            { id: 'cancel', label: 'ביטול', onClick: Modal.close }
+            { id: 'cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
           ]
         });
       });
@@ -9057,18 +9057,18 @@
     // ── עדכון תנועות ─────────────────────────────────────────────
     screen.querySelector('#main-movements-update').addEventListener('click', () => {
       Modal.open({
-        title: 'עדכון תנועות',
+        title: Lang.T('עדכון תנועות', 'Actualizar traslados'),
         html: `
-          <p class="card-meta" style="margin-bottom:10px">הדבק כאן הודעות WhatsApp שנשלחו מהאפליקציה. כל הודעה בנפרד — הפרד בשורה ריקה:</p>
+          <p class="card-meta" style="margin-bottom:10px">${Lang.T('הדבק כאן הודעות WhatsApp שנשלחו מהאפליקציה. כל הודעה בנפרד — הפרד בשורה ריקה:', 'Pega aquí mensajes de WhatsApp enviados desde la app. Cada mensaje por separado — separar con línea vacía:')}</p>
           <textarea id="movements-paste-area" rows="10"
             style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
                    font-size:0.82rem;font-family:monospace;direction:rtl;text-align:right;resize:vertical;line-height:1.6"></textarea>
           <div id="movements-results" style="margin-top:10px;font-size:0.84rem;display:none"></div>
         `,
         actions: [
-          { id: 'do-movements', label: 'עדכן', cls: 'btn-primary', onClick: () => {
+          { id: 'do-movements', label: Lang.T('עדכן', 'Actualizar'), cls: 'btn-primary', onClick: () => {
             let text = document.getElementById('movements-paste-area').value.trim();
-            if (!text) { Toast.show('לא הודבק טקסט', 'error'); return; }
+            if (!text) { Toast.show(Lang.T('לא הודבק טקסט', 'No se pegó texto'), 'error'); return; }
             // Strip WhatsApp/iOS directional marks
             text = text.replace(/[\uFEFF\u200B\u200C\u200D\u00A0\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C]/g, '');
             const { results, unknowns } = _parseAndApplyMovements(text);
@@ -9076,8 +9076,8 @@
             const fail = results.filter(r => !r.ok && !r.unknown);
             const resEl = document.getElementById('movements-results');
             resEl.style.display = '';
-            const okHtml = ok.length ? `<div style="color:var(--success);margin-bottom:4px">✓ עודכנו ${ok.length} תנועות:<br>${ok.map(r => esc(r.msg)).join('<br>')}</div>` : '';
-            const failHtml = fail.length ? `<div style="color:var(--danger);margin-bottom:4px">✗ לא זוהו ${fail.length}:<br>${fail.map(r => esc(r.msg)).join('<br>')}</div>` : '';
+            const okHtml = ok.length ? `<div style="color:var(--success);margin-bottom:4px">✓ ${Lang.T('עודכנו ', 'Actualizados ')}${ok.length}${Lang.T(' תנועות:', ' traslados:')}<br>${ok.map(r => esc(r.msg)).join('<br>')}</div>` : '';
+            const failHtml = fail.length ? `<div style="color:var(--danger);margin-bottom:4px">✗ ${Lang.T('לא זוהו ', 'No reconocidos ')}${fail.length}:<br>${fail.map(r => esc(r.msg)).join('<br>')}</div>` : '';
             let unknownsHtml = '';
             if (unknowns.length) {
               const rows = unknowns.map((u, i) => {
@@ -9085,10 +9085,10 @@
                 const destLabel = u.location + (u.subLocation ? '/' + u.subLocation : '');
                 return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer"><input type="checkbox" checked data-idx="${i}"><span>${esc(typeLabel + u.cartId)} → ${esc(destLabel)}</span></label>`;
               }).join('');
-              unknownsHtml = `<div id="movements-unknowns-section" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#d97706;font-weight:600;margin-bottom:6px">⚠ לא נמצאו במערכת — אשר להוסיף:</div><div id="movements-unknowns-list">${rows}</div><button id="movements-add-unknowns" class="btn btn-outline" style="margin-top:8px;width:100%">הוסף נבחרים למערכת</button></div>`;
+              unknownsHtml = `<div id="movements-unknowns-section" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#d97706;font-weight:600;margin-bottom:6px">⚠ ${Lang.T('לא נמצאו במערכת — אשר להוסיף:', 'No encontrados en el sistema — confirmar para agregar:')}</div><div id="movements-unknowns-list">${rows}</div><button id="movements-add-unknowns" class="btn btn-outline" style="margin-top:8px;width:100%">${Lang.T('הוסף נבחרים למערכת', 'Agregar seleccionados al sistema')}</button></div>`;
             }
             resEl.innerHTML = okHtml + failHtml + unknownsHtml;
-            if (ok.length) Toast.show(`עודכנו ${ok.length} תנועות`, 'success');
+            if (ok.length) Toast.show(`${Lang.T('עודכנו ', 'Actualizados ')}${ok.length}${Lang.T(' תנועות', ' traslados')}`, 'success');
             if (unknowns.length) {
               setTimeout(() => {
                 const addBtn = document.getElementById('movements-add-unknowns');
@@ -9104,14 +9104,14 @@
                     }
                   });
                   if (addedCount) {
-                    Toast.show(`נוספו ${addedCount} פריטים למערכת`, 'success');
+                    Toast.show(`${Lang.T('נוספו ', 'Agregados ')}${addedCount}${Lang.T(' פריטים למערכת', ' ítems al sistema')}`, 'success');
                     document.getElementById('movements-unknowns-section').remove();
                   }
                 });
               }, 0);
             }
           }},
-          { id: 'cancel-movements', label: 'סגור', onClick: Modal.close }
+          { id: 'cancel-movements', label: Lang.T('סגור', 'Cerrar'), onClick: Modal.close }
         ]
       });
     });
@@ -9314,7 +9314,7 @@
     // ── Pull-to-refresh ─────────────────────────────────────────
     const ptrIndicator = document.createElement('div');
     ptrIndicator.className = 'ptr-indicator';
-    ptrIndicator.innerHTML = '<span class="ptr-arrow">↓</span><span class="ptr-text">משוך לרענון</span>';
+    ptrIndicator.innerHTML = `<span class="ptr-arrow">↓</span><span class="ptr-text">${Lang.T('משוך לרענון', 'Jalar para actualizar')}</span>`;
     screen.insertBefore(ptrIndicator, screen.firstChild.nextSibling); // after header
 
     const PTR_THRESHOLD = 70;
@@ -9338,7 +9338,7 @@
       _ptrDist = Math.min(dy * 0.5, 100);
       ptrIndicator.style.height = _ptrDist + 'px';
       ptrIndicator.classList.toggle('threshold', _ptrDist >= PTR_THRESHOLD);
-      ptrIndicator.querySelector('.ptr-text').textContent = _ptrDist >= PTR_THRESHOLD ? 'שחרר לרענון' : 'משוך לרענון';
+      ptrIndicator.querySelector('.ptr-text').textContent = _ptrDist >= PTR_THRESHOLD ? Lang.T('שחרר לרענון', 'Suelta para actualizar') : Lang.T('משוך לרענון', 'Jalar para actualizar');
     }, { passive: true });
 
     scrContainer.addEventListener('touchend', () => {
@@ -9347,7 +9347,7 @@
       if (_ptrDist >= PTR_THRESHOLD && !_ptrRefreshing) {
         _ptrRefreshing = true;
         ptrIndicator.classList.add('refreshing');
-        ptrIndicator.querySelector('.ptr-text').textContent = 'מרענן...';
+        ptrIndicator.querySelector('.ptr-text').textContent = Lang.T('מרענן...', 'Actualizando...');
         ptrIndicator.style.height = '44px';
         if (navigator.vibrate) navigator.vibrate(15);
         // Reload the page to pick up the latest version
@@ -9403,7 +9403,7 @@
     document.body.setAttribute('data-theme', mode);
     localStorage.setItem(THEME_KEY, mode);
     const btn = document.getElementById('theme-toggle');
-    if (btn) btn.textContent = mode === 'dark' ? 'מצב בהיר' : 'מצב כהה';
+    if (btn) btn.textContent = mode === 'dark' ? Lang.T('מצב בהיר', 'Modo claro') : Lang.T('מצב כהה', 'Modo oscuro');
   }
 
   function toggleTheme() {
@@ -9421,89 +9421,89 @@
 
   const HelpContent = {
     main: {
-      title: '❓ מסך ראשי — עזרה',
+      title: Lang.T('❓ מסך ראשי — עזרה', '❓ Pantalla principal — Ayuda'),
       html: `
-        ${_sec('כפתורי המסך הראשי', `
-          ${_h('📤', '<b>ייצוא נתונים</b> — מייצר גיבוי מלא של כל הנתונים ומעתיק ללוח.')}
-          ${_h('📥', '<b>ייבוא נתונים</b> — הדבק טקסט גיבוי שיוצא קודם לכן — הנתונים יתמזגו.')}
-          ${_h('🗺️', '<b>מיפוי</b> — יוצר מפת מיקומים, מעתיק ללוח ופותח עורך טקסט לעריכה ושמירה. בחר "רגיל" לפריטים שבמפה, או "חיצוני" לפריטים שאינם בעמוד המפה. לאחר הבחירה המיפוי מועתק ונפתח לעריכה — שנה ולחץ שמור.')}
-          ${_h('📋', '<b>ייבוא מיפוי</b> — הדבק טקסט מיפוי שהועתק בעבר ומזג לנתונים הקיימים.')}
-          ${_h('📲', '<b>עדכון תנועות</b> — הדבק הודעות WhatsApp שנשלחו מהאפליקציה ועדכן מיקומי עגלות אוטומטית.')}
-          ${_h('🗑️', '<b>מחיקת נתונים</b> — בחר "פריטים בלבד" למחיקת עגלות ופריטי רצפה (מיקומים ומאפיינים נשמרים), או "מחק הכל" לאיפוס מלא עם אישור כפול.')}
+        ${_sec(Lang.T('כפתורי המסך הראשי', 'Botones de la pantalla principal'), `
+          ${_h('📤', Lang.T('<b>ייצוא נתונים</b> — מייצר גיבוי מלא של כל הנתונים ומעתיק ללוח.', '<b>Exportar datos</b> — genera una copia de seguridad completa y la copia al portapapeles.'))}
+          ${_h('📥', Lang.T('<b>ייבוא נתונים</b> — הדבק טקסט גיבוי שיוצא קודם לכן — הנתונים יתמזגו.', '<b>Importar datos</b> — pega el texto de respaldo exportado anteriormente — los datos se fusionarán.'))}
+          ${_h('🗺️', Lang.T('<b>מיפוי</b> — יוצר מפת מיקומים, מעתיק ללוח ופותח עורך טקסט לעריכה ושמירה. בחר "רגיל" לפריטים שבמפה, או "חיצוני" לפריטים שאינם בעמוד המפה.', '<b>Mapa</b> — genera un mapa de ubicaciones, lo copia al portapapeles y abre el editor. Elige "Normal" para ítems en el mapa, o "Externo" para ítems fuera del mapa.'))}
+          ${_h('📋', Lang.T('<b>ייבוא מיפוי</b> — הדבק טקסט מיפוי שהועתק בעבר ומזג לנתונים הקיימים.', '<b>Importar mapa</b> — pega el texto del mapa copiado anteriormente y fusiónalo con los datos existentes.'))}
+          ${_h('📲', Lang.T('<b>עדכון תנועות</b> — הדבק הודעות WhatsApp שנשלחו מהאפליקציה ועדכן מיקומי עגלות אוטומטית.', '<b>Actualizar traslados</b> — pega mensajes de WhatsApp enviados desde la app y actualiza las ubicaciones automáticamente.'))}
+          ${_h('🗑️', Lang.T('<b>מחיקת נתונים</b> — בחר "פריטים בלבד" למחיקת עגלות ופריטי רצפה (מיקומים ומאפיינים נשמרים), או "מחק הכל" לאיפוס מלא עם אישור כפול.', '<b>Eliminar datos</b> — elige "Solo ítems" para eliminar carretas e ítems de piso (ubicaciones y atributos se conservan), o "Eliminar todo" para reseteo completo con doble confirmación.'))}
         `)}
-        ${_sec('כלים נוספים', `
-          ${_h('↩', '<b>ביטול פעולה</b> — לחץ ↩ בראש המסך לביטול הפעולה האחרונה.')}
-          ${_h('🌙', '<b>מצב לילה</b> — לחץ על הכפתור הימני לשינוי ערכת הצבעים.')}
-          ${_h('🇮🇱/🇨🇱', '<b>שפה</b> — לחץ על דגל השפה לעבור בין עברית וספרדית.')}
+        ${_sec(Lang.T('כלים נוספים', 'Herramientas adicionales'), `
+          ${_h('↩', Lang.T('<b>ביטול פעולה</b> — לחץ ↩ בראש המסך לביטול הפעולה האחרונה.', '<b>Deshacer</b> — presiona ↩ en la parte superior para deshacer la última acción.'))}
+          ${_h('🌙', Lang.T('<b>מצב לילה</b> — לחץ על הכפתור הימני לשינוי ערכת הצבעים.', '<b>Modo oscuro</b> — presiona el botón derecho para cambiar el esquema de colores.'))}
+          ${_h('🇮🇱/🇨🇱', Lang.T('<b>שפה</b> — לחץ על דגל השפה לעבור בין עברית וספרדית.', '<b>Idioma</b> — presiona la bandera para cambiar entre hebreo y español.'))}
         `)}
       `
     },
     transfer: {
-      title: '❓ מסך העברה — עזרה',
+      title: Lang.T('❓ מסך העברה — עזרה', '❓ Pantalla de traslado — Ayuda'),
       html: `
-        ${_sec('איך משתמשים?', `
-          ${_h('1️⃣', 'הזן את מספר העגלה בשדה "עגלה".')}
-          ${_h('2️⃣', 'בחר מיקום מקור (מאיפה) ומיקום יעד (לאן).')}
-          ${_h('3️⃣', 'הזן את כמות הפריטים ומספרים סידוריים (אפשרי גם בסריקה).')}
-          ${_h('4️⃣', 'לחץ "שמור ושלח" — הנתונים יישמרו ותיפתח הודעת וואטסאפ מוכנה לשליחה.')}
+        ${_sec(Lang.T('איך משתמשים?', '¿Cómo se usa?'), `
+          ${_h('1️⃣', Lang.T('הזן את מספר העגלה בשדה "עגלה".', 'Ingresa el número de la carreta en el campo "Carreta".'))}
+          ${_h('2️⃣', Lang.T('בחר מיקום מקור (מאיפה) ומיקום יעד (לאן).', 'Elige ubicación de origen (de dónde) y destino (a dónde).'))}
+          ${_h('3️⃣', Lang.T('הזן את כמות הפריטים ומספרים סידוריים (אפשרי גם בסריקה).', 'Ingresa la cantidad de ítems y números de serie (también posible por escaneo).'))}
+          ${_h('4️⃣', Lang.T('לחץ "שמור ושלח" — הנתונים יישמרו ותיפתח הודעת וואטסאפ מוכנה לשליחה.', 'Presiona "Guardar y enviar" — los datos se guardarán y se abrirá un mensaje de WhatsApp listo para enviar.'))}
         `)}
-        ${_sec('פיצ\'רים', `
-          ${_h('📦', '<b>משטח</b> — בחר "משטח" בתפריט הסוג רק אם למשטח יש מספר מזהה. משטחים ללא מספר אינם נתמכים.')}
-          ${_h('📍', '<b>תת-מיקום</b> — במיקומים חיצוניים (לא במפה) יופיע שדה לתת-מיקום (לדוגמה: מספר מעבר). ניתן לבחור שני תת-מיקומים אם העגלה נמצאת בין שניים.')}
-          ${_h('+', '<b>יעד ספציפי לפריט</b> — לחץ + ליד מספר סידורי כדי לקבוע יעד שונה לאותו פריט בלבד.')}
-          ${_h('📷', '<b>סריקת ברקוד</b> — לחץ 📷 ליד כל שדה מספר סידורי לסריקה דרך מצלמה או גלריה.')}
-          ${_h('💾', '<b>שמור בלבד</b> — לחץ "שמור בלבד" כדי לשמור ללא שליחת וואטסאפ.')}
-          ${_h('↩', '<b>ביטול פעולה</b> — לחץ ↩ לביטול השמירה האחרונה.')}
+        ${_sec(Lang.T('פיצ\'רים', 'Funciones'), `
+          ${_h('📦', Lang.T('<b>משטח</b> — בחר "משטח" בתפריט הסוג רק אם למשטח יש מספר מזהה.', '<b>Piso</b> — elige "Piso" en el menú de tipo solo si el piso tiene número de ID. Pisos sin número no están soportados.'))}
+          ${_h('📍', Lang.T('<b>תת-מיקום</b> — במיקומים חיצוניים (לא במפה) יופיע שדה לתת-מיקום (לדוגמה: מספר מעבר).', '<b>Sub-ubicación</b> — en ubicaciones externas (fuera del mapa) aparecerá un campo de sub-ubicación (por ejemplo: número de pasillo).'))}
+          ${_h('+', Lang.T('<b>יעד ספציפי לפריט</b> — לחץ + ליד מספר סידורי כדי לקבוע יעד שונה לאותו פריט בלבד.', '<b>Destino específico por ítem</b> — presiona + junto al número de serie para asignar un destino diferente solo a ese ítem.'))}
+          ${_h('📷', Lang.T('<b>סריקת ברקוד</b> — לחץ 📷 ליד כל שדה מספר סידורי לסריקה דרך מצלמה או גלריה.', '<b>Escanear código de barras</b> — presiona 📷 junto a cada campo de número de serie para escanear con cámara o galería.'))}
+          ${_h('💾', Lang.T('<b>שמור בלבד</b> — לחץ "שמור בלבד" כדי לשמור ללא שליחת וואטסאפ.', '<b>Solo guardar</b> — presiona "Solo guardar" para guardar sin enviar WhatsApp.'))}
+          ${_h('↩', Lang.T('<b>ביטול פעולה</b> — לחץ ↩ לביטול השמירה האחרונה.', '<b>Deshacer</b> — presiona ↩ para deshacer el último guardado.'))}
         `)}
       `
     },
     loadunload: {
-      title: '❓ מסך העמסה/פירוק — עזרה',
+      title: Lang.T('❓ מסך העמסה/פירוק — עזרה', '❓ Pantalla de carga/descarga — Ayuda'),
       html: `
-        ${_sec('איך משתמשים?', `
-          ${_h('1️⃣', 'בחר טאב: "העמסה" (טעינת פריטים לעגלה) או "פירוק" (הורדת פריטים מעגלה).')}
-          ${_h('2️⃣', 'הזן את מספר העגלה.')}
-          ${_h('3️⃣', 'הוסף חריצי פריטים — לכל חריץ: כמות, מספרים סידוריים ומאפיינים.')}
-          ${_h('4️⃣', 'לחץ "שמור" לסיום.')}
+        ${_sec(Lang.T('איך משתמשים?', '¿Cómo se usa?'), `
+          ${_h('1️⃣', Lang.T('בחר טאב: "העמסה" (טעינת פריטים לעגלה) או "פירוק" (הורדת פריטים מעגלה).', 'Elige pestaña: "Carga" (cargar ítems en carreta) o "Descarga" (quitar ítems de carreta).'))}
+          ${_h('2️⃣', Lang.T('הזן את מספר העגלה.', 'Ingresa el número de la carreta.'))}
+          ${_h('3️⃣', Lang.T('הוסף חריצי פריטים — לכל חריץ: כמות, מספרים סידוריים ומאפיינים.', 'Agrega slots de ítems — por cada slot: cantidad, números de serie y atributos.'))}
+          ${_h('4️⃣', Lang.T('לחץ "שמור" לסיום.', 'Presiona "Guardar" para finalizar.'))}
         `)}
-        ${_sec('פיצ\'רים', `
-          ${_h('📦', '<b>משטח על עגלה</b> — הטאב "משטח על עגלה" רלוונטי רק למשטחים בעלי מספר מזהה. משטחים ללא מספר אינם נתמכים.')}
-          ${_h('📷', '<b>סריקת ברקוד</b> — לחץ 📷 ליד כל שדה מספר סידורי לסריקה מהירה.')}
-          ${_h('📋', '<b>מאפיינים</b> — תעד מאפיינים לכל חריץ (לדוגמה: גודל, סוג, מצב).')}
-          ${_h('➕', '<b>כמה חריצים</b> — לחץ "הוסף חריץ" להוסיף סוגי פריטים שונים באותה פעולה.')}
-          ${_h('🚚', '<b>העברה לאחר העמסה</b> — בהעמסה ניתן לציין מיקום יעד להזזת העגלה מיד לאחר ההעמסה.')}
-          ${_h('↩', '<b>ביטול פעולה</b> — לחץ ↩ לביטול השמירה האחרונה.')}
+        ${_sec(Lang.T('פיצ\'רים', 'Funciones'), `
+          ${_h('📦', Lang.T('<b>משטח על עגלה</b> — הטאב "משטח על עגלה" רלוונטי רק למשטחים בעלי מספר מזהה.', '<b>Piso en carreta</b> — la pestaña "Piso en carreta" es relevante solo para pisos con número de ID.'))}
+          ${_h('📷', Lang.T('<b>סריקת ברקוד</b> — לחץ 📷 ליד כל שדה מספר סידורי לסריקה מהירה.', '<b>Escanear código de barras</b> — presiona 📷 junto a cada campo de número de serie para escaneo rápido.'))}
+          ${_h('📋', Lang.T('<b>מאפיינים</b> — תעד מאפיינים לכל חריץ (לדוגמה: גודל, סוג, מצב).', '<b>Atributos</b> — registra atributos para cada slot (por ejemplo: tamaño, tipo, estado).'))}
+          ${_h('➕', Lang.T('<b>כמה חריצים</b> — לחץ "הוסף חריץ" להוסיף סוגי פריטים שונים באותה פעולה.', '<b>Varios slots</b> — presiona "Agregar slot" para añadir distintos tipos de ítems en la misma operación.'))}
+          ${_h('🚚', Lang.T('<b>העברה לאחר העמסה</b> — בהעמסה ניתן לציין מיקום יעד להזזת העגלה מיד לאחר ההעמסה.', '<b>Traslado después de carga</b> — al cargar se puede indicar una ubicación destino para mover la carreta inmediatamente después.'))}
+          ${_h('↩', Lang.T('<b>ביטול פעולה</b> — לחץ ↩ לביטול השמירה האחרונה.', '<b>Deshacer</b> — presiona ↩ para deshacer el último guardado.'))}
         `)}
       `
     },
     search: {
-      title: '❓ מסך חיפוש — עזרה',
+      title: Lang.T('❓ מסך חיפוש — עזרה', '❓ Pantalla de búsqueda — Ayuda'),
       html: `
-        ${_sec('איך משתמשים?', `
-          ${_h('1️⃣', 'הקלד בשדה החיפוש — שם עגלה, מספר סידורי, מיקום או כל מילה מהמאפיינים.')}
-          ${_h('2️⃣', 'התוצאות מתעדכנות תוך כדי הקלדה.')}
-          ${_h('3️⃣', 'לחץ על תוצאה לצפייה בכל פרטי הפריט.')}
+        ${_sec(Lang.T('איך משתמשים?', '¿Cómo se usa?'), `
+          ${_h('1️⃣', Lang.T('הקלד בשדה החיפוש — שם עגלה, מספר סידורי, מיקום או כל מילה מהמאפיינים.', 'Escribe en el campo de búsqueda — nombre de carreta, número de serie, ubicación o cualquier palabra de los atributos.'))}
+          ${_h('2️⃣', Lang.T('התוצאות מתעדכנות תוך כדי הקלדה.', 'Los resultados se actualizan mientras escribes.'))}
+          ${_h('3️⃣', Lang.T('לחץ על תוצאה לצפייה בכל פרטי הפריט.', 'Presiona un resultado para ver todos los detalles del ítem.'))}
         `)}
-        ${_sec('פיצ\'רים', `
-          ${_h('🗺️', '<b>כולל חיצוני</b> — ברירת המחדל מציגה רק מיקומים שנמצאים במפה. סמן "כולל חיצוני" כדי לכלול גם מיקומים חיצוניים כמו מחסנים ומעברים.')}
-          ${_h('❌', '<b>סינון תקול/תקין</b> — לחץ "תקין" או "תקול" לסינון לפי מצב (פריט תקול מסומן ב-❌ בהערה או במאפיינים). "הכל" מציג את כולם.')}
-          ${_h('📭', '<b>הצג ריקות בלבד</b> — מציג רק עגלות ריקות, שימושי לאיתור עגלות פנויות.')}
+        ${_sec(Lang.T('פיצ\'רים', 'Funciones'), `
+          ${_h('🗺️', Lang.T('<b>כולל חיצוני</b> — ברירת המחדל מציגה רק מיקומים שנמצאים במפה. סמן "כולל חיצוני" כדי לכלול גם מיקומים חיצוניים כמו מחסנים ומעברים.', '<b>Incluir externos</b> — por defecto muestra solo ubicaciones en el mapa. Marca "Incluir externos" para incluir también ubicaciones externas como depósitos y pasillos.'))}
+          ${_h('❌', Lang.T('<b>סינון תקול/תקין</b> — לחץ "תקין" או "תקול" לסינון לפי מצב. "הכל" מציג את כולם.', '<b>Filtrar averiado/funcional</b> — presiona "Funcional" o "Averiado" para filtrar por estado. "Todo" muestra todos.'))}
+          ${_h('📭', Lang.T('<b>הצג ריקות בלבד</b> — מציג רק עגלות ריקות, שימושי לאיתור עגלות פנויות.', '<b>Mostrar solo vacías</b> — muestra solo carretas vacías, útil para encontrar carretas disponibles.'))}
         `)}
       `
     },
     edit: {
-      title: '❓ עריכת נתונים — עזרה',
+      title: Lang.T('❓ עריכת נתונים — עזרה', '❓ Edición de datos — Ayuda'),
       html: `
-        ${_sec('איך משתמשים?', `
-          ${_h('1️⃣', 'מסך זה מאפשר הגדרת רשימות הבסיס של האפליקציה.')}
-          ${_h('2️⃣', 'בחר טאב — מיקומים, מאפיינים, סוגי מכולה, או ייבוא/ייצוא.')}
-          ${_h('3️⃣', 'הוסף, ערוך או מחק ערכים ולחץ שמור.')}
+        ${_sec(Lang.T('איך משתמשים?', '¿Cómo se usa?'), `
+          ${_h('1️⃣', Lang.T('מסך זה מאפשר הגדרת רשימות הבסיס של האפליקציה.', 'Esta pantalla permite configurar las listas base de la aplicación.'))}
+          ${_h('2️⃣', Lang.T('בחר טאב — מיקומים, מאפיינים, סוגי מכולה, או ייבוא/ייצוא.', 'Elige una pestaña — Ubicaciones, Atributos, Tipos de contenedor, o Importar/Exportar.'))}
+          ${_h('3️⃣', Lang.T('הוסף, ערוך או מחק ערכים ולחץ שמור.', 'Agrega, edita o elimina valores y presiona Guardar.'))}
         `)}
-        ${_sec('פיצ\'רים', `
-          ${_h('📍', '<b>מיקומים</b> — הגדר מיקומים, אם הם נמצאים במפה, ותת-מיקומים (לדוגמה: מספרי מעברים). מיקום חיצוני (לא במפה) יציג רק את תת-המיקום בהודעות וואטסאפ.')}
-          ${_h('🏷️', '<b>מאפיינים</b> — הגדר שדות מאפיינים מותאמים (לדוגמה: גודל, צבע) עם רשימת ערכים קבועים.')}
-          ${_h('📦', '<b>סוגי מכולה</b> — הגדר את סוגי העגלות והמכולות הקיימות.')}
-          ${_h('↩', '<b>ביטול פעולה</b> — לחץ ↩ לביטול השינוי האחרון.')}
+        ${_sec(Lang.T('פיצ\'רים', 'Funciones'), `
+          ${_h('📍', Lang.T('<b>מיקומים</b> — הגדר מיקומים, אם הם נמצאים במפה, ותת-מיקומים. מיקום חיצוני יציג רק את תת-המיקום בהודעות וואטסאפ.', '<b>Ubicaciones</b> — define ubicaciones, si están en el mapa, y sub-ubicaciones. Una ubicación externa mostrará solo la sub-ubicación en los mensajes de WhatsApp.'))}
+          ${_h('🏷️', Lang.T('<b>מאפיינים</b> — הגדר שדות מאפיינים מותאמים (לדוגמה: גודל, צבע) עם רשימת ערכים קבועים.', '<b>Atributos</b> — define campos de atributos personalizados (por ejemplo: tamaño, color) con lista de valores fijos.'))}
+          ${_h('📦', Lang.T('<b>סוגי מכולה</b> — הגדר את סוגי העגלות והמכולות הקיימות.', '<b>Tipos de contenedor</b> — define los tipos de carretas y contenedores existentes.'))}
+          ${_h('↩', Lang.T('<b>ביטול פעולה</b> — לחץ ↩ לביטול השינוי האחרון.', '<b>Deshacer</b> — presiona ↩ para deshacer el último cambio.'))}
         `)}
       `
     },
@@ -9549,9 +9549,9 @@
     document.addEventListener('click', e => {
       const btn = e.target.closest('.undo-btn');
       if (!btn) return;
-      if (!DB.canUndo()) { Toast.show('אין פעולה לביטול', 'info'); return; }
+      if (!DB.canUndo()) { Toast.show(Lang.T('אין פעולה לביטול', 'No hay acción para deshacer'), 'info'); return; }
       DB.undo();
-      Toast.show('פעולה בוטלה', 'success');
+      Toast.show(Lang.T('פעולה בוטלה', 'Acción deshecha'), 'success');
       Router.navigate(Router.getCurrent());
     });
 
@@ -9576,7 +9576,7 @@
       const screen = btn.dataset.screen;
       const content = HelpContent[screen];
       if (!content) return;
-      Modal.open({ title: content.title, html: content.html, actions: [{ id: 'close', label: 'סגור', onClick: Modal.close }] });
+      Modal.open({ title: content.title, html: content.html, actions: [{ id: 'close', label: Lang.T('סגור', 'Cerrar'), onClick: Modal.close }] });
     });
 
     // Navigate to initial screen
@@ -9830,7 +9830,7 @@ const BarcodeScanner = (() => {
     choice.style.display = 'none';
     camView.classList.add('active');
     resultBar.textContent = '';
-    tapHint.textContent = 'הכנס ברקוד לתוך המסגרת';
+    tapHint.textContent = Lang.T('הכנס ברקוד לתוך המסגרת', 'Coloca el código de barras dentro del marco');
     scanFrame.setAttribute('stroke', '#fff');
     scanHole.setAttribute('fill', 'black');
     _lastResult = null;
@@ -9841,7 +9841,7 @@ const BarcodeScanner = (() => {
       await video.play();
       _scanRaf = requestAnimationFrame(scanLoop);
     } catch(e) {
-      Toast.show('לא ניתן לגשת למצלמה', 'error');
+      Toast.show(Lang.T('לא ניתן לגשת למצלמה', 'No se puede acceder a la cámara'), 'error');
       showChoice();
     }
   }
@@ -9887,7 +9887,7 @@ const BarcodeScanner = (() => {
         if (val !== _lastResult) {
           _lastResult = val;
           resultBar.textContent = val;
-          tapHint.textContent = 'הקש כדי לאשר';
+          tapHint.textContent = Lang.T('הקש כדי לאשר', 'Toca para confirmar');
           scanFrame.setAttribute('stroke', '#00e878');
           scanHole.setAttribute('fill', '#00e87822');
         }
