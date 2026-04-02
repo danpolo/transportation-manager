@@ -3430,11 +3430,11 @@
             </div>
             <div class="form-group">
               <label class="form-label">${Lang.T('מיקום', 'Ubicación')}</label>
-              <input id="ec-loc" class="form-input" placeholder="משני" autocomplete="off">
+              <input id="ec-loc" class="form-input" placeholder="${Lang.T('משני', 'Secundaria')}" autocomplete="off">
             </div>
             <div class="form-group" id="ec-subloc-group" hidden>
               <label class="form-label">${Lang.T('תת-מיקום', 'Sub-ubicación')}</label>
-              <input id="ec-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+              <input id="ec-subloc" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
             </div>
             <div class="form-group">
               <label class="form-label">${Lang.T('מועמס על: (אופציונלי)', 'Cargado sobre: (opcional)')}</label>
@@ -3462,7 +3462,7 @@
           <div class="card mt-12">
             <div class="card-title">${Lang.T('קטגוריות', 'Categorías')}</div>
             <div class="form-group" style="display:flex;gap:8px;">
-              <input id="ec-newcontainertype" class="form-input" placeholder="משטח" autocomplete="off" style="flex:1">
+              <input id="ec-newcontainertype" class="form-input" placeholder="${Lang.T('משטח', 'Piso')}" autocomplete="off" style="flex:1">
               <button id="ec-addcontainertype-btn" class="btn btn-outline">${Lang.T('+ הוסף', '+ Agregar')}</button>
             </div>
             <div id="ec-containertype-list"></div>
@@ -3807,7 +3807,7 @@
             <div class="card-title">${Lang.T('הוספת מיקום', 'Agregar ubicación')}</div>
             <div class="form-group">
               <label class="form-label">${Lang.T('שם מיקום', 'Nombre de ubicación')}</label>
-              <input id="el-name" class="form-input" placeholder="משני">
+              <input id="el-name" class="form-input" placeholder="${Lang.T('משני', 'Secundaria')}">
             </div>
             <label style="display:flex;align-items:center;gap:10px;margin-bottom:14px;cursor:pointer">
               <label class="modern-check"><input type="checkbox" id="el-inmap"><span class="modern-check-box"></span></label> ${Lang.T('הצג במיפוי', 'Mostrar en mapa')}
@@ -3849,7 +3849,7 @@
             <div class="form-group">
               <label class="form-label">${Lang.T('שם מיפוי חיצוני', 'Nombre del mapa externo')}</label>
               <div style="display:flex;gap:8px">
-                <input id="el-offmap-label" class="form-input" placeholder="חיצוני" autocomplete="off">
+                <input id="el-offmap-label" class="form-input" placeholder="${Lang.T('חיצוני', 'Externo')}" autocomplete="off">
                 <button id="el-offmap-label-save" class="btn btn-primary" style="white-space:nowrap">${Lang.T('שמור', 'Guardar')}</button>
               </div>
             </div>
@@ -4276,7 +4276,7 @@
             <div class="card-title">${Lang.T('הוספת מאפיין', 'Agregar atributo')}</div>
             <div class="form-group">
               <label class="form-label">${Lang.T('שם מאפיין', 'Nombre de atributo')}</label>
-              <input id="ep-name" class="form-input" placeholder="מרעום">
+              <input id="ep-name" class="form-input" placeholder="${Lang.T('מרעום', 'Ejm')}">
             </div>
             <button id="ep-save" class="btn btn-primary btn-full">${Lang.T('הוסף מאפיין', 'Agregar atributo')}</button>
           </div>
@@ -4309,7 +4309,7 @@
             <p class="card-meta" style="margin-bottom:8px">${Lang.T('תכונה מספרית שסכומה מוגבל בכל מיקום. מקושרת למאפיין בעל אפשרויות.', 'Característica numérica cuya suma está limitada por ubicación. Vinculada a un atributo con opciones.')}</p>
             <div class="form-group">
               <label class="form-label">${Lang.T('שם התכונה', 'Nombre de la característica')}</label>
-              <input id="cf-name" class="form-input" placeholder="למשל: משקל">
+              <input id="cf-name" class="form-input" placeholder="${Lang.T('למשל: משקל', 'Ej.: peso')}">
             </div>
             <div class="form-group">
               <label class="form-label">${Lang.T('מאפיין מקושר', 'Atributo vinculado')}</label>
@@ -4935,11 +4935,11 @@
         <div id="tr-floor-section" hidden>
           <div class="form-group">
             <label class="form-label">${Lang.T('מיקום מקור', 'Ubicación origen')}</label>
-            <input id="tr-floor-src-loc" class="form-input" placeholder="משני" autocomplete="off">
+            <input id="tr-floor-src-loc" class="form-input" placeholder="${Lang.T('משני', 'Secundaria')}" autocomplete="off">
           </div>
           <div class="form-group" id="tr-floor-src-subloc-group" hidden>
             <label class="form-label">${Lang.T('תת-מיקום מקור', 'Sub-ubicación origen')}</label>
-            <input id="tr-floor-src-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+            <input id="tr-floor-src-subloc" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
           </div>
           <div id="tr-floor-src-props" class="mt-12"></div>
           <div id="tr-floor-avail" class="card" style="margin:14px 0;" hidden></div>
@@ -4957,15 +4957,15 @@
 
           <div class="form-group">
             <label class="form-label">${Lang.T('מיקום יעד', 'Ubicación destino')}</label>
-            <input id="tr-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
+            <input id="tr-dest-loc" class="form-input" placeholder="${Lang.T('משני', 'Secundaria')}" autocomplete="off">
           </div>
           <div class="form-group" id="tr-dest-subloc-group" hidden>
             <label class="form-label">${Lang.T('תת-מיקום יעד', 'Sub-ubicación destino')}</label>
-            <input id="tr-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+            <input id="tr-dest-subloc" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
           </div>
           <div class="form-group" id="tr-dest-subloc2-group" hidden>
             <label class="form-label">${Lang.T('תת-מיקום נוסף (אופציונלי)', 'Sub-ubicación adicional (opcional)')}</label>
-            <input id="tr-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
+            <input id="tr-dest-subloc2" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
           </div>
 
           <!-- cart-mode: multi-slot support -->
@@ -5557,11 +5557,11 @@
           <div id="lu-floor-src-section" hidden>
             <div class="form-group">
               <label class="form-label">${Lang.T('מיקום מקור', 'Ubicación origen')}</label>
-              <input id="lu-src-loc" class="form-input" placeholder="משני" autocomplete="off">
+              <input id="lu-src-loc" class="form-input" placeholder="${Lang.T('משני', 'Secundaria')}" autocomplete="off">
             </div>
             <div class="form-group" id="lu-src-subloc-group" hidden>
               <label class="form-label">${Lang.T('תת-מיקום מקור', 'Sub-ubicación origen')}</label>
-              <input id="lu-src-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+              <input id="lu-src-subloc" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
             </div>
             <div id="lu-floor-slots-container"></div>
             <button id="lu-floor-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
@@ -5574,11 +5574,11 @@
           </div>
           <div class="form-group" id="lu-load-move-dest-subloc-group" hidden>
             <label class="form-label">${Lang.T('תת-מיקום יעד', 'Sub-ubicación destino')}</label>
-            <input id="lu-load-move-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+            <input id="lu-load-move-dest-subloc" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
           </div>
           <div class="form-group" id="lu-load-move-dest-subloc2-group" hidden>
             <label class="form-label">${Lang.T('תת-מיקום נוסף (אופציונלי)', 'Sub-ubicación adicional (opcional)')}</label>
-            <input id="lu-load-move-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
+            <input id="lu-load-move-dest-subloc2" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
             <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
@@ -5618,15 +5618,15 @@
             <div id="lu-unload-slots-container"></div>
             <div class="form-group" style="margin-top:16px;">
               <label class="form-label">${Lang.T('מיקום יעד (רצפה)', 'Ubicación destino (suelo)')}</label>
-              <input id="lu-unload-dest-loc" class="form-input" placeholder="משני" autocomplete="off">
+              <input id="lu-unload-dest-loc" class="form-input" placeholder="${Lang.T('משני', 'Secundaria')}" autocomplete="off">
             </div>
             <div class="form-group" id="lu-unload-dest-subloc-group" hidden>
               <label class="form-label">${Lang.T('תת-מיקום יעד', 'Sub-ubicación destino')}</label>
-              <input id="lu-unload-dest-subloc" class="form-input" placeholder="שוליים" autocomplete="off">
+              <input id="lu-unload-dest-subloc" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
             </div>
             <div class="form-group" id="lu-unload-dest-subloc2-group" hidden>
               <label class="form-label">${Lang.T('תת-מיקום נוסף (אופציונלי)', 'Sub-ubicación adicional (opcional)')}</label>
-              <input id="lu-unload-dest-subloc2" class="form-input" placeholder="שוליים" autocomplete="off">
+              <input id="lu-unload-dest-subloc2" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
@@ -7341,10 +7341,10 @@
             <button class="sr-pin-btn${isPinned ? ' pinned' : ''}" data-pin-key="${esc(gKey)}" title="${isPinned ? 'בטל הצמדה' : 'הצמד למעלה'}">${isPinned ? '\u2605' : '\u2606'}</button>
           </div>
           <div class="sr-loc-add-form" data-form-loc="${esc(g.loc)}" data-form-sub="${esc(g.sub||'')}" hidden>
-            <textarea class="sr-loc-add-textarea" rows="4" placeholder="שורות כמו במפה, למשל:&#10;8-6(1k): 3 אדום גדול&#10;אדום גדול - 5"></textarea>
+            <textarea class="sr-loc-add-textarea" rows="4" placeholder="${Lang.T('שורות כמו במפה, למשל:\n8-6(1k): 3 אדום גדול\nאדום גדול - 5', 'Líneas como en el mapa, ej:\n8-6(1k): 3 rojo grande\nrojo grande - 5')}"></textarea>
             <div style="display:flex;gap:8px;margin-top:6px">
-              <button class="btn btn-sm btn-outline sr-loc-cancel-btn">ביטול</button>
-              <button class="btn btn-sm sr-loc-import-btn" style="background:var(--brand);color:#fff">ייבא</button>
+              <button class="btn btn-sm btn-outline sr-loc-cancel-btn">${Lang.T('ביטול', 'Cancelar')}</button>
+              <button class="btn btn-sm sr-loc-import-btn" style="background:var(--brand);color:#fff">${Lang.T('ייבא', 'Importar')}</button>
             </div>
           </div>
           ${g.items.map(({ data, type }) => {
@@ -7916,7 +7916,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v125</span>
+        <span class="version-badge">v126</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -9374,7 +9374,7 @@
     _el: null,
     show(label) {
       this._el = document.getElementById('progress-overlay');
-      this._el.innerHTML = `<div class="progress-box"><div class="progress-spinner"></div><div class="progress-label">${label || 'מעבד...'}</div><div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div></div>`;
+      this._el.innerHTML = `<div class="progress-box"><div class="progress-spinner"></div><div class="progress-label">${label || Lang.T('מעבד...', 'Procesando...')}</div><div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div></div>`;
       this._el.hidden = false;
     },
     update(pct) {
