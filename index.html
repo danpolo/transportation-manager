@@ -7916,7 +7916,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v127</span>
+        <span class="version-badge">v128</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8193,7 +8193,31 @@
               const diffs = _getLocationDiffs(blocks);
               const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
               const doActualImportCore = () => {
+                // Locations that are currently on the map (inMap=true)
+                const inMapLocNames = new Set(
+                  (DB.getMetadata().locations || []).filter(l => l.inMap).map(l => l.name)
+                );
+                // Cart keys present in the new map
+                const importedCartKeys = new Set(Object.keys(importedDb.carts || {}));
+
+                // Remove all floor items at map locations before import —
+                // the new map is the source of truth for what's on the floor
+                for (const fi of DB.getAllFloorItems()) {
+                  if (fi.location && inMapLocNames.has(fi.location)) DB.deleteFloorItem(fi.id);
+                }
+
                 DB.importJSON(JSON.stringify(importedDb), 'merge');
+
+                // Move to "unknown location" any cart that was at a map location
+                // but doesn't appear in the new map
+                for (const cart of DB.getAllCarts()) {
+                  if (!cart.location || !inMapLocNames.has(cart.location)) continue;
+                  const key = cart.cartId + (cart.cartType ? '(' + cart.cartType + ')' : '');
+                  if (!importedCartKeys.has(key)) {
+                    DB.upsertCart({ ...cart, location: '', subLocation: '' });
+                  }
+                }
+
                 _applyMapOrdering(blocks, propDefs);
                 const cartCount = Object.keys(importedDb.carts).length;
                 const floorCount = Object.keys(importedDb.floorItems).length;
