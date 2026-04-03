@@ -3286,8 +3286,8 @@
       // strip trailing "[containerType]" and/or "(cartType)" suffixes added by cartLabel()
       const id  = raw.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!id) { if (onCartLoaded) onCartLoaded(null); return; }
-      // fall back to raw value if stripped ID not found (handles cart IDs that contain parentheses)
-      const cart = DB.getCart(id) || DB.getCart(raw);
+      // Try the raw value first (preserves compound key like "66(14)"), then fall back to stripped id
+      const cart = DB.getCart(raw) || DB.getCart(id);
       const filtered = !cartFilter || !cart || cartFilter(cart);
       if (onCartLoaded) onCartLoaded(filtered ? cart || null : null);
     }
@@ -3640,7 +3640,11 @@
         };
         const existing = DB.getCart(cartId);
         const existingType = existing ? (existing.containerType || DEFAULT_CONTAINER) : null;
-        if (existing && existingType === (containerType || DEFAULT_CONTAINER)) {
+        // Only warn if same cartId AND same container type AND same numeric cart type
+        // (66(11a) and 66(14) are different carts: numeric types 11 ≠ 14)
+        const sameNumericType = existing &&
+          (existing.cartType || '').replace(/[a-zA-Z]+$/, '') === (cartType || '').replace(/[a-zA-Z]+$/, '');
+        if (existing && existingType === (containerType || DEFAULT_CONTAINER) && sameNumericType) {
           showDuplicateCartWarning(containerType || DEFAULT_CONTAINER, cartId, existing, doCreate);
         } else {
           doCreate();
@@ -7943,7 +7947,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v132</span>
+        <span class="version-badge">v133</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
