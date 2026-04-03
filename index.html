@@ -2159,9 +2159,12 @@
         const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
         const displayId = /^#\d+$/.test(c.cartId) ? '#' : c.cartId;
         const idLabel = displayId + (c.cartType ? '(' + c.cartType + ')' : '');
+        const hasChildren = (childrenOf[c.cartId] || []).length > 0;
         let line;
         if (c.isEmpty || !c.itemCount) {
-          line = `${prefix}${ctLabel}${idLabel}: empty`;
+          line = hasChildren
+            ? `${prefix}${ctLabel}${idLabel}:`
+            : `${prefix}${ctLabel}${idLabel}: empty`;
         } else {
           const propVals = _orderedPropValues(c.properties, propDefs);
           line = (`${prefix}${ctLabel}${idLabel}: ${c.itemCount} ${propVals}`).trim();
@@ -2322,8 +2325,9 @@
         const ctLabel = (c.containerType && c.containerType !== 'עגלה') ? `${c.containerType} ` : '';
         const displayId = /^#\d+$/.test(c.cartId) ? '#' : c.cartId;
         const idLabel = displayId + (c.cartType ? '(' + c.cartType + ')' : '');
+        const hasChildren = (childrenOf[c.cartId] || []).length > 0;
         let line = (c.isEmpty || !c.itemCount)
-          ? `${ctLabel}${idLabel}: empty`
+          ? (hasChildren ? `${ctLabel}${idLabel}:` : `${ctLabel}${idLabel}: empty`)
           : (`${ctLabel}${idLabel}: ${c.itemCount} ${_orderedPropValues(c.properties, propDefs)}`).trim();
         if (c.comment) line += ` # ${c.comment}`;
         return line + '\n';
@@ -7916,7 +7920,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v128</span>
+        <span class="version-badge">v129</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8447,7 +8451,9 @@
         if (mode === 'multiline') mode = 'normal';
       }
 
-      for (const raw of text.split('\n')) {
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
         const line = raw.trim();
 
         if (!line) { if (mode === 'multiline') flushMultiline(); lastWasAnonLine = false; continue; }
@@ -8555,12 +8561,31 @@
                 slots: [{ itemCount: count, isEmpty: count === 0, rawProps }] });
             }
           } else {
-            // no content → header
+            // no content → header or multiline cart with children
             lastWasAnonLine = false;
             if (!blockStarted) {
               flushEntries(); location = before; subLocation = ''; blockStarted = true; mode = 'normal';
             } else {
-              flushEntries(); subLocation = before; mode = 'normal';
+              // Peek ahead: if the next non-empty line is indented, this is a cart
+              // whose children follow (not a sub-location header)
+              let nextIsIndented = false;
+              for (let j = i + 1; j < lines.length; j++) {
+                const nxt = lines[j];
+                if (!nxt.trim()) continue;
+                nextIsIndented = nxt[0] === ' ' || nxt[0] === '\t';
+                break;
+              }
+              if (nextIsIndented) {
+                if (mode === 'multiline') flushMultiline();
+                const parts = before.split(/\s+/);
+                const containerType = parts.length >= 2 ? parts.slice(0, -1).join(' ') : 'עגלה';
+                const cId = parts[parts.length - 1];
+                multilineCart = { type: 'cart', cartId: cId, cartType: '', containerType, comment: genComment,
+                  slots: [{ itemCount: 0, isEmpty: true, rawProps: '' }] };
+                mode = 'multiline';
+              } else {
+                flushEntries(); subLocation = before; mode = 'normal';
+              }
             }
           }
           continue;
