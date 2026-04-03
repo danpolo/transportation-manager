@@ -7941,7 +7941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v130</span>
+        <span class="version-badge">v131</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -9253,6 +9253,7 @@
           const { location, subLocation } = resolveLocLabel(emptyM[2]);
           if (known) {
             DB.upsertCart({ cartId, location, subLocation });
+            DB.cascadeLocationUpdate(cartId, location, subLocation);
             results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
           } else if (cartId) {
             unknowns.push({ cartId, containerType, location, subLocation });
@@ -9274,6 +9275,7 @@
                 const { location, subLocation } = resolveLocLabel(m[2]);
                 if (known) {
                   DB.upsertCart({ cartId, location, subLocation });
+                  DB.cascadeLocationUpdate(cartId, location, subLocation);
                   results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
                 } else {
                   unknowns.push({ cartId, containerType, location, subLocation });
@@ -9298,6 +9300,7 @@
                 const { location, subLocation } = resolveLocLabel(m[1]);
                 if (known) {
                   DB.upsertCart({ cartId, location, subLocation });
+                  DB.cascadeLocationUpdate(cartId, location, subLocation);
                   results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
                 } else {
                   unknowns.push({ cartId, containerType, location, subLocation });
