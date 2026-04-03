@@ -5324,8 +5324,28 @@
         const _propDefs = DB.getMetadata().properties || [];
         const _ctName = containerName(_currentData);
         const isEmpty = !allSlots.some(s => s.itemCount > 0);
+
+        // Build child-cart lines (e.g. משטח loaded on this cart)
+        const _children = DB.getChildCarts(_currentData.cartId);
+        const _childLines = _children.flatMap(ch => {
+          const chCt = ch.containerType || 'עגלה';
+          const chLabel = ch.cartId + (ch.cartType ? '(' + ch.cartType + ')' : '');
+          const chSlots = [{ itemCount: ch.itemCount || 0, properties: ch.properties || {} }, ...(ch.extraItems || [])];
+          const filled = chSlots.filter(s => s.itemCount > 0);
+          if (!filled.length) return [`${chCt} ${chLabel}: ריק`];
+          return filled.map(s => {
+            const ps = Utils.orderedPropValues(s.properties, _propDefs);
+            return `${chCt} ${chLabel}: ${s.itemCount}${ps ? ' ' + ps : ''}`;
+          });
+        });
+
         if (isEmpty) {
-          msg = `${_ctName} ${msgCartLabel(_currentData)} ריקה מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`;
+          if (_childLines.length) {
+            msg = [_ctName + ' ' + msgCartLabel(_currentData), ..._childLines,
+              `מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`].join('\n');
+          } else {
+            msg = `${_ctName} ${msgCartLabel(_currentData)} ריקה מועברת מ${fromLabel || '?'} ל${toLabel || '?'}`;
+          }
         } else {
           // Collect per-item specific destinations
           const itemDestMap = {}; // id → destLabel
@@ -5343,6 +5363,7 @@
             _msgLines.push(`${s.itemCount}${ps ? ' ' + ps : ''}`);
             if (!hasSpecific) (s.itemIds || []).forEach(id => _msgLines.push(id));
           });
+          _childLines.forEach(l => _msgLines.push(l));
 
           if (hasSpecific) {
             _msgLines.push('היחידות יורדות בנקודות הבאות:');
@@ -7920,7 +7941,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v129</span>
+        <span class="version-badge">v130</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
