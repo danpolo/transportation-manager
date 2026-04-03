@@ -7862,7 +7862,7 @@
             const newProps = {};
             document.querySelectorAll('.ec-prop').forEach(i => { if (i.value.trim()) newProps[i.dataset.prop] = i.value.trim(); });
             const newComment = (document.getElementById('ec-comment').value || '').trim();
-            DB.upsertCart({ cartId: cart.cartId, itemCount: newCount, itemIds: newIds, properties: newProps, isEmpty: newCount === 0, comment: newComment });
+            DB.upsertCart({ cartId: cart.cartId, cartType: cart.cartType, itemCount: newCount, itemIds: newIds, properties: newProps, isEmpty: newCount === 0, comment: newComment });
             Modal.close();
             Toast.show(Lang.T('עגלה עודכנה', 'Carreta actualizada'), 'success');
             renderResults();
@@ -7916,7 +7916,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v126</span>
+        <span class="version-badge">v127</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
