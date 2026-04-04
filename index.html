@@ -6491,7 +6491,7 @@
         const _mSub2 = (!_mSub2Grp || _mSub2Grp.hidden)
           ? '' : screen.querySelector('#lu-load-move-dest-subloc2').value.trim();
         const moveDestSubloc = (_mSub1 && _mSub2) ? `${_mSub1}/${_mSub2}` : _mSub1;
-        DB.upsertCart({ cartId: destCartId, location: moveDest, subLocation: moveDestSubloc });
+        DB.upsertCart({ cartId: destCartId, cartType: destCartType, location: moveDest, subLocation: moveDestSubloc });
         msg += '\nמועברת ל' + waMsgLoc(moveDest, moveDestSubloc);
       }
       screen.querySelector('#lu-dest-cart').value = '';
@@ -6550,7 +6550,7 @@
         msgParts.push(`${slot.itemCount}${propStr ? ' ' + propStr : ''}`);
       }
 
-      DB.upsertCart({ cartId: _srcCart.cartId,
+      DB.upsertCart({ cartId: _srcCart.cartId, cartType: _srcCart.cartType,
                       itemCount: remain0Count, itemIds: remain0Ids,
                       extraItems: newExtras });
 
@@ -6579,7 +6579,7 @@
     // empty cart (unload screen)
     screen.querySelector('#lu-empty-cart').addEventListener('click', () => {
       if (!_srcCart) { Toast.show(Lang.T('בחר עגלה', 'Selecciona carreta'), 'error'); return; }
-      DB.upsertCart({ cartId: _srcCart.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
+      DB.upsertCart({ cartId: _srcCart.cartId, cartType: _srcCart.cartType, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
       Toast.show(Lang.T('עגלה רוקנה', 'Carreta vaciada'), 'success');
       _srcCart = null;
       screen.querySelector('#lu-unload-fields').hidden = true;
@@ -8079,7 +8079,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v138</span>
+        <span class="version-badge">v139</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
