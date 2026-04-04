@@ -3290,21 +3290,22 @@
 
     function lookup() {
       const raw = input.value.trim();
-      // strip trailing "[containerType]" and/or "(cartType)" suffixes added by cartLabel()
       const id  = raw.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!id) { if (onCartLoaded) onCartLoaded(null); return; }
-      // Try the raw value first (preserves compound key like "66(14)"), then fall back to stripped id
-      const cart = DB.getCart(raw) || DB.getCart(id);
-      const filtered = !cartFilter || !cart || cartFilter(cart);
-      if (onCartLoaded) onCartLoaded(filtered ? cart || null : null);
+      // Only match if the input exactly equals cartLabel(cart) — no fuzzy/closest selection
+      const all = DB.getAllCarts();
+      const pool = cartFilter ? all.filter(cartFilter) : all;
+      const cart = pool.find(c => cartLabel(c) === raw) || null;
+      if (onCartLoaded) onCartLoaded(cart);
     }
 
     input.addEventListener('change', lookup);
     input.addEventListener('input', () => {
-      // only auto-lookup if the value (after stripping type) exactly matches a known cart
+      // only auto-lookup if the value exactly matches a known cart label
       const raw = input.value.trim();
-      const id  = raw.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
-      if (DB.getCart(id) || DB.getCart(raw)) lookup();
+      const all = DB.getAllCarts();
+      const pool = cartFilter ? all.filter(cartFilter) : all;
+      if (pool.some(c => cartLabel(c) === raw)) lookup();
     });
 
     return {
@@ -5313,7 +5314,9 @@
           showSharedFields({ cartId: '', containerType: 'משטח', location: '', isEmpty: true }, 'cart');
           return;
         }
-        const cart = DB.getCart(id) || DB.getCart(raw);
+        // Only match if the input exactly equals cartLabel(cart)
+        const allNonCart = DB.getAllCarts().filter(c => c.containerType && c.containerType !== DEFAULT_CONTAINER);
+        const cart = allNonCart.find(c => cartLabel(c) === raw) || null;
         if (cart) {
           showSharedFields(cart, 'cart');
         } else {
@@ -5324,8 +5327,8 @@
       input.addEventListener('change', lookup);
       input.addEventListener('input', () => {
         const raw = input.value.trim();
-        const id  = raw.replace(/\s*\[[^\]]+\]\s*$/g, '').replace(/\([^)]+\)\s*$/, '').trim();
-        if (DB.getCart(id) || DB.getCart(raw)) lookup();
+        const allNonCart = DB.getAllCarts().filter(c => c.containerType && c.containerType !== DEFAULT_CONTAINER);
+        if (allNonCart.some(c => cartLabel(c) === raw)) lookup();
       });
       _containerRef = {
         getValue() { return input.value.trim(); },
@@ -5543,6 +5546,19 @@
             showSharedFields(newCart, 'cart');
             _trSaveWithValidation(andSend);
           });
+          return;
+        }
+      }
+      // If container mode but no container loaded, auto-create the non-cart container
+      if (!_currentData && _mode === 'container') {
+        const rawInput = _containerRef ? _containerRef.getValue() : '';
+        const ctId = rawInput.replace(/\s*\[[^\]]+\]\s*$/g, '').replace(/\([^)]+\)\s*$/, '').trim();
+        if (ctId) {
+          const ctType = (rawInput.match(/\(([^)]+)\)/) || [])[1] || '';
+          const containerType = (rawInput.match(/\[([^\]]+)\]/) || [])[1] || 'משטח';
+          const newCart = DB.upsertCart({ cartId: ctId, cartType: ctType, containerType, location: '', subLocation: '', parentCartId: null, isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
+          showSharedFields(newCart, 'cart');
+          _trSaveWithValidation(andSend);
           return;
         }
       }
@@ -6337,12 +6353,21 @@
       const destCartType = (rawDest.match(/\(([^)]+)\)/) || [])[1] || '';
       if (!destCartId) { Toast.show(Lang.T('יש להזין יעד להעמסה', 'Ingresa destino de carga'), 'error'); return null; }
 
-      // If the cart doesn't exist yet, offer to add it first
-      if (!DB.getCart(rawDest) && !DB.getCart(destCartId)) {
-        const prefilledType = (rawDest.match(/\(([^)]+)\)$/) || [])[1] || '';
+      // Only accept the container if input exactly matches cartLabel — no auto-closest selection
+      const _exactCart = DB.getAllCarts().find(c => cartLabel(c) === rawDest) || null;
+      if (!_exactCart) {
+        const _bracketType = (rawDest.match(/\[([^\]]+)\]$/) || [])[1] || DEFAULT_CONTAINER;
         const moveDest = screen.querySelector('#lu-load-move-dest').value.trim();
-        showAddUnknownCartModal(destCartId, prefilledType, moveDest, () => doLoadSave(skipValidation));
-        return null;
+        if (_bracketType !== DEFAULT_CONTAINER) {
+          // Non-cart container: auto-create and continue
+          DB.upsertCart({ cartId: destCartId, cartType: destCartType, containerType: _bracketType,
+            location: moveDest || '', subLocation: '', parentCartId: null, isEmpty: false,
+            itemCount: 0, itemIds: [], properties: {} });
+        } else {
+          // Cart: show modal to choose type
+          showAddUnknownCartModal(destCartId, destCartType, moveDest, () => doLoadSave(skipValidation));
+          return null;
+        }
       }
 
       let msg;
@@ -8105,7 +8130,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v142</span>
+        <span class="version-badge">v143</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
