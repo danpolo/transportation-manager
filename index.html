@@ -8079,7 +8079,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v139</span>
+        <span class="version-badge">v140</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -9403,7 +9403,8 @@
           const { location, subLocation } = resolveLocLabel(emptyM[2]);
           if (known) {
             if (!dryRun) {
-              DB.upsertCart({ cartId, location, subLocation });
+              const dbCart = allCarts.find(c => c.cartId === cartId);
+              DB.upsertCart({ cartId, cartType: (dbCart && dbCart.cartType) || cartType, location, subLocation });
               DB.cascadeLocationUpdate(cartId, location, subLocation);
             }
             results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
@@ -9427,7 +9428,8 @@
                 const { location, subLocation } = resolveLocLabel(m[2]);
                 if (known) {
                   if (!dryRun) {
-                    DB.upsertCart({ cartId, location, subLocation });
+                    const dbCart = allCarts.find(c => c.cartId === cartId);
+                    DB.upsertCart({ cartId, cartType: (dbCart && dbCart.cartType) || cartType, location, subLocation });
                     DB.cascadeLocationUpdate(cartId, location, subLocation);
                   }
                   results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
@@ -9454,7 +9456,8 @@
                 const { location, subLocation } = resolveLocLabel(m[1]);
                 if (known) {
                   if (!dryRun) {
-                    DB.upsertCart({ cartId, location, subLocation });
+                    const dbCart = allCarts.find(c => c.cartId === cartId);
+                    DB.upsertCart({ cartId, cartType: (dbCart && dbCart.cartType) || cartType, location, subLocation });
                     DB.cascadeLocationUpdate(cartId, location, subLocation);
                   }
                   results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
@@ -9507,7 +9510,8 @@
                   const { location, subLocation } = resolveLocLabel(dm[1]);
                   if (parentInfo.cartId) {
                     if (parentInfo.known) {
-                      DB.upsertCart({ cartId: parentInfo.cartId, location, subLocation });
+                      const dbParent = allCarts.find(c => c.cartId === parentInfo.cartId);
+                      DB.upsertCart({ cartId: parentInfo.cartId, cartType: (dbParent && dbParent.cartType) || parentInfo.cartType, location, subLocation });
                       results.push({ ok: true, msg: `${timePrefix}${parentInfo.cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
                     } else {
                       unknowns.push({ cartId: parentInfo.cartId, cartType: parentInfo.cartType, containerType: parentInfo.containerType, location, subLocation });
@@ -9516,7 +9520,8 @@
                   }
                   if (palletHasId) {
                     if (palletInfo.known) {
-                      DB.upsertCart({ cartId: palletInfo.cartId, location, subLocation });
+                      const dbPallet = allCarts.find(c => c.cartId === palletInfo.cartId);
+                      DB.upsertCart({ cartId: palletInfo.cartId, cartType: (dbPallet && dbPallet.cartType) || palletInfo.cartType, location, subLocation });
                     } else {
                       unknowns.push({ cartId: palletInfo.cartId, cartType: palletInfo.cartType, containerType: palletInfo.containerType, location, subLocation });
                       results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${palletInfo.cartId}` });
