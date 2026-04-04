@@ -5022,7 +5022,11 @@
             <button id="tr-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
           </div>
 
-          <div style="display:flex;gap:8px;margin-top:16px">
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-label">${Lang.T('הערה (אופציונלי)', 'Nota (opcional)')}</label>
+            <input id="tr-comment" class="form-input" placeholder="${Lang.T('הערה...', 'Nota...')}" autocomplete="off">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
             <button id="tr-save-only-btn" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
             <button id="tr-save-btn" class="btn btn-primary" style="flex:2">${Lang.T('שמור ושלח 💬', 'Guardar y enviar 💬')}</button>
           </div>
@@ -5476,8 +5480,11 @@
       screen.querySelector('#tr-dest-loc').value = '';
       screen.querySelector('#tr-dest-subloc').value = '';
       screen.querySelector('#tr-dest-subloc2').value = '';
+      const _trComment = screen.querySelector('#tr-comment').value.trim();
+      screen.querySelector('#tr-comment').value = '';
       if (_cartRef) _cartRef.clear();
       if (_containerRef) _containerRef.clear();
+      if (_trComment) msg += '\n' + _trComment;
       return msg;
     }
 
@@ -5674,7 +5681,11 @@
             <label class="form-label">${Lang.T('תת-מיקום נוסף (אופציונלי)', 'Sub-ubicación adicional (opcional)')}</label>
             <input id="lu-load-move-dest-subloc2" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
           </div>
-          <div style="display:flex;gap:8px;margin-top:16px">
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-label">${Lang.T('הערה (אופציונלי)', 'Nota (opcional)')}</label>
+            <input id="lu-load-comment" class="form-input" placeholder="${Lang.T('הערה...', 'Nota...')}" autocomplete="off">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
             <button id="lu-load-save-only" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
             <button id="lu-load-save-btn" class="btn btn-primary" style="flex:2">${Lang.T('שמור ושלח 💬', 'Guardar y enviar 💬')}</button>
           </div>
@@ -5723,7 +5734,11 @@
               <input id="lu-unload-dest-subloc2" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
             </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:16px">
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-label">${Lang.T('הערה (אופציונלי)', 'Nota (opcional)')}</label>
+            <input id="lu-unload-comment" class="form-input" placeholder="${Lang.T('הערה...', 'Nota...')}" autocomplete="off">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
             <button id="lu-unload-save-only" class="btn btn-outline" style="flex:1">${Lang.T('שמור', 'Guardar')}</button>
             <button id="lu-unload-save-btn" class="btn btn-primary" style="flex:2">${Lang.T('שמור ושלח 💬', 'Guardar y enviar 💬')}</button>
           </div>
@@ -6494,12 +6509,15 @@
         DB.upsertCart({ cartId: destCartId, cartType: destCartType, location: moveDest, subLocation: moveDestSubloc });
         msg += '\nמועברת ל' + waMsgLoc(moveDest, moveDestSubloc);
       }
+      const _loadComment = screen.querySelector('#lu-load-comment').value.trim();
       screen.querySelector('#lu-dest-cart').value = '';
       screen.querySelector('#lu-load-move-dest').value = '';
       screen.querySelector('#lu-load-move-dest-subloc').value = '';
       screen.querySelector('#lu-load-move-dest-subloc2').value = '';
       screen.querySelector('#lu-src-loc').value = '';
       screen.querySelector('#lu-src-subloc').value = '';
+      screen.querySelector('#lu-load-comment').value = '';
+      if (_loadComment) msg += '\n' + _loadComment;
       return msg;
     }
 
@@ -6559,13 +6577,15 @@
       const msg   = [`${containerName(_srcCart)} ${label}`, ...msgParts, `פורקו ל${unloadDest}`].join('\n');
       Toast.show(Lang.T('פריטים פורקו לרצפה', 'Ítems descargados al suelo'), 'success');
 
+      const _unloadComment = screen.querySelector('#lu-unload-comment').value.trim();
       _srcCart = null;
       screen.querySelector('#lu-unload-fields').hidden = true;
       screen.querySelector('#lu-unload-dest-loc').value = '';
       screen.querySelector('#lu-unload-dest-subloc').value = '';
       screen.querySelector('#lu-unload-dest-subloc2').value = '';
+      screen.querySelector('#lu-unload-comment').value = '';
       if (_unloadCartRef) _unloadCartRef.clear();
-      return msg;
+      return _unloadComment ? msg + '\n' + _unloadComment : msg;
     }
 
     screen.querySelector('#lu-unload-save-btn').addEventListener('click', () => {
@@ -8079,7 +8099,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v140</span>
+        <span class="version-badge">v141</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
