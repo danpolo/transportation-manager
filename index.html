@@ -5353,6 +5353,7 @@
         if (_currentData.cartId) {
           DB.upsertCart({
             cartId:      _currentData.cartId,
+            cartType:    _currentData.cartType,
             location:    destLoc,
             subLocation: destSubLoc,
             itemCount:   slot0.itemCount,
@@ -5560,7 +5561,7 @@
     // empty cart / container
     screen.querySelector('#tr-empty-cart').addEventListener('click', () => {
       if (!_currentData || _currentType !== 'cart') { Toast.show(Lang.T('בחר עגלה או משטח', 'Elige una carreta o palé'), 'error'); return; }
-      DB.upsertCart({ cartId: _currentData.cartId, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
+      DB.upsertCart({ cartId: _currentData.cartId, cartType: _currentData.cartType, itemCount: 0, itemIds: [], properties: {}, isEmpty: true, extraItems: [] });
       const entityName = containerName(_currentData);
       Toast.show(entityName + ' רוקן/ה', 'success');
       screen.querySelector('#tr-shared-fields').hidden = true;
@@ -8078,7 +8079,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v137</span>
+        <span class="version-badge">v138</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
