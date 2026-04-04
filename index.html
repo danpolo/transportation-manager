@@ -3311,6 +3311,41 @@
     };
   }
 
+  // ── showAddUnknownCartModal ──
+  // Shows a modal to register an unknown cart, then calls onConfirm(newCart).
+  function showAddUnknownCartModal(cartId, prefilledType, destLoc, onConfirm) {
+    const ctypes = [DEFAULT_CONTAINER, ...(DB.getMetadata().containerTypes || []).filter(t => t !== DEFAULT_CONTAINER)];
+    Modal.open({
+      title: Lang.T('עגלה לא נמצאה — הוסף?', 'Carreta no encontrada — ¿Agregar?'),
+      html: `
+        <p class="card-meta" style="margin-bottom:12px">${Lang.T('עגלה ', 'Carreta ')}${esc(cartId)} ${Lang.T('לא קיימת בנתונים.', 'no existe en los datos.')}</p>
+        <div class="form-group">
+          <label class="form-label">${Lang.T('קטגוריה', 'Categoría')}</label>
+          <select id="_uac-ct" class="form-select">
+            ${ctypes.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${Lang.T('סוג', 'Tipo')}</label>
+          <input id="_uac-type" class="form-input" placeholder="${Lang.T('סוג (אופציונלי)', 'Tipo (opcional)')}" value="${esc(prefilledType || '')}">
+        </div>
+      `,
+      actions: [
+        { id: 'uac-confirm', label: Lang.T('הוסף והמשך', 'Agregar y continuar'), cls: 'btn-primary', onClick: () => {
+          const cartType = document.getElementById('_uac-type').value.trim();
+          const containerType = document.getElementById('_uac-ct').value;
+          const newCart = DB.upsertCart({
+            cartId, cartType, containerType, location: destLoc || '', subLocation: '',
+            parentCartId: null, isEmpty: false, itemCount: 0, itemIds: [], properties: {}
+          });
+          Modal.close();
+          if (onConfirm) onConfirm(newCart);
+        }},
+        { id: 'uac-cancel', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
+      ]
+    });
+  }
+
   // ── buildPropertyFields ──
   // Renders property dropdowns from metadata into a container element
   // Supports conditional visibility: if p.condition is an array of {prop, value},
@@ -5476,6 +5511,20 @@
 
     // save + send / save only — both run slot-homogeneity validation first
     function _trSaveWithValidation(andSend) {
+      // If cart mode but no cart loaded, offer to create the unknown cart first
+      if (!_currentData && _mode === 'cart') {
+        const rawInput = _cartRef ? _cartRef.getValue() : '';
+        const prefilledType = (rawInput.match(/\(([^)]+)\)$/) || [])[1] || '';
+        const cartId = rawInput.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
+        if (cartId) {
+          const destLoc = screen.querySelector('#tr-dest-loc').value.trim();
+          showAddUnknownCartModal(cartId, prefilledType, destLoc, (newCart) => {
+            showSharedFields(newCart, 'cart');
+            _trSaveWithValidation(andSend);
+          });
+          return;
+        }
+      }
       const doSaveAndSend = () => {
         const msg = doTransferSave();
         if (andSend && msg) Utils.shareOrCopy(msg);
@@ -5594,6 +5643,12 @@
               <label class="form-label">${Lang.T('תת-מיקום מקור', 'Sub-ubicación origen')}</label>
               <input id="lu-src-subloc" class="form-input" placeholder="${Lang.T('שוליים', 'Margen')}" autocomplete="off">
             </div>
+            <div id="lu-src-items-panel" style="display:none;margin-bottom:8px">
+              <details>
+                <summary style="cursor:pointer;padding:8px 0;font-size:0.88rem;font-weight:600;color:var(--primary);list-style:none">${Lang.T('▶ פריטים זמינים במיקום', '▶ Ítems disponibles en la ubicación')}</summary>
+                <div id="lu-src-items-list" style="margin-top:8px"></div>
+              </details>
+            </div>
             <div id="lu-floor-slots-container"></div>
             <button id="lu-floor-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
           </div>
@@ -5709,6 +5764,54 @@
       if (!loc) return [];
       return DB.getAllFloorItems().filter(fi =>
         fi.location === loc && (!subloc || (fi.subLocation || '') === subloc) && !fi.isEmpty);
+    }
+
+    // Render the collapsible "available items" panel for the floor source section
+    function _renderSrcItemsPanel() {
+      const panel = screen.querySelector('#lu-src-items-panel');
+      const list  = screen.querySelector('#lu-src-items-list');
+      const loc   = _getFloorLoc();
+      const subloc = _getFloorSubloc();
+      if (!loc) { panel.style.display = 'none'; return; }
+      const propDefs = DB.getMetadata().properties || [];
+      const floorItems = _floorItemsAtLoc();
+      const nonCartCtrs = DB.getAllCarts().filter(c =>
+        c.containerType && c.containerType !== DEFAULT_CONTAINER &&
+        !c.parentCartId && c.location === loc &&
+        (!subloc || (c.subLocation || '') === subloc) && (c.itemCount || 0) > 0
+      );
+      if (!floorItems.length && !nonCartCtrs.length) { panel.style.display = 'none'; return; }
+      panel.style.display = '';
+      const allItems = [
+        ...floorItems.map(fi => ({
+          label: Utils.orderedPropValues(fi.properties, propDefs) || Lang.T('ללא מאפיינים', 'Sin atributos'),
+          count: fi.itemCount, props: fi.properties
+        })),
+        ...nonCartCtrs.map(c => ({
+          label: `${c.containerType} ${msgCartLabel(c)}`,
+          count: c.itemCount || 0, props: c.properties || {}
+        }))
+      ];
+      list.innerHTML = allItems.map((item, i) => `
+        <div class="list-item" data-src-idx="${i}" style="cursor:pointer">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.88rem">${esc(item.label)}</div>
+            <div class="card-meta">${item.count} ${Lang.T('פריטים', 'ítems')}</div>
+          </div>
+          <button class="btn btn-outline" style="flex-shrink:0;font-size:0.8rem;padding:4px 10px">${Lang.T('בחר', 'Elegir')}</button>
+        </div>
+      `).join('');
+      list.querySelectorAll('[data-src-idx]').forEach(el => {
+        el.querySelector('button').addEventListener('click', () => {
+          const item = allItems[+el.dataset.srcIdx];
+          const firstSlot = screen.querySelector('#lu-floor-slots-container .floor-slot');
+          if (!firstSlot) return;
+          buildPropertyFields(firstSlot.querySelector('.floor-slot-props'), item.props);
+          firstSlot.querySelector('.floor-slot-props').dispatchEvent(new Event('change', { bubbles: true }));
+          const countInput = firstSlot.querySelector('.floor-slot-count');
+          if (countInput) { countInput.value = item.count; countInput.dispatchEvent(new Event('input')); }
+        });
+      });
     }
 
     // Find a serial across ALL floor items
@@ -5882,8 +5985,8 @@
         propsContainer.dispatchEvent(new Event('change', { bubbles: true }));
       });
     }
-    screen.querySelector('#lu-src-loc').addEventListener('change', _refreshAllFloorSlots);
-    screen.querySelector('#lu-src-subloc').addEventListener('change', _refreshAllFloorSlots);
+    screen.querySelector('#lu-src-loc').addEventListener('change', () => { _refreshAllFloorSlots(); _renderSrcItemsPanel(); });
+    screen.querySelector('#lu-src-subloc').addEventListener('change', () => { _refreshAllFloorSlots(); _renderSrcItemsPanel(); });
 
     function renderItemRows(container, n, existing) {
       const rows = [];
@@ -6203,6 +6306,14 @@
       const rawDest    = screen.querySelector('#lu-dest-cart').value.trim();
       const destCartId = rawDest.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
       if (!destCartId) { Toast.show(Lang.T('יש להזין יעד להעמסה', 'Ingresa destino de carga'), 'error'); return null; }
+
+      // If the cart doesn't exist yet, offer to add it first
+      if (!DB.getCart(rawDest) && !DB.getCart(destCartId)) {
+        const prefilledType = (rawDest.match(/\(([^)]+)\)$/) || [])[1] || '';
+        const moveDest = screen.querySelector('#lu-load-move-dest').value.trim();
+        showAddUnknownCartModal(destCartId, prefilledType, moveDest, () => doLoadSave(skipValidation));
+        return null;
+      }
 
       let msg;
 
@@ -7947,7 +8058,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v133</span>
+        <span class="version-badge">v134</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>

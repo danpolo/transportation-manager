@@ -1,4 +1,4 @@
-const CACHE = 'shinua-v133';
+const CACHE = 'shinua-v134';
 const ASSETS = ['./', './manifest.json', './icons/icon.svg'];
 
 self.addEventListener('install', e => {
