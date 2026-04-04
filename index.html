@@ -2103,15 +2103,21 @@
     }
 
     async function parseImportText(text) {
-      // iPhone WhatsApp bug: first line (SH2S) sometimes gets replaced with
-      // random Hebrew text, but the actual data and SH2E remain intact.
-      // Fix: if SH2E exists but SH2S is missing, replace everything before
-      // the first newline with SH2S.
+      // iPhone WhatsApp bug: SH2S header gets replaced with garbage (Hebrew text +
+      // possibly multiple newlines). SH2E and actual base64 data are intact.
+      // Fix: if SH2E exists but SH2S is missing, strip all leading non-base64 lines
+      // and reconstruct with SH2S prefix.
       const e2raw = text.indexOf('SH2E');
       if (e2raw >= 0 && text.indexOf('SH2S') < 0) {
-        const firstNl = text.indexOf('\n');
-        if (firstNl >= 0 && firstNl < e2raw) {
-          text = 'SH2S' + text.slice(firstNl);
+        const before = text.slice(0, e2raw);
+        const lines = before.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        // Find first line that is pure base64 (skip any garbage/Hebrew prefix lines)
+        let dataStart = lines.length; // default: no data found
+        for (let i = 0; i < lines.length; i++) {
+          if (/^[A-Za-z0-9+/=]+$/.test(lines[i])) { dataStart = i; break; }
+        }
+        if (dataStart < lines.length) {
+          text = 'SH2S\n' + lines.slice(dataStart).join('\n') + '\nSH2E' + text.slice(e2raw + 4);
         }
       }
       // V2 compressed format
@@ -8099,7 +8105,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v141</span>
+        <span class="version-badge">v142</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8203,7 +8209,7 @@
         title: Lang.T('ייבוא נתונים', 'Importar datos'),
         html: `
           <p class="card-meta" style="margin-bottom:10px">הדבק כאן את טקסט הגיבוי שהועתק בייצוא:</p>
-          <textarea id="import-paste-area" rows="6"
+          <textarea id="import-paste-area" rows="6" autocorrect="off" autocapitalize="off" spellcheck="false"
             style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;
                    font-size:0.82rem;font-family:monospace;direction:ltr;text-align:left;resize:vertical"></textarea>
         `,
