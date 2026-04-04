@@ -3328,13 +3328,14 @@
         </div>
         <div class="form-group">
           <label class="form-label">${Lang.T('סוג', 'Tipo')}</label>
-          <input id="_uac-type" class="form-input" placeholder="${Lang.T('סוג (אופציונלי)', 'Tipo (opcional)')}" value="${esc(prefilledType || '')}">
+          <input id="_uac-type" class="form-input" placeholder="${Lang.T('סוג (נדרש לעגלה)', 'Tipo (requerido para carreta)')}" value="${esc(prefilledType || '')}">
         </div>
       `,
       actions: [
         { id: 'uac-confirm', label: Lang.T('הוסף והמשך', 'Agregar y continuar'), cls: 'btn-primary', onClick: () => {
           const cartType = document.getElementById('_uac-type').value.trim();
           const containerType = document.getElementById('_uac-ct').value;
+          if (containerType === DEFAULT_CONTAINER && !cartType) { Toast.show(Lang.T('עגלה חייבת להיות עם סוג', 'La carreta requiere un tipo'), 'error'); return; }
           const newCart = DB.upsertCart({
             cartId, cartType, containerType, location: destLoc || '', subLocation: '',
             parentCartId: null, isEmpty: false, itemCount: 0, itemIds: [], properties: {}
@@ -3657,6 +3658,7 @@
         if (!cartId) { Toast.show(Lang.T('יש להזין מספר מזהה', 'Ingresa un número de ID'), 'error'); return; }
         const containerType = tabContent.querySelector('#ec-containertype').value || 'עגלה';
         const cartType = tabContent.querySelector('#ec-carttype').value;
+        if (containerType === DEFAULT_CONTAINER && !cartType) { Toast.show(Lang.T('עגלה חייבת להיות עם סוג', 'La carreta requiere un tipo'), 'error'); return; }
         const loc      = tabContent.querySelector('#ec-loc').value.trim();
         const subLoc   = tabContent.querySelector('#ec-subloc-group').hidden
           ? '' : tabContent.querySelector('#ec-subloc').value.trim();
@@ -8076,7 +8078,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v135</span>
+        <span class="version-badge">v136</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
