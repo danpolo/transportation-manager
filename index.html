@@ -8078,7 +8078,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v136</span>
+        <span class="version-badge">v137</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -9284,17 +9284,45 @@
             if (!preview.results.length) { Toast.show(Lang.T('לא נמצאו תנועות', 'No se encontraron traslados'), 'error'); return; }
             const okPreHtml = okPrev.length ? `<div style="color:var(--success);margin-bottom:4px">✓ ${Lang.T('יעודכנו ', 'Se actualizarán ')}${okPrev.length}${Lang.T(' תנועות:', ' traslados:')}<br>${okPrev.map(r => esc(r.msg)).join('<br>')}</div>` : '';
             const failPreHtml = failPrev.length ? `<div style="color:var(--danger);margin-bottom:4px">✗ ${Lang.T('לא זוהו ', 'No reconocidos ')}${failPrev.length}:<br>${failPrev.map(r => esc(r.msg)).join('<br>')}</div>` : '';
-            const unknPreHtml = unknPrev.length ? `<div style="color:#d97706;margin-bottom:4px">⚠ ${Lang.T('לא נמצאו (לא יעודכנו אוטומטית): ', 'No encontrados (no se actualizarán): ')}${unknPrev.map(u => esc(u.cartId)).join(', ')}</div>` : '';
+            const unknPreHtml = unknPrev.length ? (() => {
+              const rows = unknPrev.map((u, i) => {
+                const needsType = u.containerType === DEFAULT_CONTAINER && !u.cartType;
+                const label = esc((u.containerType !== DEFAULT_CONTAINER ? u.containerType + ' ' : '') + u.cartId + (u.cartType ? '(' + u.cartType + ')' : '') + ' → ' + u.location + (u.subLocation ? '/' + u.subLocation : ''));
+                return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;flex-wrap:wrap">
+                  <input type="checkbox" checked class="mu-unk-cb" data-idx="${i}" style="flex-shrink:0">
+                  <span style="flex:1;min-width:0">${label}</span>
+                  ${needsType ? `<input type="text" class="form-input mu-unk-type" data-idx="${i}" placeholder="${Lang.T('סוג (נדרש)', 'Tipo (requerido)')}" style="width:80px;padding:4px 6px;font-size:0.8rem;flex-shrink:0">` : ''}
+                </div>`;
+              }).join('');
+              return `<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px"><div style="color:#d97706;font-weight:600;margin-bottom:6px">⚠ ${Lang.T('לא נמצאו — סמן להוסיף:', 'No encontrados — marcar para agregar:')}</div>${rows}</div>`;
+            })() : '';
             Modal.open({
               title: Lang.T('אישור עדכון תנועות', 'Confirmar actualización'),
               html: `<div style="font-size:0.85rem">${okPreHtml}${failPreHtml}${unknPreHtml}</div>`,
               actions: [
                 { id: 'confirm-movements', label: Lang.T('אשר ועדכן', 'Confirmar'), cls: 'btn-primary', onClick: () => {
+                  // Collect unknowns to add
+                  const toAdd = [];
+                  let missingType = false;
+                  document.querySelectorAll('.mu-unk-cb').forEach(cb => {
+                    if (!cb.checked) return;
+                    const idx = parseInt(cb.dataset.idx);
+                    const u = unknPrev[idx];
+                    let resolvedType = u.cartType || '';
+                    if (!resolvedType && u.containerType === DEFAULT_CONTAINER) {
+                      const inp = document.querySelector(`.mu-unk-type[data-idx="${idx}"]`);
+                      resolvedType = inp ? inp.value.trim() : '';
+                      if (!resolvedType) { missingType = true; return; }
+                    }
+                    toAdd.push(Object.assign({}, u, { cartType: resolvedType }));
+                  });
+                  if (missingType) { Toast.show(Lang.T('יש להזין סוג לכל העגלות', 'Ingresa el tipo para todas las carretas'), 'error'); return; }
                   Modal.close();
-                  const { results, unknowns } = _parseAndApplyMovements(text, false);
+                  const { results } = _parseAndApplyMovements(text, false);
+                  toAdd.forEach(u => DB.upsertCart({ cartId: u.cartId, cartType: u.cartType, containerType: u.containerType, location: u.location, subLocation: u.subLocation, isEmpty: true }));
                   const ok = results.filter(r => r.ok);
                   if (ok.length) Toast.show(`${Lang.T('עודכנו ', 'Actualizados ')}${ok.length}${Lang.T(' תנועות', ' traslados')}`, 'success');
-                  if (unknowns.length) Toast.show(`${Lang.T('לא נמצאו ', 'No encontrados ')}${unknowns.length}${Lang.T(' פריטים', ' ítems')}`, 'warning');
+                  if (toAdd.length) Toast.show(`${Lang.T('נוספו ', 'Agregados ')}${toAdd.length}${Lang.T(' לא מוכרים', ' desconocidos')}`, 'success');
                 }},
                 { id: 'cancel-confirm-movements', label: Lang.T('ביטול', 'Cancelar'), onClick: Modal.close }
               ]
@@ -9331,9 +9359,11 @@
         for (const ct of ctypes) {
           if (stripped.startsWith(ct + ' ')) { detectedType = ct; stripped = stripped.slice(ct.length + 1).trim(); break; }
         }
+        const cartTypeMatch = stripped.match(/\(([^)]+)\)\s*$/);
+        const cartType = cartTypeMatch ? cartTypeMatch[1] : '';
         const cartId = stripped.replace(/\([^)]+\)\s*$/, '').trim();
         const known = !!allCarts.find(c => c.cartId === cartId);
-        return { cartId, containerType: detectedType, known };
+        return { cartId, cartType, containerType: detectedType, known };
       }
 
       // Detect and parse WhatsApp multi-message format: [M/D, HH:MM] Name: content
@@ -9368,7 +9398,7 @@
         const emptyM = lines[0].match(/ריקה\s+מועברת\s+מ(.+?)\s+ל(.+)$/);
         if (!handled && emptyM && lines.length === 1) {
           const beforeRika = lines[0].replace(/\s+ריקה.*$/, '').trim();
-          const { cartId, containerType, known } = extractCartInfo(beforeRika);
+          const { cartId, cartType, containerType, known } = extractCartInfo(beforeRika);
           const { location, subLocation } = resolveLocLabel(emptyM[2]);
           if (known) {
             if (!dryRun) {
@@ -9377,7 +9407,7 @@
             }
             results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
           } else if (cartId) {
-            unknowns.push({ cartId, containerType, location, subLocation });
+            unknowns.push({ cartId, cartType, containerType, location, subLocation });
             results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
           } else {
             results.push({ ok: false, msg: `${timePrefix}עגלה לא נמצאה: ${beforeRika}` });
@@ -9391,7 +9421,7 @@
           if (tLine) {
             const m = tLine.match(/מועברת\s+מ(.+?)\s+ל(.+)$/);
             if (m) {
-              const { cartId, containerType, known } = extractCartInfo(lines[0]);
+              const { cartId, cartType, containerType, known } = extractCartInfo(lines[0]);
               if (cartId) {
                 const { location, subLocation } = resolveLocLabel(m[2]);
                 if (known) {
@@ -9401,7 +9431,7 @@
                   }
                   results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
                 } else {
-                  unknowns.push({ cartId, containerType, location, subLocation });
+                  unknowns.push({ cartId, cartType, containerType, location, subLocation });
                   results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
                 }
               } else {
@@ -9418,7 +9448,7 @@
           if (lLine) {
             const m = lLine.match(/מועמסת\s+ב(.+)$/);
             if (m) {
-              const { cartId, containerType, known } = extractCartInfo(lines[0]);
+              const { cartId, cartType, containerType, known } = extractCartInfo(lines[0]);
               if (cartId) {
                 const { location, subLocation } = resolveLocLabel(m[1]);
                 if (known) {
@@ -9428,7 +9458,7 @@
                   }
                   results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
                 } else {
-                  unknowns.push({ cartId, containerType, location, subLocation });
+                  unknowns.push({ cartId, cartType, containerType, location, subLocation });
                   results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
                 }
               } else {
@@ -9479,7 +9509,7 @@
                       DB.upsertCart({ cartId: parentInfo.cartId, location, subLocation });
                       results.push({ ok: true, msg: `${timePrefix}${parentInfo.cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
                     } else {
-                      unknowns.push({ cartId: parentInfo.cartId, containerType: parentInfo.containerType, location, subLocation });
+                      unknowns.push({ cartId: parentInfo.cartId, cartType: parentInfo.cartType, containerType: parentInfo.containerType, location, subLocation });
                       results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${parentInfo.cartId}` });
                     }
                   }
@@ -9487,7 +9517,7 @@
                     if (palletInfo.known) {
                       DB.upsertCart({ cartId: palletInfo.cartId, location, subLocation });
                     } else {
-                      unknowns.push({ cartId: palletInfo.cartId, containerType: palletInfo.containerType, location, subLocation });
+                      unknowns.push({ cartId: palletInfo.cartId, cartType: palletInfo.cartType, containerType: palletInfo.containerType, location, subLocation });
                       results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${palletInfo.cartId}` });
                     }
                   }
