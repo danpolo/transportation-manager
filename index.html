@@ -3908,6 +3908,13 @@
                 <button id="el-offmap-label-save" class="btn btn-primary" style="white-space:nowrap">${Lang.T('שמור', 'Guardar')}</button>
               </div>
             </div>
+            <div class="form-group">
+              <label class="form-label">${Lang.T('מיקום טעינה ברירת מחדל', 'Ubicación de carga predeterminada')}</label>
+              <div style="display:flex;gap:8px">
+                <input id="el-default-load-loc" class="form-input" placeholder="${Lang.T('מיקום ברירת מחדל לטעינה', 'Ubicación predeterminada')}" autocomplete="off">
+                <button id="el-default-load-loc-save" class="btn btn-primary" style="white-space:nowrap">${Lang.T('שמור', 'Guardar')}</button>
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -4038,6 +4045,17 @@
         DB.getMetadata().offMapLabel = val || '';
         DB.save();
         Toast.show(Lang.T('שם מיפוי חיצוני נשמר', 'Nombre del mapa externo guardado'), 'success');
+      });
+
+      // Default load location setting
+      const _defLoadLocInput = tabContent.querySelector('#el-default-load-loc');
+      makeAutocomplete(_defLoadLocInput, locationSuggestions);
+      _defLoadLocInput.value = DB.getMetadata().defaultLoadLocation || '';
+      tabContent.querySelector('#el-default-load-loc-save').addEventListener('click', () => {
+        const val = _defLoadLocInput.value.trim();
+        DB.getMetadata().defaultLoadLocation = val || '';
+        DB.save();
+        Toast.show(Lang.T('מיקום ברירת מחדל נשמר', 'Ubicación predeterminada guardada'), 'success');
       });
 
       tabContent.querySelector('#el-save').addEventListener('click', () => {
@@ -5603,9 +5621,11 @@
         if (cartId) {
           setMode('cart');
           setTimeout(() => {
-            _cartRef.setValue(cartId);
             const cart = DB.getCart(cartId);
-            if (cart) showSharedFields(cart, 'cart');
+            if (cart) {
+              _cartRef.setValue(cartLabel(cart)); // use full label to pass exact-match check
+              showSharedFields(cart, 'cart');
+            }
           }, 50);
         } else if (floorItemId) {
           setMode('floor');
@@ -5668,6 +5688,10 @@
           <div id="lu-new-item-section">
             <div id="lu-slots-container"></div>
             <button id="lu-add-slot-btn" class="btn btn-outline btn-full" style="margin-bottom:10px;">${Lang.T('+ הוסף סוג נוסף', '+ Agregar tipo')}</button>
+            <div class="form-group">
+              <label class="form-label">${Lang.T('מיקום הטעינה', 'Lugar de carga')}</label>
+              <input id="lu-load-location" class="form-input" placeholder="${Lang.T('מיקום נוכחי של העגלה', 'Ubicación actual del carro')}" autocomplete="off">
+            </div>
           </div>
 
           <!-- floor source sub-section: multi-slot with auto-fill -->
@@ -5780,6 +5804,13 @@
       screen.querySelector('#lu-src-subloc')
     );
     makeAutocomplete(screen.querySelector('#lu-dest-cart'), () => DB.getAllCarts().map(c => cartLabel(c)));
+    // Pre-fill load location with default from settings
+    (function() {
+      const locInput = screen.querySelector('#lu-load-location');
+      makeAutocomplete(locInput, locationSuggestions);
+      const def = DB.getMetadata().defaultLoadLocation;
+      if (def) locInput.placeholder = def;
+    })();
     setupLocationFields(
       screen.querySelector('#lu-load-move-dest'),
       screen.querySelector('#lu-load-move-dest-subloc-group'),
@@ -6365,7 +6396,11 @@
             itemCount: 0, itemIds: [], properties: {} });
         } else {
           // Cart: show modal to choose type
-          showAddUnknownCartModal(destCartId, destCartType, moveDest, () => doLoadSave(skipValidation));
+          showAddUnknownCartModal(destCartId, destCartType, moveDest, (newCart) => {
+            // Update input to full label so the next call passes the exact-match check
+            screen.querySelector('#lu-dest-cart').value = cartLabel(newCart);
+            doLoadSave(skipValidation);
+          });
           return null;
         }
       }
@@ -6413,15 +6448,18 @@
           }
           if (issues.length) { showValidationWarning(issues, () => doLoadSave(true)); return null; }
         }
+        const _loadLocInput = screen.querySelector('#lu-load-location').value.trim();
+        const _loadLoc = _loadLocInput || DB.getMetadata().defaultLoadLocation || '';
         DB.upsertCart({
           cartId: destCartId, cartType: destCartType,
           itemCount: slot0.itemCount, itemIds: slot0.itemIds, properties: slot0.properties,
-          extraItems: extras
+          extraItems: extras, isEmpty: false,
+          ...(_loadLoc ? { location: _loadLoc, subLocation: '' } : {})
         });
         const destCart = DB.getCart(destCartId);
         const label    = destCart ? msgCartLabel(destCart) : destCartId;
         const ctName = destCart ? containerName(destCart) : 'עגלה';
-        const loc = destCart ? (destCart.location || '?') : '?';
+        const loc = _loadLoc || (destCart ? (destCart.location || '?') : '?');
         const msgLines = [`${ctName} ${label}`, `מועמסת ב${loc}`];
         const _mProps = DB.getMetadata().properties || [];
         allSlots.filter(sl => sl.itemCount).forEach(sl => {
@@ -6542,6 +6580,7 @@
       }
       const _loadComment = screen.querySelector('#lu-load-comment').value.trim();
       screen.querySelector('#lu-dest-cart').value = '';
+      screen.querySelector('#lu-load-location').value = '';
       screen.querySelector('#lu-load-move-dest').value = '';
       screen.querySelector('#lu-load-move-dest-subloc').value = '';
       screen.querySelector('#lu-load-move-dest-subloc2').value = '';
@@ -6640,7 +6679,10 @@
       onShow({ cartId, floorItemId } = {}) {
         if (cartId) {
           setOp('unload');
-          setTimeout(() => _unloadCartRef.setValue(cartId), 50);
+          setTimeout(() => {
+            const cart = DB.getCart(cartId);
+            if (cart) _unloadCartRef.setValue(cartLabel(cart));
+          }, 50);
         } else if (floorItemId) {
           setOp('load');
           setLoadType('floor');
@@ -8130,7 +8172,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v143</span>
+        <span class="version-badge">v144</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8324,7 +8366,21 @@
               const diffs = _getLocationDiffs(blocks);
               const { db: importedDb, unmatchedFloorLines } = _buildMapDB(blocks, propDefs);
               const doActualImportCore = () => {
+                // Same cleanup as full map import: clear floor items at inMap locations
+                const inMapLocNames = new Set(
+                  (DB.getMetadata().locations || []).filter(l => l.inMap).map(l => l.name)
+                );
+                const importedCartKeys = new Set(Object.keys(importedDb.carts || {}));
+                for (const fi of DB.getAllFloorItems()) {
+                  if (fi.location && inMapLocNames.has(fi.location)) DB.deleteFloorItem(fi.id);
+                }
                 DB.importJSON(JSON.stringify(importedDb), 'merge');
+                // Move to unknown location any cart at a map location not in the new map
+                for (const cart of DB.getAllCarts()) {
+                  if (!cart.location || !inMapLocNames.has(cart.location)) continue;
+                  const key = cart.cartId + (cart.cartType ? '(' + cart.cartType + ')' : '');
+                  if (!importedCartKeys.has(key)) DB.upsertCart({ ...cart, location: '', subLocation: '' });
+                }
                 _applyMapOrdering(blocks, propDefs);
                 Modal.close();
                 Toast.show(Lang.T('מיפוי נשמר בהצלחה', 'Mapa guardado exitosamente'), 'success');
@@ -9483,7 +9539,8 @@
                     DB.upsertCart({ cartId, cartType: (dbCart && dbCart.cartType) || cartType, location, subLocation });
                     DB.cascadeLocationUpdate(cartId, location, subLocation);
                   }
-                  results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                  const { location: fromLoc } = resolveLocLabel(m[1]);
+                  results.push({ ok: true, msg: `${timePrefix}${containerType !== DEFAULT_CONTAINER ? containerType + ' ' : ''}${cartId}${cartType ? '(' + cartType + ')' : ''} הועבר מ${fromLoc} ל${location}${subLocation ? '/' + subLocation : ''}` });
                 } else {
                   unknowns.push({ cartId, cartType, containerType, location, subLocation });
                   results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
@@ -9498,20 +9555,31 @@
 
         // 3. Load: "מועמסת בX"
         if (!handled) {
-          const lLine = lines.find(l => /מועמסת\s+ב/.test(l));
-          if (lLine) {
-            const m = lLine.match(/מועמסת\s+ב(.+)$/);
+          const lLineIdx = lines.findIndex(l => /מועמסת\s+ב/.test(l));
+          if (lLineIdx >= 0) {
+            const m = lines[lLineIdx].match(/מועמסת\s+ב(.+)$/);
             if (m) {
               const { cartId, cartType, containerType, known } = extractCartInfo(lines[0]);
               if (cartId) {
                 const { location, subLocation } = resolveLocLabel(m[1]);
+                // Parse item count and serials from lines after "מועמסת ב"
+                const afterLoad = lines.slice(lLineIdx + 1).filter(l => !/מועבר\s+ל/.test(l));
+                const countMatch = afterLoad.length ? afterLoad[0].match(/^(\d+)/) : null;
+                const parsedCount = countMatch ? parseInt(countMatch[1]) : 0;
+                const parsedIds = afterLoad.slice(1).filter(l => l && !/^\d+\s/.test(l) && !/מועמסת|מועברת|מועבר|ריקה/.test(l));
                 if (known) {
                   if (!dryRun) {
                     const dbCart = allCarts.find(c => c.cartId === cartId);
-                    DB.upsertCart({ cartId, cartType: (dbCart && dbCart.cartType) || cartType, location, subLocation });
+                    const update = { cartId, cartType: (dbCart && dbCart.cartType) || cartType, location, subLocation, isEmpty: false };
+                    if (parsedCount > 0) {
+                      update.itemCount = parsedCount;
+                      update.itemIds = parsedIds;
+                    }
+                    DB.upsertCart(update);
                     DB.cascadeLocationUpdate(cartId, location, subLocation);
                   }
-                  results.push({ ok: true, msg: `${timePrefix}${cartId} → ${location}${subLocation ? '/' + subLocation : ''}` });
+                  const detail = parsedCount ? ` (${parsedCount}${parsedIds.length ? ', ' + parsedIds.join(', ') : ''})` : '';
+                  results.push({ ok: true, msg: `${timePrefix}${cartId} הועמס ב${location}${subLocation ? '/' + subLocation : ''}${detail}` });
                 } else {
                   unknowns.push({ cartId, cartType, containerType, location, subLocation });
                   results.push({ ok: false, unknown: true, msg: `${timePrefix}לא נמצא: ${cartId}` });
@@ -10093,6 +10161,8 @@ const BarcodeScanner = (() => {
     _lastResult = null;
     showChoice();
     modal.classList.add('open');
+    // Push a history entry so Android hardware back button closes the scanner
+    history.pushState({ scanner: 'open' }, '');
   }
 
   function close() {
@@ -10102,6 +10172,16 @@ const BarcodeScanner = (() => {
     galView.classList.remove('active');
     choice.style.display = '';
     _lastResult = null;
+  }
+
+  function _backStep() {
+    // Called by hardware back: if in camera/gallery view, go to choice; else close
+    if (camView.classList.contains('active') || galView.classList.contains('active')) {
+      history.pushState({ scanner: 'choice' }, '');
+      showChoice();
+    } else {
+      close();
+    }
   }
 
   function showChoice() {
@@ -10419,8 +10499,16 @@ const BarcodeScanner = (() => {
   document.getElementById('scanner-back-btn').addEventListener('click', showChoice);
   document.getElementById('sc-debug-btn').addEventListener('click', e => { e.stopPropagation(); _toggleDebug(); });
 
-  return { open };
+  return { open, _backStep };
 })();
+
+// ─── Android hardware back button for scanner ────────────────────────────
+window.addEventListener('popstate', e => {
+  if (document.getElementById('scanner-modal').classList.contains('open')) {
+    BarcodeScanner._backStep();
+    e.preventDefault();
+  }
+});
 
 // ─── Global scan-btn handler ─────────────────────────────────────────────
 document.addEventListener('click', e => {
