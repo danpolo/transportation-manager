@@ -3314,6 +3314,8 @@
         input.value = val; // val may be "8" or "8(110)" — lookup strips suffix
         input.dispatchEvent(new Event('change', { bubbles: true }));
       },
+      // prefill: sets the display value silently without triggering lookup/onCartLoaded
+      prefill(cart) { input.value = cartLabel(cart); },
       clear() { input.value = ''; },
       focus() { input.focus(); }
     };
@@ -5619,14 +5621,14 @@
     Router.register('transfer', {
       onShow({ cartId, floorItemId } = {}) {
         if (cartId) {
-          setMode('cart');
-          setTimeout(() => {
-            const cart = DB.getCart(cartId);
-            if (cart) {
-              _cartRef.setValue(cartLabel(cart)); // use full label to pass exact-match check
-              showSharedFields(cart, 'cart');
-            }
-          }, 50);
+          const cart = DB.getCart(cartId);
+          if (cart) {
+            setMode('cart');
+            _cartRef.prefill(cart);        // show label in input, no lookup triggered
+            showSharedFields(cart, 'cart'); // directly populate shared fields
+          } else {
+            setMode(_mode);
+          }
         } else if (floorItemId) {
           setMode('floor');
           setTimeout(() => {
@@ -6337,29 +6339,31 @@
     });
 
     // unload cart form
-    _unloadCartRef = CartForm(screen.querySelector('#lu-unload-cart-form-host'), {
-      onCartLoaded(cart) {
-        _srcCart = cart || null;
-        const fields = screen.querySelector('#lu-unload-fields');
-        if (!cart) { fields.hidden = true; return; }
-        // If cart is empty, switch to load tab with this cart pre-filled
-        if (cart.isEmpty && !cart.itemCount && !(cart.extraItems && cart.extraItems.some(e => e.itemCount))) {
-          fields.hidden = true;
-          if (_unloadCartRef) _unloadCartRef.clear();
-          setOp('load');
-          screen.querySelector('#lu-dest-cart').value = cartLabel(cart);
-          Toast.show(Lang.T('העגלה ריקה — עובר להעמסה', 'La carreta está vacía — cambiando a carga'), 'info');
-          return;
-        }
-        fields.hidden = false;
-        const total = cartTotalCount(cart);
-        screen.querySelector('#lu-unload-cart-info').innerHTML = `
-          <div class="card-title">${esc(containerName(cart))}: ${esc(cartLabel(cart))}</div>
-          <div class="card-meta">מיקום נוכחי: ${esc(cart.location || 'לא ידוע')} · ${total} פריטים</div>
-          ${cart.comment ? `<div class="card-meta" style="color:var(--muted);font-style:italic">${esc(cart.comment)}</div>` : ''}
-        `;
-        populateSlots(screen.querySelector('#lu-unload-slots-container'), cart);
+    function _activateUnloadCart(cart) {
+      _srcCart = cart || null;
+      const fields = screen.querySelector('#lu-unload-fields');
+      if (!cart) { fields.hidden = true; return; }
+      // If cart is empty, switch to load tab with this cart pre-filled
+      if (cart.isEmpty && !cart.itemCount && !(cart.extraItems && cart.extraItems.some(e => e.itemCount))) {
+        fields.hidden = true;
+        if (_unloadCartRef) _unloadCartRef.clear();
+        setOp('load');
+        screen.querySelector('#lu-dest-cart').value = cartLabel(cart);
+        Toast.show(Lang.T('העגלה ריקה — עובר להעמסה', 'La carreta está vacía — cambiando a carga'), 'info');
+        return;
       }
+      fields.hidden = false;
+      const total = cartTotalCount(cart);
+      screen.querySelector('#lu-unload-cart-info').innerHTML = `
+        <div class="card-title">${esc(containerName(cart))}: ${esc(cartLabel(cart))}</div>
+        <div class="card-meta">מיקום נוכחי: ${esc(cart.location || 'לא ידוע')} · ${total} פריטים</div>
+        ${cart.comment ? `<div class="card-meta" style="color:var(--muted);font-style:italic">${esc(cart.comment)}</div>` : ''}
+      `;
+      populateSlots(screen.querySelector('#lu-unload-slots-container'), cart);
+    }
+
+    _unloadCartRef = CartForm(screen.querySelector('#lu-unload-cart-form-host'), {
+      onCartLoaded(cart) { _activateUnloadCart(cart); }
     });
 
     // ── load save logic ──
@@ -6679,10 +6683,11 @@
       onShow({ cartId, floorItemId } = {}) {
         if (cartId) {
           setOp('unload');
-          setTimeout(() => {
-            const cart = DB.getCart(cartId);
-            if (cart) _unloadCartRef.setValue(cartLabel(cart));
-          }, 50);
+          const cart = DB.getCart(cartId);
+          if (cart) {
+            _unloadCartRef.prefill(cart);   // show label in input, no lookup triggered
+            _activateUnloadCart(cart);       // directly populate unload fields
+          }
         } else if (floorItemId) {
           setOp('load');
           setLoadType('floor');
@@ -8172,7 +8177,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v144</span>
+        <span class="version-badge">v145</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
