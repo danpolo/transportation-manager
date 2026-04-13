@@ -5028,6 +5028,10 @@
         <!-- shared fields (destination + cart item fields) -->
         <div id="tr-shared-fields" hidden>
           <div id="tr-current-info" class="card" style="margin:0 0 14px;"></div>
+          <div id="tr-src-loc-group" class="form-group" hidden>
+            <label class="form-label">${Lang.T('מיקום מקור', 'Ubicación origen')}</label>
+            <input id="tr-src-loc" class="form-input" placeholder="${Lang.T('מאיפה?', '¿Desde dónde?')}" autocomplete="off">
+          </div>
           <button id="tr-empty-cart" class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger);margin-bottom:12px">${Lang.T('ריקון עגלה', 'Vaciar carreta')}</button>
 
           <div class="form-group">
@@ -5082,6 +5086,7 @@
       screen.querySelector('#tr-floor-src-subloc')
     );
     buildPropertyFields(screen.querySelector('#tr-floor-src-props'), {});
+    makeAutocomplete(screen.querySelector('#tr-src-loc'), locationSuggestions);
 
     function _getFloorSrcSubloc() {
       const grp = screen.querySelector('#tr-floor-src-subloc-group');
@@ -5152,21 +5157,25 @@
       _currentData = null; _currentType = null;
     }
 
-    function showSharedFields(data, type) {
+    function showSharedFields(data, type, { skipSlots = false } = {}) {
       _currentData = data;
       _currentType = type;
       const shared = screen.querySelector('#tr-shared-fields');
       shared.hidden = false;
 
+      // Show source location input when location is unknown and cart has an ID
+      const srcLocGroup = screen.querySelector('#tr-src-loc-group');
+      srcLocGroup.hidden = !(type === 'cart' && !data.location && data.cartId);
+
       const info = screen.querySelector('#tr-current-info');
       if (type === 'cart') {
         info.innerHTML = `
-          <div class="card-title">${esc(containerName(data))}: ${esc(cartLabel(data))}</div>
+          <div class="card-title">${esc(containerName(data))}: ${esc(data._isNew ? data.cartId : cartLabel(data))}</div>
           <div class="card-meta">${Lang.T('מיקום נוכחי:', 'Ubicación actual:')} ${esc(data.location || Lang.T('לא ידוע', 'Desconocido'))}</div>
           ${data.comment ? `<div class="card-meta" style="color:var(--muted);font-style:italic">${esc(data.comment)}</div>` : ''}
         `;
         screen.querySelector('#tr-cart-item-fields').hidden = false;
-        _trPopulateSlots(data);
+        if (!skipSlots) _trPopulateSlots(data);
       } else {
         const propStr = Utils.orderedPropValues(data.properties, DB.getMetadata().properties || []);
         info.innerHTML = `
@@ -5305,7 +5314,14 @@
         if (cart) {
           showSharedFields(cart, 'cart');
         } else {
-          screen.querySelector('#tr-shared-fields').hidden = true;
+          const rawInput = _cartRef ? _cartRef.getValue() : '';
+          const cartId = rawInput.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
+          if (cartId) {
+            const cartType = (rawInput.match(/\(([^)]+)\)$/) || [])[1] || '';
+            showSharedFields({ cartId, cartType, containerType: DEFAULT_CONTAINER, location: '', _isNew: true }, 'cart');
+          } else {
+            screen.querySelector('#tr-shared-fields').hidden = true;
+          }
         }
       }
     });
@@ -5340,8 +5356,9 @@
         if (cart) {
           showSharedFields(cart, 'cart');
         } else {
-          screen.querySelector('#tr-shared-fields').hidden = true;
-          _currentData = null; _currentType = null;
+          const ctType = (raw.match(/\(([^)]+)\)/) || [])[1] || '';
+          const cType  = (raw.match(/\[([^\]]+)\]/) || [])[1] || 'משטח';
+          showSharedFields({ cartId: id, cartType: ctType, containerType: cType, location: '', _isNew: true }, 'cart');
         }
       }
       input.addEventListener('change', lookup);
@@ -5397,7 +5414,8 @@
           });
           DB.cascadeLocationUpdate(_currentData.cartId, destLoc, destSubLoc);
         }
-        const fromLabel = waMsgLoc(_currentData.location, _currentData.subLocation);
+        const _srcLocOverride = screen.querySelector('#tr-src-loc-group').hidden ? '' : screen.querySelector('#tr-src-loc').value.trim();
+        const fromLabel = waMsgLoc(_currentData.location || _srcLocOverride, _currentData.subLocation);
         const toLabel   = waMsgLoc(destLoc, destSubLoc);
         const _propDefs = DB.getMetadata().properties || [];
         const _ctName = containerName(_currentData);
@@ -5555,32 +5573,26 @@
 
     // save + send / save only — both run slot-homogeneity validation first
     function _trSaveWithValidation(andSend) {
-      // If cart mode but no cart loaded, offer to create the unknown cart first
-      if (!_currentData && _mode === 'cart') {
-        const rawInput = _cartRef ? _cartRef.getValue() : '';
-        const prefilledType = (rawInput.match(/\(([^)]+)\)$/) || [])[1] || '';
-        const cartId = rawInput.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\([^)]+\)\s*$/, '').trim();
-        if (cartId) {
-          const destLoc = screen.querySelector('#tr-dest-loc').value.trim();
-          showAddUnknownCartModal(cartId, prefilledType, destLoc, (newCart) => {
-            showSharedFields(newCart, 'cart');
-            _trSaveWithValidation(andSend);
-          });
-          return;
-        }
-      }
-      // If container mode but no container loaded, auto-create the non-cart container
-      if (!_currentData && _mode === 'container') {
-        const rawInput = _containerRef ? _containerRef.getValue() : '';
-        const ctId = rawInput.replace(/\s*\[[^\]]+\]\s*$/g, '').replace(/\([^)]+\)\s*$/, '').trim();
-        if (ctId) {
-          const ctType = (rawInput.match(/\(([^)]+)\)/) || [])[1] || '';
-          const containerType = (rawInput.match(/\[([^\]]+)\]/) || [])[1] || 'משטח';
-          const newCart = DB.upsertCart({ cartId: ctId, cartType: ctType, containerType, location: '', subLocation: '', parentCartId: null, isEmpty: false, itemCount: 0, itemIds: [], properties: {} });
-          showSharedFields(newCart, 'cart');
+      // If cart mode with a pending new cart, show modal to fill details first
+      if (_currentData && _currentData._isNew && _mode === 'cart') {
+        const cartId = _currentData.cartId;
+        const prefilledType = _currentData.cartType || '';
+        showAddUnknownCartModal(cartId, prefilledType, '', (newCart) => {
+          if (_cartRef) _cartRef.prefill(newCart);
+          showSharedFields(newCart, 'cart', { skipSlots: true });
           _trSaveWithValidation(andSend);
-          return;
-        }
+        });
+        return;
+      }
+      // If container mode with a pending new container, show modal to fill details first
+      if (_currentData && _currentData._isNew && _mode === 'container') {
+        const cartId = _currentData.cartId;
+        const prefilledType = _currentData.cartType || '';
+        showAddUnknownCartModal(cartId, prefilledType, '', (newCart) => {
+          showSharedFields(newCart, 'cart', { skipSlots: true });
+          _trSaveWithValidation(andSend);
+        });
+        return;
       }
       const doSaveAndSend = () => {
         const msg = doTransferSave();
@@ -6391,22 +6403,14 @@
       // Only accept the container if input exactly matches cartLabel — no auto-closest selection
       const _exactCart = DB.getAllCarts().find(c => cartLabel(c) === rawDest) || null;
       if (!_exactCart) {
-        const _bracketType = (rawDest.match(/\[([^\]]+)\]$/) || [])[1] || DEFAULT_CONTAINER;
         const moveDest = screen.querySelector('#lu-load-move-dest').value.trim();
-        if (_bracketType !== DEFAULT_CONTAINER) {
-          // Non-cart container: auto-create and continue
-          DB.upsertCart({ cartId: destCartId, cartType: destCartType, containerType: _bracketType,
-            location: moveDest || '', subLocation: '', parentCartId: null, isEmpty: false,
-            itemCount: 0, itemIds: [], properties: {} });
-        } else {
-          // Cart: show modal to choose type
-          showAddUnknownCartModal(destCartId, destCartType, moveDest, (newCart) => {
-            // Update input to full label so the next call passes the exact-match check
-            screen.querySelector('#lu-dest-cart').value = cartLabel(newCart);
-            doLoadSave(skipValidation);
-          });
-          return null;
-        }
+        // Show modal for ALL unknown containers (cart type + container type)
+        showAddUnknownCartModal(destCartId, destCartType, moveDest, (newCart) => {
+          // Update input to full label so the next call passes the exact-match check
+          screen.querySelector('#lu-dest-cart').value = cartLabel(newCart);
+          doLoadSave(skipValidation);
+        });
+        return null;
       }
 
       let msg;
