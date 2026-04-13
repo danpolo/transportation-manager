@@ -8177,7 +8177,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v145</span>
+        <span class="version-badge">v146</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -9915,8 +9915,8 @@
 
     // Refresh undo button state on every navigate
     const _origNavigate = Router.navigate.bind(Router);
-    Router.navigate = function(name) {
-      _origNavigate(name);
+    Router.navigate = function(name, params) {
+      _origNavigate(name, params);
       document.querySelectorAll('.undo-btn').forEach(b => b.classList.toggle('can-undo', DB.canUndo()));
     };
 
