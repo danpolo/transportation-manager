@@ -7559,7 +7559,8 @@
       // Precompute occupied cart counts per location for capacity display
       const _locOccupied = {};
       DB.getAllCarts().forEach(c => {
-        if (c.location && !c.parentCartId) _locOccupied[c.location] = (_locOccupied[c.location] || 0) + 1;
+        if (c.location && !c.parentCartId && (!c.containerType || c.containerType === DEFAULT_CONTAINER))
+          _locOccupied[c.location] = (_locOccupied[c.location] || 0) + 1;
       });
 
       const clearSelBar = _selectedItems.size
@@ -8182,7 +8183,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v148</span>
+        <span class="version-badge">v149</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
@@ -8334,7 +8335,8 @@
       if (!locs.length) return '';
       const locOcc = {};
       DB.getAllCarts().forEach(c => {
-        if (c.location && !c.parentCartId) locOcc[c.location] = (locOcc[c.location] || 0) + 1;
+        if (c.location && !c.parentCartId && (!c.containerType || c.containerType === DEFAULT_CONTAINER))
+          locOcc[c.location] = (locOcc[c.location] || 0) + 1;
       });
       const rows = locs.map(l => {
         const occ = locOcc[l.name] || 0;
