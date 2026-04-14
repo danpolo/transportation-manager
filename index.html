@@ -914,6 +914,17 @@
       user-select: none;
     }
     .sr-cat-badge:hover { background: color-mix(in srgb, var(--brand) 22%, var(--card)); }
+    .sr-or-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      color: #e07b00;
+      background: color-mix(in srgb, #e07b00 12%, var(--card));
+      border-radius: 4px;
+      padding: 2px 7px;
+      margin-top: 3px;
+      user-select: none;
+      font-weight: 600;
+    }
 
     /* ─── Pin button in search results ─── */
     .loc-group-header {
@@ -6748,11 +6759,11 @@
         <span class="sr-collapse-toggle" id="sr-collapse-toggle">${Lang.T('הצג סינונים ▼', 'Mostrar filtros ▼')}</span>
       </div>
       <div class="sr-search-inputs" id="sr-search-inputs">
-        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 1', 'Filtro positivo 1')}"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 2', 'Filtro positivo 2')}"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 3', 'Filtro positivo 3')}"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 4', 'Filtro positivo 4')}"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 5', 'Filtro positivo 5')}"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 1 (ניתן לכתוב א|ב לOR)', 'Filtro 1 (usa a|b para OR)')}"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 2 (ניתן לכתוב א|ב לOR)', 'Filtro 2 (usa a|b para OR)')}"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 3 (ניתן לכתוב א|ב לOR)', 'Filtro 3 (usa a|b para OR)')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 4 (ניתן לכתוב א|ב לOR)', 'Filtro 4 (usa a|b para OR)')}"></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 5 (ניתן לכתוב א|ב לOR)', 'Filtro 5 (usa a|b para OR)')}"></div>
         <div class="sr-suggest-wrap"><input id="sr-exc-1" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 1 (לא לכלול)', 'Exclusión 1 (no incluir)')}"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 2 (לא לכלול)', 'Exclusión 2 (no incluir)')}"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 3 (לא לכלול)', 'Exclusión 3 (no incluir)')}"></div>
@@ -6831,7 +6842,7 @@
       }
       collapseBar.style.display = '';
       // Build summary text
-      const incParts = state.includeTerms.map(t => t);
+      const incParts = state.includeTerms.map(t => Array.isArray(t) ? t.join(' OR ') : t);
       const excParts = state.excludeTerms.map(t => t);
       let summary = incParts.join(', ');
       if (excParts.length) {
@@ -6885,7 +6896,7 @@
     function _saveRecentFilter() {
       if (!state.includeTerms.length && !state.excludeTerms.length && !state.emptyOnly) return;
       const entry = {
-        inc: state.includeTerms.slice(),
+        inc: state.includeTerms.map(t => Array.isArray(t) ? t.join('|') : t),
         exc: state.excludeTerms.slice(),
         empty: state.emptyOnly,
         ts: Date.now()
@@ -6917,7 +6928,16 @@
       state.excludeCategories = [];
       (r.inc || []).forEach((t, i) => { if (incInputs[i]) incInputs[i].value = t; });
       (r.exc || []).forEach((t, i) => { if (excInputs[i]) excInputs[i].value = t; });
-      state.includeTerms = (r.inc || []).slice();
+      state.includeTerms = (r.inc || []).map(t => {
+        const parts = t.split('|').map(s => s.trim()).filter(Boolean);
+        return parts.length > 1 ? parts : t;
+      });
+      // Update OR badges after restore
+      incInputs.forEach(inp => {
+        const val = inp.value.trim();
+        const parts = val.split('|').map(s => s.trim()).filter(Boolean);
+        _updateOrBadge(inp, parts.length > 1 ? parts : null);
+      });
       state.excludeTerms = (r.exc || []).slice();
       state.emptyOnly = !!r.empty;
       screen.querySelector('#sr-empty-check').checked = state.emptyOnly;
@@ -6944,7 +6964,9 @@
       // Only show recents where all terms still exist in the suggestion pool
       const poolSet = new Set(_suggestions.map(s => s.toLowerCase()));
       const validRecents = recents.filter(r =>
-        [...(r.inc || []), ...(r.exc || [])].every(t => poolSet.has(t.toLowerCase()))
+        [...(r.inc || []), ...(r.exc || [])].every(t =>
+          t.split('|').map(s => s.trim()).filter(Boolean).every(a => poolSet.has(a.toLowerCase()))
+        )
       );
       if (!validRecents.length) { container.innerHTML = ''; return; }
       container.innerHTML = validRecents.map(r => {
@@ -7057,6 +7079,21 @@
       };
     }
 
+    function _updateOrBadge(input, orParts) {
+      const wrap = input.closest('.sr-suggest-wrap');
+      let badge = wrap.querySelector('.sr-or-badge');
+      if (!orParts || orParts.length < 2) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'sr-or-badge';
+        wrap.appendChild(badge);
+      }
+      badge.textContent = Lang.T('OR (מרובה)', 'OR (múltiple)');
+    }
+
     // Show disambiguation picker when a value belongs to multiple property categories
     function showDisambiguation(input, value, ambigProps) {
       closeSuggestions();
@@ -7141,7 +7178,17 @@
       _debounceTimer = setTimeout(() => {
         const incPairs = incInputs.map(i => ({ term: i.value.trim().toLowerCase(), cat: _inputCategoryMap.get(i) || null })).filter(p => p.term);
         const excPairs = excInputs.map(i => ({ term: i.value.trim().toLowerCase(), cat: _inputCategoryMap.get(i) || null })).filter(p => p.term);
-        state.includeTerms = incPairs.map(p => p.term);
+        // Parse "|" as OR separator within include inputs
+        state.includeTerms = incPairs.map(p => {
+          const parts = p.term.split('|').map(s => s.trim()).filter(Boolean);
+          return parts.length > 1 ? parts : p.term;
+        });
+        // Update OR badges on include inputs
+        incInputs.forEach(inp => {
+          const val = inp.value.trim().toLowerCase();
+          const parts = val.split('|').map(s => s.trim()).filter(Boolean);
+          _updateOrBadge(inp, parts.length > 1 ? parts : null);
+        });
         state.includeCategories = incPairs.map(p => p.cat);
         state.excludeTerms = excPairs.map(p => p.term);
         state.excludeCategories = excPairs.map(p => p.cat);
@@ -7335,8 +7382,14 @@
       if (!state.includeTerms.length && !state.excludeTerms.length) return true;
       const parts = buildSearchableParts(item);
       for (let i = 0; i < state.includeTerms.length; i++) {
-        const t = _resolveSearchTerm(state.includeTerms[i]), cat = state.includeCategories[i];
-        if (cat ? !_propMatchesTerm(item, cat, t) : !termMatchesParts(t, parts)) return false;
+        const rawTerm = state.includeTerms[i];
+        const cat = state.includeCategories[i];
+        const alternatives = Array.isArray(rawTerm) ? rawTerm : [rawTerm];
+        const matches = alternatives.some(alt => {
+          const t = _resolveSearchTerm(alt);
+          return cat ? _propMatchesTerm(item, cat, t) : termMatchesParts(t, parts);
+        });
+        if (!matches) return false;
       }
       for (let i = 0; i < state.excludeTerms.length; i++) {
         const t = _resolveSearchTerm(state.excludeTerms[i]), cat = state.excludeCategories[i];
@@ -7528,7 +7581,7 @@
         return;
       }
 
-      const terms = state.includeTerms; // highlight include terms only
+      const terms = state.includeTerms.flatMap(t => Array.isArray(t) ? t : [t]); // highlight include terms only (flatten OR groups)
 
       const groups = {};
       const addItem = (item, type) => {
@@ -7829,6 +7882,7 @@
         i.value = '';
         _inputCategoryMap.delete(i);
         _updateCatBadge(i, null);
+        _updateOrBadge(i, null);
       });
       state.includeTerms = [];
       state.excludeTerms = [];
@@ -8194,7 +8248,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v150</span>
+        <span class="version-badge">v151</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
