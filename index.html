@@ -914,17 +914,50 @@
       user-select: none;
     }
     .sr-cat-badge:hover { background: color-mix(in srgb, var(--brand) 22%, var(--card)); }
-    .sr-or-badge {
-      display: inline-block;
-      font-size: 0.72rem;
-      color: #e07b00;
-      background: color-mix(in srgb, #e07b00 12%, var(--card));
-      border-radius: 4px;
-      padding: 2px 7px;
-      margin-top: 3px;
-      user-select: none;
+    .sr-or-add-btn {
+      position: absolute;
+      top: 50%; left: 8px;
+      transform: translateY(-50%);
+      font-size: 0.7rem;
       font-weight: 600;
+      color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 10%, var(--card));
+      border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+      border-radius: 6px;
+      padding: 2px 7px;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      line-height: 1.4;
     }
+    .sr-or-add-btn:hover { background: color-mix(in srgb, var(--brand) 20%, var(--card)); }
+    .sr-or-companion {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-right: 16px;
+      border-right: 2px solid var(--brand);
+      margin-right: 4px;
+    }
+    .sr-or-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--brand);
+      white-space: nowrap;
+      direction: ltr;
+    }
+    .sr-or-companion .sr-search-field { flex: 1; }
+    .sr-or-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .sr-or-remove:hover { color: var(--danger); }
 
     /* ─── Pin button in search results ─── */
     .loc-group-header {
@@ -6759,11 +6792,11 @@
         <span class="sr-collapse-toggle" id="sr-collapse-toggle">${Lang.T('הצג סינונים ▼', 'Mostrar filtros ▼')}</span>
       </div>
       <div class="sr-search-inputs" id="sr-search-inputs">
-        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 1 (ניתן לכתוב א|ב לOR)', 'Filtro 1 (usa a|b para OR)')}"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 2 (ניתן לכתוב א|ב לOR)', 'Filtro 2 (usa a|b para OR)')}"></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 3 (ניתן לכתוב א|ב לOR)', 'Filtro 3 (usa a|b para OR)')}"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 4 (ניתן לכתוב א|ב לOR)', 'Filtro 4 (usa a|b para OR)')}"></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון 5 (ניתן לכתוב א|ב לOR)', 'Filtro 5 (usa a|b para OR)')}"></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 1', 'Filtro positivo 1')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-1">${Lang.T('+ OR', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 2', 'Filtro positivo 2')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-2">${Lang.T('+ OR', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 3', 'Filtro positivo 3')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-3">${Lang.T('+ OR', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 4', 'Filtro positivo 4')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-4">${Lang.T('+ OR', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 5', 'Filtro positivo 5')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-5">${Lang.T('+ OR', '+ OR')}</button></div>
         <div class="sr-suggest-wrap"><input id="sr-exc-1" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 1 (לא לכלול)', 'Exclusión 1 (no incluir)')}"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 2 (לא לכלול)', 'Exclusión 2 (no incluir)')}"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 3 (לא לכלול)', 'Exclusión 3 (no incluir)')}"></div>
@@ -6896,7 +6929,12 @@
     function _saveRecentFilter() {
       if (!state.includeTerms.length && !state.excludeTerms.length && !state.emptyOnly) return;
       const entry = {
-        inc: state.includeTerms.map(t => Array.isArray(t) ? t.join('|') : t),
+        inc: incInputs.map(inp => {
+          const primary = inp.value.trim().toLowerCase();
+          const companions = (_orInputsMap.get(inp) || []).map(c => c.value.trim().toLowerCase()).filter(Boolean);
+          const all = [primary, ...companions].filter(Boolean);
+          return all.length > 1 ? all.join('|') : all[0] || null;
+        }).filter(Boolean),
         exc: state.excludeTerms.slice(),
         empty: state.emptyOnly,
         ts: Date.now()
@@ -6926,21 +6964,35 @@
       });
       state.includeCategories = [];
       state.excludeCategories = [];
-      (r.inc || []).forEach((t, i) => { if (incInputs[i]) incInputs[i].value = t; });
-      (r.exc || []).forEach((t, i) => { if (excInputs[i]) excInputs[i].value = t; });
-      state.includeTerms = (r.inc || []).map(t => {
+      // Clear existing OR companions before restoring
+      _orInputsMap.forEach((companions, _) => {
+        companions.forEach(c => { const w = c.closest('.sr-or-companion'); if (w) w.remove(); });
+      });
+      _orInputsMap.clear();
+      (r.inc || []).forEach((t, i) => {
+        if (!incInputs[i]) return;
         const parts = t.split('|').map(s => s.trim()).filter(Boolean);
-        return parts.length > 1 ? parts : t;
+        incInputs[i].value = parts[0] || '';
+        for (let j = 1; j < parts.length; j++) {
+          addOrCompanion(incInputs[i]);
+          const companions = _orInputsMap.get(incInputs[i]) || [];
+          if (companions[j - 1]) companions[j - 1].value = parts[j];
+        }
       });
-      // Update OR badges after restore
-      incInputs.forEach(inp => {
-        const val = inp.value.trim();
-        const parts = val.split('|').map(s => s.trim()).filter(Boolean);
-        _updateOrBadge(inp, parts.length > 1 ? parts : null);
-      });
+      (r.exc || []).forEach((t, i) => { if (excInputs[i]) excInputs[i].value = t; });
       state.excludeTerms = (r.exc || []).slice();
       state.emptyOnly = !!r.empty;
       screen.querySelector('#sr-empty-check').checked = state.emptyOnly;
+      // Rebuild includeTerms from restored inputs + companions
+      const restoredPairs = incInputs.map(inp => {
+        const primary = inp.value.trim().toLowerCase();
+        const companions = (_orInputsMap.get(inp) || []).map(c => c.value.trim().toLowerCase()).filter(Boolean);
+        const all = [primary, ...companions].filter(Boolean);
+        if (!all.length) return null;
+        return { terms: all.length > 1 ? all : all[0], cat: null };
+      }).filter(Boolean);
+      state.includeTerms = restoredPairs.map(p => p.terms);
+      state.includeCategories = restoredPairs.map(p => p.cat);
       // Show enough fields
       incWraps.forEach((w, i) => { if (r.inc && i < r.inc.length) w.classList.remove('sr-hidden'); });
       excWraps.forEach((w, i) => { if (r.exc && i < r.exc.length) w.classList.remove('sr-hidden'); });
@@ -7079,19 +7131,59 @@
       };
     }
 
-    function _updateOrBadge(input, orParts) {
-      const wrap = input.closest('.sr-suggest-wrap');
-      let badge = wrap.querySelector('.sr-or-badge');
-      if (!orParts || orParts.length < 2) {
-        if (badge) badge.remove();
-        return;
-      }
-      if (!badge) {
-        badge = document.createElement('div');
-        badge.className = 'sr-or-badge';
-        wrap.appendChild(badge);
-      }
-      badge.textContent = Lang.T('OR (מרובה)', 'OR (múltiple)');
+    const _orInputsMap = new Map(); // primaryInput → HTMLInputElement[]
+
+    function _wireOrInput(compInput, primaryInput) {
+      compInput.addEventListener('input', () => {
+        const q = compInput.value.trim();
+        if (q.length >= 1) showSuggestions(compInput, q);
+        else closeSuggestions();
+        onSearchInput();
+      });
+      compInput.addEventListener('focus', () => {
+        const q = compInput.value.trim();
+        if (q.length >= 1) showSuggestions(compInput, q);
+      });
+      compInput.addEventListener('blur', () => setTimeout(closeSuggestions, 150));
+    }
+
+    function addOrCompanion(primaryInput) {
+      const primaryWrap = primaryInput.closest('.sr-suggest-wrap');
+      const companionWrap = document.createElement('div');
+      companionWrap.className = 'sr-suggest-wrap sr-or-companion';
+
+      const orLabel = document.createElement('span');
+      orLabel.className = 'sr-or-label';
+      orLabel.textContent = Lang.T('OR', 'OR');
+
+      const compInput = document.createElement('input');
+      compInput.className = 'sr-search-field sr-or-input';
+      compInput.type = 'text';
+      compInput.autocomplete = 'off';
+      compInput.placeholder = Lang.T('ערך נוסף (OR)', 'Valor adicional (OR)');
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'sr-or-remove';
+      removeBtn.type = 'button';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        companionWrap.remove();
+        const list = _orInputsMap.get(primaryInput) || [];
+        const idx = list.indexOf(compInput);
+        if (idx !== -1) list.splice(idx, 1);
+        onSearchInput();
+      });
+
+      companionWrap.appendChild(orLabel);
+      companionWrap.appendChild(compInput);
+      companionWrap.appendChild(removeBtn);
+      primaryWrap.after(companionWrap);
+
+      if (!_orInputsMap.has(primaryInput)) _orInputsMap.set(primaryInput, []);
+      _orInputsMap.get(primaryInput).push(compInput);
+
+      _wireOrInput(compInput, primaryInput);
+      compInput.focus();
     }
 
     // Show disambiguation picker when a value belongs to multiple property categories
@@ -7176,19 +7268,16 @@
     function onSearchInput() {
       clearTimeout(_debounceTimer);
       _debounceTimer = setTimeout(() => {
-        const incPairs = incInputs.map(i => ({ term: i.value.trim().toLowerCase(), cat: _inputCategoryMap.get(i) || null })).filter(p => p.term);
         const excPairs = excInputs.map(i => ({ term: i.value.trim().toLowerCase(), cat: _inputCategoryMap.get(i) || null })).filter(p => p.term);
-        // Parse "|" as OR separator within include inputs
-        state.includeTerms = incPairs.map(p => {
-          const parts = p.term.split('|').map(s => s.trim()).filter(Boolean);
-          return parts.length > 1 ? parts : p.term;
-        });
-        // Update OR badges on include inputs
-        incInputs.forEach(inp => {
-          const val = inp.value.trim().toLowerCase();
-          const parts = val.split('|').map(s => s.trim()).filter(Boolean);
-          _updateOrBadge(inp, parts.length > 1 ? parts : null);
-        });
+        // Build include pairs: each primary input may have OR companion inputs
+        const incPairs = incInputs.map(inp => {
+          const primaryVal = inp.value.trim().toLowerCase();
+          const companions = (_orInputsMap.get(inp) || []).map(c => c.value.trim().toLowerCase()).filter(Boolean);
+          const allVals = [primaryVal, ...companions].filter(Boolean);
+          if (!allVals.length) return null;
+          return { terms: allVals.length > 1 ? allVals : allVals[0], cat: _inputCategoryMap.get(inp) || null };
+        }).filter(Boolean);
+        state.includeTerms = incPairs.map(p => p.terms);
         state.includeCategories = incPairs.map(p => p.cat);
         state.excludeTerms = excPairs.map(p => p.term);
         state.excludeCategories = excPairs.map(p => p.cat);
@@ -7221,6 +7310,14 @@
       });
       input.addEventListener('blur', () => {
         setTimeout(closeSuggestions, 150);
+      });
+    });
+
+    // Wire "+ OR" buttons on include inputs
+    screen.querySelectorAll('.sr-or-add-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const inp = screen.querySelector('#' + btn.dataset.orFor);
+        if (inp) addOrCompanion(inp);
       });
     });
 
@@ -7882,8 +7979,12 @@
         i.value = '';
         _inputCategoryMap.delete(i);
         _updateCatBadge(i, null);
-        _updateOrBadge(i, null);
       });
+      // Remove all OR companion inputs
+      _orInputsMap.forEach((companions, _) => {
+        companions.forEach(c => { const w = c.closest('.sr-or-companion'); if (w) w.remove(); });
+      });
+      _orInputsMap.clear();
       state.includeTerms = [];
       state.excludeTerms = [];
       state.includeCategories = [];
@@ -8248,7 +8349,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v151</span>
+        <span class="version-badge">v152</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
