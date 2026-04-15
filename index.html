@@ -6792,11 +6792,11 @@
         <span class="sr-collapse-toggle" id="sr-collapse-toggle">${Lang.T('הצג סינונים ▼', 'Mostrar filtros ▼')}</span>
       </div>
       <div class="sr-search-inputs" id="sr-search-inputs">
-        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 1', 'Filtro positivo 1')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-1">${Lang.T('+ OR', '+ OR')}</button></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 2', 'Filtro positivo 2')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-2">${Lang.T('+ OR', '+ OR')}</button></div>
-        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 3', 'Filtro positivo 3')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-3">${Lang.T('+ OR', '+ OR')}</button></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 4', 'Filtro positivo 4')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-4">${Lang.T('+ OR', '+ OR')}</button></div>
-        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 5', 'Filtro positivo 5')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-5">${Lang.T('+ OR', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-1" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 1', 'Filtro positivo 1')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-1">${Lang.T('+ או', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-2" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 2', 'Filtro positivo 2')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-2">${Lang.T('+ או', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap"><input id="sr-inc-3" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 3', 'Filtro positivo 3')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-3">${Lang.T('+ או', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-4" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 4', 'Filtro positivo 4')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-4">${Lang.T('+ או', '+ OR')}</button></div>
+        <div class="sr-suggest-wrap sr-hidden"><input id="sr-inc-5" class="sr-search-field" type="text" autocomplete="off" placeholder="${Lang.T('סינון חיובי 5', 'Filtro positivo 5')}"><button class="sr-or-add-btn" type="button" data-or-for="sr-inc-5">${Lang.T('+ או', '+ OR')}</button></div>
         <div class="sr-suggest-wrap"><input id="sr-exc-1" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 1 (לא לכלול)', 'Exclusión 1 (no incluir)')}"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-2" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 2 (לא לכלול)', 'Exclusión 2 (no incluir)')}"></div>
         <div class="sr-suggest-wrap sr-hidden"><input id="sr-exc-3" class="sr-search-field sr-exclude" type="text" autocomplete="off" placeholder="${Lang.T('החרגה 3 (לא לכלול)', 'Exclusión 3 (no incluir)')}"></div>
@@ -6875,7 +6875,7 @@
       }
       collapseBar.style.display = '';
       // Build summary text
-      const incParts = state.includeTerms.map(t => Array.isArray(t) ? t.join(' OR ') : t);
+      const incParts = state.includeTerms.map(t => Array.isArray(t) ? t.join(' או ') : t);
       const excParts = state.excludeTerms.map(t => t);
       let summary = incParts.join(', ');
       if (excParts.length) {
@@ -7154,7 +7154,7 @@
 
       const orLabel = document.createElement('span');
       orLabel.className = 'sr-or-label';
-      orLabel.textContent = Lang.T('OR', 'OR');
+      orLabel.textContent = Lang.T('או', 'OR');
 
       const compInput = document.createElement('input');
       compInput.className = 'sr-search-field sr-or-input';
@@ -8349,7 +8349,7 @@
       <div class="screen-header">
         <span class="header-icon">📍</span>
         <h1>${Lang.T('מיפוי', 'Mapeo')}</h1>
-        <span class="version-badge">v152</span>
+        <span class="version-badge">v153</span>
         <button class="undo-btn" title="${Lang.T('בטל פעולה', 'Deshacer')}">↩</button>
         <button class="help-btn" data-screen="main" title="${Lang.T('עזרה', 'Ayuda')}">❓</button>
         <button id="lang-toggle" class="theme-toggle-btn" title="שפה / Idioma" style="font-size:1.3rem;padding:2px 4px;background:none;border:none;cursor:pointer;"></button>
